@@ -2,9 +2,10 @@ Source: openssl
 Build-Depends: debhelper (>= 8.1.3), zlib1g-dev, m4, bc, dpkg-dev (>= 1.15.7)
 Section: utils
 Priority: optional
-Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Maintainer: Pexip AS <packaging@pexip.com>
+XBCS-Original-Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 XSBC-Original-Maintainer: Debian OpenSSL Team <pkg-openssl-devel@lists.alioth.debian.org>
-Uploaders: Christoph Martin <christoph.martin@uni-mainz.de>, Kurt Roeckx <kurt@roeckx.be>
+XBCS-Original-Uploaders: Christoph Martin <christoph.martin@uni-mainz.de>, Kurt Roeckx <kurt@roeckx.be>
 Standards-Version: 3.8.0
 XS-Debian-Vcs-Browser: http://svn.debian.org/wsvn/pkg-openssl/openssl
 XS-Debian-Vcs-Svn: svn://svn.debian.org/pkg-openssl/openssl/
