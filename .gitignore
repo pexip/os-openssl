@@ -1,0 +1,6 @@
+Makefile
+Makefile.bak
+apps/CA.pl
+crypto/opensslconf.h
+tools/c_rehash
+
