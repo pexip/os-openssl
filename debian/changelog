@@ -1,3 +1,129 @@
+openssl (1.0.1f-1ubuntu1) trusty; urgency=low
+
+  * Merge with Debian, remaining changes.
+    - debian/libssl1.0.0.postinst:
+      + Display a system restart required notification on libssl1.0.0
+        upgrade on servers.
+      + Use a different priority for libssl1.0.0/restart-services depending
+        on whether a desktop, or server dist-upgrade is being performed.
+    - debian/{libssl1.0.0-udeb.dirs, control, rules}: Create
+      libssl1.0.0-udeb, for the benefit of wget-udeb (no wget-udeb package
+      in Debian).
+    - debian/{libcrypto1.0.0-udeb.dirs, libssl1.0.0.dirs, libssl1.0.0.files,
+      rules}: Move runtime libraries to /lib, for the benefit of
+      wpasupplicant.
+    - debian/patches/perlpath-quilt.patch: Don't change perl #! paths under
+      .pc.
+    - debian/rules:
+      + Don't run 'make test' when cross-building.
+      + Use host compiler when cross-building.  Patch from Neil Williams.
+      + Don't build for processors no longer supported: i586 (on i386)
+      + Fix Makefile to properly clean up libs/ dirs in clean target.
+      + Replace duplicate files in the doc directory with symlinks.
+    - debian/control: Mark Debian Vcs-* as XS-Debian-Vcs-*
+    - debian/patches/ubuntu_deb676533_arm_asm.patch: Enable arm assembly
+      code.
+    - debian/rules: Enable optimized 64bit elliptic curve code contributed
+      by Google.
+  * Dropped changes:
+    - debian/patches/arm64-support: included in debian-targets.patch
+    - debian/patches/no_default_rdrand.patch: upstream
+    - debian/patches/openssl-1.0.1e-env-zlib.patch: zlib is now completely
+      disabled in debian/rules
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Wed, 08 Jan 2014 15:57:24 -0500
+
+openssl (1.0.1f-1) unstable; urgency=high
+
+  * New upstream version
+    - Fix for TLS record tampering bug CVE-2013-4353
+    - Drop the snapshot patch
+  * update watch file to check for upstream signature and add upstream pgp key.
+  * Drop conflicts against openssh since we now on a released version again.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Mon, 06 Jan 2014 18:50:54 +0100
+
+openssl (1.0.1e-6) unstable; urgency=medium
+
+  * Add Breaks: openssh-client (<< 1:6.4p1-1.1), openssh-server (<<
+    1:6.4p1-1.1).  This is to prevent people running into #732940.
+    This Breaks can be removed again when we stop using a git snapshot.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Mon, 23 Dec 2013 15:19:17 +0100
+
+openssl (1.0.1e-5) unstable; urgency=low
+
+  * Change default digest to SHA256 instead of SHA1.  (Closes: #694738)
+  * Drop support for multiple certificates in 1 file.  It never worked
+    properly in the first place, and the only one shipping in
+    ca-certificates has been split.
+  * Fix libdoc-manpgs-pod-spell.patch to only fix spalling errors
+  * Remove make-targets.patch.  It prevented the test dir from being cleaned.
+  * Update to a git snapshot of the OpenSSL_1_0_1-stable branch. 
+    - Fixes CVE-2013-6449 (Closes: #732754)
+    - Fixes CVE-2013-6450
+    - Drop patches ssltest_no_sslv2.patch cpuid.patch aesni-mac.patch
+      dtls_version.patch get_certificate.patch, since they where all
+      already commited upstream.
+    - adjust fix-pod-errors.patch for the reordering of items in the
+      documentation they've done trying to fix those pod errors.
+    - disable rdrand engine by default (Closes: #732710)
+  * disable zlib support.  Fixes CVE-2012-4929 (Closes: #728055)
+  * Add arm64 support (Closes: #732348)
+  * Properly use the default number of bits in req when none are given
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Sun, 22 Dec 2013 19:25:35 +0100
+
+openssl (1.0.1e-4ubuntu4) trusty; urgency=low
+
+  * debian/patches/no_default_rdrand.patch: Don't use rdrand engine as
+    default unless explicitly requested.
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Thu, 19 Dec 2013 15:39:22 -0500
+
+openssl (1.0.1e-4ubuntu3) trusty; urgency=medium
+
+  * Update debian configuration.
+
+ -- Matthias Klose <doko@ubuntu.com>  Thu, 05 Dec 2013 14:34:48 +0100
+
+openssl (1.0.1e-4ubuntu2) trusty; urgency=low
+
+  * Re-enable full TLSv1.2 support (LP: #1257877)
+    - debian/patches/tls12_workarounds.patch: disable patch to re-enable
+      full TLSv1.2 support. Most problematic sites have been fixed now, and
+      we really want proper TLSv1.2 support in an LTS.
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Wed, 04 Dec 2013 12:33:44 -0500
+
+openssl (1.0.1e-4ubuntu1) trusty; urgency=low
+
+  * Merge with Debian; remaining changes same as in 1.0.1e-3ubuntu1.
+
+ -- Matthias Klose <doko@ubuntu.com>  Wed, 04 Dec 2013 11:28:00 +0100
+
+openssl (1.0.1e-4) unstable; urgency=low
+
+  [ Peter Michael Green ]
+  * Fix pod errors (Closes: #723954)
+  * Fix clean target
+
+  [ Kurt Roeckx ]
+  * Add mipsn32 and mips64 targets.  Patch from Eleanor Chen
+    <chenyueg@gmail.com>  (Closes: #720654)
+  * Add support for nocheck in DEB_BUILD_OPTIONS
+  * Update Norwegian translation (Closes: #653574)
+  * Update description of the packages.  Patch by Justin B Rye
+    (Closes: #719262)
+  * change to debhelper compat level 9:
+    - change dh_strip call so only the files from libssl1.0.0 get debug
+      symbols.
+    - change dh_makeshlibs call so the engines don't get added to the
+      shlibs
+  * Update Standards-Version from 3.8.0 to 3.9.5.  No changes required.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Fri, 01 Nov 2013 17:11:53 +0100
+
 openssl (1.0.1e-3ubuntu1) saucy; urgency=low
 
   * Merge with Debian, remaining changes.
