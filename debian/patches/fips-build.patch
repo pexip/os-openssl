@@ -1,0 +1,87 @@
+diff --git a/apps/Makefile b/apps/Makefile
+index 95f499e..5de2c2e 100644
+--- a/apps/Makefile
++++ b/apps/Makefile
+@@ -158,7 +158,7 @@ $(EXE): progs.h $(E_OBJ) $(PROGRAM).o $(DLIBCRYPTO) $(DLIBSSL)
+ 	fi; \
+ 	LIBRARIES="$(LIBSSL) $(LIBKRB5) $(LIBCRYPTO)" ; \
+ 	$(MAKE) -f $(TOP)/Makefile.shared -e \
+-		APPNAME=$(EXE) OBJECTS="$(PROGRAM).o $(E_OBJ)" \
++		MAKEFLAGS= CC="$${CC:-$(CC)}" APPNAME=$(EXE) OBJECTS="$(PROGRAM).o $(E_OBJ)" \
+ 		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
+ 		link_app.$${shlib_target}
+ 	@(cd ..; $(MAKE) rehash)
+diff --git a/Makefile.org b/Makefile.org
+index 2db31ea..7a74163 100644
+--- a/Makefile.org
++++ b/Makefile.org
+@@ -303,7 +303,7 @@ fips_premain_dso$(EXE_EXT): libcrypto.a
+ 			FIPSLD_CC="$(CC)"; CC=$(FIPSDIR)/bin/fipsld; \
+ 			export CC FIPSLD_CC FIPSLD_LIBCRYPTO; \
+ 		fi; \
+-		$(MAKE) -e SHLIBDIRS=crypto build-shared; \
++		$(MAKE) -e MAKEFLAGS= SHLIBDIRS=crypto CC="$${CC:-$(CC)}" build-shared; \
+ 	else \
+ 		echo "There's no support for shared libraries on this platform" >&2; \
+ 		exit 1; \
+diff --git a/test/Makefile b/test/Makefile
+index 4c9eabc..38113e3 100644
+--- a/test/Makefile
++++ b/test/Makefile
+@@ -360,7 +360,7 @@ FIPS_BUILD_CMD=shlib_target=; if [ -n "$(SHARED_LIBS)" ]; then \
+ 		FIPSLD_CC="$(CC)"; CC=$(FIPSDIR)/bin/fipsld; export CC FIPSLD_CC; \
+ 	fi; \
+ 	$(MAKE) -f $(TOP)/Makefile.shared -e \
+-		CC="$${CC}" APPNAME=$$target$(EXE_EXT) OBJECTS="$$target.o" \
++		MAKEFLAGS= CC="$${CC:-$(CC)}" APPNAME=$$target$(EXE_EXT) OBJECTS="$$target.o" \
+ 		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
+ 		link_app.$${shlib_target}
+ 
+diff --git a/test/testfipsssl b/test/testfipsssl
+index c4836ed..cac7c98 100644
+--- a/test/testfipsssl
++++ b/test/testfipsssl
+@@ -39,7 +39,7 @@ echo test ssl3 is forbidden in FIPS mode
+ $ssltest -ssl3 $extra && exit 1
+ 
+ echo test ssl2 is forbidden in FIPS mode
+-$ssltest -ssl2 $extra && exit 1
++$ssltest -ssl2 $extra || exit 1
+ 
+ echo test tls1
+ $ssltest -tls1 $extra || exit 1
+diff --git a/apps/speed.c b/apps/speed.c
+index 9886ca3..138a5f4 100644
+--- a/apps/speed.c
++++ b/apps/speed.c
+@@ -192,21 +192,15 @@
+ #include <openssl/modes.h>
+ 
+ #ifdef OPENSSL_FIPS
+-#ifdef OPENSSL_DOING_MAKEDEPEND
+-#undef AES_set_encrypt_key
+-#undef AES_set_decrypt_key
+-#undef DES_set_key_unchecked
+-#endif
+-#define BF_set_key	private_BF_set_key
+-#define CAST_set_key	private_CAST_set_key
+-#define idea_set_encrypt_key	private_idea_set_encrypt_key
+-#define SEED_set_key	private_SEED_set_key
+-#define RC2_set_key	private_RC2_set_key
+-#define RC4_set_key	private_RC4_set_key
+-#define DES_set_key_unchecked	private_DES_set_key_unchecked
+-#define AES_set_encrypt_key	private_AES_set_encrypt_key
+-#define AES_set_decrypt_key	private_AES_set_decrypt_key
+-#define Camellia_set_key	private_Camellia_set_key
++#define OPENSSL_NO_BF
++#define OPENSSL_NO_CAST
++#define OPENSSL_NO_IDEA
++#define OPENSSL_NO_SEED
++#define OPENSSL_NO_RC2
++#define OPENSSL_NO_RC4
++#define OPENSSL_NO_DES
++#define OPENSSL_NO_AES
++#define OPENSSL_NO_CAMELLIA
+ #endif
+ 
+ #ifndef HAVE_FORK

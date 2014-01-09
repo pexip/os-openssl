@@ -1,3 +1,9 @@
+openssl (1.0.1e-3ubuntu1pexip2) pexip; urgency=low
+
+  * Build with FIPS 140-2 support
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 09 Jan 2014 00:56:24 +0000
+
 openssl (1.0.1e-3ubuntu1pexip1) precise; urgency=low
 
   * Repackage upstream 1.0.1e-3ubuntu1

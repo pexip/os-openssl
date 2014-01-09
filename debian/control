@@ -1,5 +1,5 @@
 Source: openssl
-Build-Depends: debhelper (>= 8.1.3), zlib1g-dev, m4, bc, dpkg-dev (>= 1.15.7)
+Build-Depends: debhelper (>= 8.1.3), zlib1g-dev, m4, bc, dpkg-dev (>= 1.15.7), libssl-fips-dev
 Section: utils
 Priority: optional
 Maintainer: Pexip AS <packaging@pexip.com>
