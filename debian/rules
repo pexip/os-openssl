@@ -36,7 +36,7 @@ ifeq ($(DEB_HOST_ARCH),amd64)
  ARCH_CONFARGS := enable-ec_nistp_64_gcc_128
 endif
 
-CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) --with-fipsdir=/usr/lib/ssl/fips-2.0 fips no-idea no-mdc2 no-rc5 zlib  enable-tlsext no-ssl2 $(ARCH_CONFARGS)
+CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) --with-fipsdir=/usr/lib/ssl/fips-2.0 fips no-idea no-mdc2 no-rc5 no-zlib  enable-tlsext no-ssl2 $(ARCH_CONFARGS)
 OPT_alpha = ev4 ev5
 ARCHOPTS  = OPT_$(DEB_HOST_ARCH)
 OPTS      = $($(ARCHOPTS))
@@ -44,6 +44,10 @@ WANTED_LIBC_VERSION = 2.3.1-10
 
 ifeq ($(DEB_HOST_ARCH_CPU), amd64)
 	CONFARGS += enable-ec_nistp_64_gcc_128
+endif
+
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	MAKE_TEST = :
 endif
 
 build: build-arch build-indep
@@ -103,6 +107,9 @@ clean:
 	-rm -f libcrypto.* libssl.*
 	-cd test && rm -f .rnd tmp.bntest tmp.bctest *.o *.obj lib tags core .pure .nfs* *.old *.bak fluff bntest ectest  ecdsatest ecdhtest ideatest md2test  md4test md5test hmactest rc2test rc4test rc5test destest shatest sha1test sha256t sha512t mdc2test rmdtest randtest dhtest enginetest bftest casttest ssltest exptest dsatest rsa_test evp_test *.ss *.srl log dummytest newkey.pem igetest jpaketest srptest wp_test asn1test
 	-rm Makefile apps/CA.pl tools/c_rehash crypto/opensslconf.h crypto/x86_64cpuid.S
+	rm -f test/asn1test test/wp_test test/srptest test/jpaketest
+	rm -f certs/demo/*.0
+	rm -rf crypto/aes/aes-armv4.S crypto/bn/armv4-gf2m.S crypto/modes/ghash-armv4.S crypto/sha/*.S
 	dh_clean
 
 install: build
@@ -169,10 +176,11 @@ binary-arch:	build install
 	done
 	chmod 700 debian/openssl/etc/ssl/private
 	dh_fixperms -a -X etc/ssl/private
-	dh_strip -a --dbg-package=libssl1.0.0
+	dh_strip -plibssl1.0.0 --dbg-package=libssl1.0.0-dbg
+	dh_strip -a -Nlibssl1.0.0
 	dh_perl -a -d
 	dpkg-gensymbols -Pdebian/libssl1.0.0/ -plibssl1.0.0 -c4
-	dh_makeshlibs -a -V "libssl1.0.0 (>= 1.0.1d)" --add-udeb="libcrypto1.0.0-udeb"
+	dh_makeshlibs -a -V "libssl1.0.0 (>= 1.0.1d)" --add-udeb="libcrypto1.0.0-udeb" -Xengines
 	sed -i '/^udeb: libssl/s/libcrypto1.0.0-udeb/libssl1.0.0-udeb/' debian/libssl1.0.0/DEBIAN/shlibs
 	dh_shlibdeps -a -L libssl1.0.0 -l debian/libssl1.0.0/lib/$(DEB_HOST_MULTIARCH)
 	dh_gencontrol -a

@@ -15,15 +15,15 @@ diff --git a/Makefile.org b/Makefile.org
 index 2db31ea..7a74163 100644
 --- a/Makefile.org
 +++ b/Makefile.org
-@@ -303,7 +303,7 @@ fips_premain_dso$(EXE_EXT): libcrypto.a
+@@ -302,7 +302,7 @@ fips_premain_dso$(EXE_EXT): libcrypto.a
  			FIPSLD_CC="$(CC)"; CC=$(FIPSDIR)/bin/fipsld; \
  			export CC FIPSLD_CC FIPSLD_LIBCRYPTO; \
  		fi; \
--		$(MAKE) -e SHLIBDIRS=crypto build-shared; \
+-		$(MAKE) -e SHLIBDIRS=crypto  CC=$${CC:-$(CC)} build-shared; \
 +		$(MAKE) -e MAKEFLAGS= SHLIBDIRS=crypto CC="$${CC:-$(CC)}" build-shared; \
+ 		touch -c fips_premain_dso$(EXE_EXT); \
  	else \
  		echo "There's no support for shared libraries on this platform" >&2; \
- 		exit 1; \
 diff --git a/test/Makefile b/test/Makefile
 index 4c9eabc..38113e3 100644
 --- a/test/Makefile
