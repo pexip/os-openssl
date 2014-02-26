@@ -1,3 +1,9 @@
+openssl (1.0.1f-1ubuntu1pexip2) pexip; urgency=low
+
+  * Auto-enable FIPS mode if flag is present
+
+ -- John-Mark Bell <jmb@pexip.com>  Wed, 26 Feb 2014 17:10:24 +0000
+
 openssl (1.0.1f-1ubuntu1pexip1) pexip; urgency=low
 
   * New upstream release
