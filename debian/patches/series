@@ -34,4 +34,6 @@ fix-pod-errors.patch
 req_bits.patch
 perlpath-quilt.patch
 ppc64-support
+CVE-2014-0076.patch
+CVE-2014-0160.patch
 fips-build.patch

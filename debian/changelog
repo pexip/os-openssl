@@ -1,3 +1,23 @@
+openssl (1.0.1f-1ubuntu2pexip1) pexip; urgency=low
+
+  * New upstream release
+
+ -- Alan Ford <alan@pexip.com>  Tue, 08 Apr 2014 09:32:23 +0000
+
+openssl (1.0.1f-1ubuntu2) trusty; urgency=medium
+
+  * SECURITY UPDATE: side-channel attack on Montgomery ladder implementation
+    - debian/patches/CVE-2014-0076.patch: add and use constant time swap in
+      crypto/bn/bn.h, crypto/bn/bn_lib.c, crypto/ec/ec2_mult.c,
+      util/libeay.num.
+    - CVE-2014-0076
+  * SECURITY UPDATE: memory disclosure in TLS heartbeat extension
+    - debian/patches/CVE-2014-0160.patch: use correct lengths in
+      ssl/d1_both.c, ssl/t1_lib.c.
+    - CVE-2014-0160
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Mon, 07 Apr 2014 15:37:53 -0400
+
 openssl (1.0.1f-1ubuntu1pexip2) pexip; urgency=low
 
   * Auto-enable FIPS mode if flag is present
