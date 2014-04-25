@@ -19,9 +19,9 @@ index 2db31ea..7a74163 100644
  			FIPSLD_CC="$(CC)"; CC=$(FIPSDIR)/bin/fipsld; \
  			export CC FIPSLD_CC FIPSLD_LIBCRYPTO; \
  		fi; \
--		$(MAKE) -e SHLIBDIRS=crypto  CC=$${CC:-$(CC)} build-shared; \
-+		$(MAKE) -e MAKEFLAGS= SHLIBDIRS=crypto CC="$${CC:-$(CC)}" build-shared; \
- 		touch -c fips_premain_dso$(EXE_EXT); \
+-		$(MAKE) -e SHLIBDIRS=crypto  CC="$${CC:-$(CC)}" build-shared && \
++		$(MAKE) -e MAKEFLAGS= SHLIBDIRS=crypto CC="$${CC:-$(CC)}" build-shared && \
+ 		(touch -c fips_premain_dso$(EXE_EXT) || :); \
  	else \
  		echo "There's no support for shared libraries on this platform" >&2; \
 diff --git a/test/Makefile b/test/Makefile
