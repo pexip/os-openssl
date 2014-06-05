@@ -21,6 +21,4 @@ block_digicert_malaysia.patch
 #padlock_conf.patch
 defaults.patch
 openssl_fix_for_x32.patch
-fix-pod-errors.patch
-CVE-2010-5298.patch
-CVE-2014-XXXX-Extension-checking-fixes.patch
+disable_heartbeat_test.patch
