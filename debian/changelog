@@ -1,3 +1,33 @@
+openssl (1.0.1h-1pexip1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- John-Mark Bell <jmb@pexip.com>  Sat, 07 Jun 2014 16:37:42 +0100
+
+openssl (1.0.1h-1) unstable; urgency=high
+
+  * New upstream release
+    - Fix CVE-2014-0224
+    - Fix CVE-2014-0221
+    - Fix CVE-2014-0195
+    - Fix CVE-2014-3470
+    - Drop patch git_snapshot.patch
+  * Disable the heartbeat test since it fails to build.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 05 Jun 2014 18:42:05 +0200
+
+openssl (1.0.1g-4) unstable; urgency=medium
+
+  * Update to git snapshot
+    - Fixes CVE-2014-0198 (Closes: #747432)
+    - Drop the following patches that got applied upstream:
+      fix-pod-errors.patch, CVE-2010-5298.patch,
+      CVE-2014-XXXX-Extension-checking-fixes.patch
+  * Actually restart the services when restart-without-asking is set.
+    (Closes: #745801)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Mon, 12 May 2014 22:22:16 +0200
+
 openssl (1.0.1g-3pexip1) pexip; urgency=medium
 
   * New upstream release
