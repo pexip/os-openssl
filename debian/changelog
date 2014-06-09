@@ -1,3 +1,12 @@
+openssl (1.0.1h-2) unstable; urgency=medium
+
+  * Use upstream git snapshot:
+    - Fix resumption problem when using tls_session_secret_cb
+    - Create ~/.rnd with mode 0600 (Closes: #750103)
+    - Fix building on heartbeat test, drop patch to disable it.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Mon, 09 Jun 2014 11:21:51 +0200
+
 openssl (1.0.1h-1) unstable; urgency=high
 
   * New upstream release

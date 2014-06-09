@@ -1,0 +1,145 @@
+diff --git a/CHANGES b/CHANGES
+index d161eca..53b6c6f 100644
+--- a/CHANGES
++++ b/CHANGES
+@@ -2,6 +2,10 @@
+  OpenSSL CHANGES
+  _______________
+ 
++ Changes between 1.0.1h and 1.0.1i [xx XXX xxxx]
++
++  *)
++
+  Changes between 1.0.1g and 1.0.1h [5 Jun 2014]
+ 
+   *) Fix for SSL/TLS MITM flaw. An attacker using a carefully crafted
+diff --git a/NEWS b/NEWS
+index d062041..58ce8fa 100644
+--- a/NEWS
++++ b/NEWS
+@@ -5,6 +5,15 @@
+   This file gives a brief overview of the major changes between each OpenSSL
+   release. For more details please read the CHANGES file.
+ 
++  Major changes between OpenSSL 1.0.1h and OpenSSL 1.0.1i [under development]
++
++      o
++
++  Known issues in OpenSSL 1.0.1h:
++
++      o EAP-FAST and other applications using tls_session_secret_cb
++        wont resume sessions. Fixed in 1.0.1i-dev
++
+   Major changes between OpenSSL 1.0.1g and OpenSSL 1.0.1h [5 Jun 2014]
+ 
+       o Fix for CVE-2014-0224
+diff --git a/README b/README
+index 95c5cd2..37dbb3b 100644
+--- a/README
++++ b/README
+@@ -1,5 +1,5 @@
+ 
+- OpenSSL 1.0.1h 5 Jun 2014
++ OpenSSL 1.0.1i-dev
+ 
+  Copyright (c) 1998-2011 The OpenSSL Project
+  Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson
+diff --git a/crypto/opensslv.h b/crypto/opensslv.h
+index c3b6ace..a59982e 100644
+--- a/crypto/opensslv.h
++++ b/crypto/opensslv.h
+@@ -25,11 +25,11 @@
+  * (Prior to 0.9.5a beta1, a different scheme was used: MMNNFFRBB for
+  *  major minor fix final patch/beta)
+  */
+-#define OPENSSL_VERSION_NUMBER	0x1000108fL
++#define OPENSSL_VERSION_NUMBER	0x10001090L
+ #ifdef OPENSSL_FIPS
+-#define OPENSSL_VERSION_TEXT	"OpenSSL 1.0.1h-fips 5 Jun 2014"
++#define OPENSSL_VERSION_TEXT	"OpenSSL 1.0.1i-fips-dev xx XXX xxxx"
+ #else
+-#define OPENSSL_VERSION_TEXT	"OpenSSL 1.0.1h 5 Jun 2014"
++#define OPENSSL_VERSION_TEXT	"OpenSSL 1.0.1i-dev xx XXX xxxx"
+ #endif
+ #define OPENSSL_VERSION_PTEXT	" part of " OPENSSL_VERSION_TEXT
+ 
+diff --git a/crypto/rand/randfile.c b/crypto/rand/randfile.c
+index 7f14280..14ba69d 100644
+--- a/crypto/rand/randfile.c
++++ b/crypto/rand/randfile.c
+@@ -79,6 +79,7 @@
+ #endif
+ #ifndef OPENSSL_NO_POSIX_IO
+ # include <sys/stat.h>
++# include <fcntl.h>
+ #endif
+ 
+ #ifdef _WIN32
+diff --git a/doc/crypto/EVP_DigestInit.pod b/doc/crypto/EVP_DigestInit.pod
+index 367691c..310c65e 100644
+--- a/doc/crypto/EVP_DigestInit.pod
++++ b/doc/crypto/EVP_DigestInit.pod
+@@ -161,9 +161,8 @@ EVP_MD_CTX_copy_ex() returns 1 if successful or 0 for failure.
+ EVP_MD_type(), EVP_MD_pkey_type() and EVP_MD_type() return the NID of the
+ corresponding OBJECT IDENTIFIER or NID_undef if none exists.
+ 
+-EVP_MD_size(), EVP_MD_block_size(), EVP_MD_CTX_size(e), EVP_MD_size(),
+-EVP_MD_CTX_block_size()	and EVP_MD_block_size() return the digest or block
+-size in bytes.
++EVP_MD_size(), EVP_MD_block_size(), EVP_MD_CTX_size() and
++EVP_MD_CTX_block_size() return the digest or block size in bytes.
+ 
+ EVP_md_null(), EVP_md2(), EVP_md5(), EVP_sha(), EVP_sha1(), EVP_dss(),
+ EVP_dss1(), EVP_mdc2() and EVP_ripemd160() return pointers to the
+diff --git a/openssl.spec b/openssl.spec
+index f0f5ea8..a7e2776 100644
+--- a/openssl.spec
++++ b/openssl.spec
+@@ -7,7 +7,7 @@ Release: 1
+ Summary: Secure Sockets Layer and cryptography libraries and tools
+ Name: openssl
+ #Version: %{libmaj}.%{libmin}.%{librel}
+-Version: 1.0.1h
++Version: 1.0.1i
+ Source0: ftp://ftp.openssl.org/source/%{name}-%{version}.tar.gz
+ License: OpenSSL
+ Group: System Environment/Libraries
+diff --git a/ssl/s3_clnt.c b/ssl/s3_clnt.c
+index 0457af8..167bfc6 100644
+--- a/ssl/s3_clnt.c
++++ b/ssl/s3_clnt.c
+@@ -901,6 +901,7 @@ int ssl3_get_server_hello(SSL *s)
+ 			{
+ 			s->session->cipher = pref_cipher ?
+ 				pref_cipher : ssl_get_cipher_by_char(s, p+j);
++	    		s->s3->flags |= SSL3_FLAGS_CCS_OK;
+ 			}
+ 		}
+ #endif /* OPENSSL_NO_TLSEXT */
+diff --git a/test/Makefile b/test/Makefile
+index 005f2e8..3e9f819 100644
+--- a/test/Makefile
++++ b/test/Makefile
+@@ -370,6 +370,13 @@ FIPS_BUILD_CMD=shlib_target=; if [ -n "$(SHARED_LIBS)" ]; then \
+ 		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
+ 		link_app.$${shlib_target}
+ 
++BUILD_CMD_STATIC=shlib_target=; \
++	LIBRARIES="$(DLIBSSL) $(DLIBCRYPTO) $(LIBKRB5)"; \
++	$(MAKE) -f $(TOP)/Makefile.shared -e \
++		APPNAME=$$target$(EXE_EXT) OBJECTS="$$target.o" \
++		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
++		link_app.$${shlib_target}
++
+ $(RSATEST)$(EXE_EXT): $(RSATEST).o $(DLIBCRYPTO)
+ 	@target=$(RSATEST); $(BUILD_CMD)
+ 
+@@ -476,7 +483,7 @@ $(SRPTEST)$(EXE_EXT): $(SRPTEST).o $(DLIBCRYPTO)
+ 	@target=$(SRPTEST); $(BUILD_CMD)
+ 
+ $(HEARTBEATTEST)$(EXE_EXT): $(HEARTBEATTEST).o $(DLIBCRYPTO)
+-	@target=$(HEARTBEATTEST); $(BUILD_CMD)
++	@target=$(HEARTBEATTEST); $(BUILD_CMD_STATIC)
+ 
+ #$(AESTEST).o: $(AESTEST).c
+ #	$(CC) -c $(CFLAGS) -DINTERMEDIATE_VALUE_KAT -DTRACE_KAT_MCT $(AESTEST).c

@@ -21,4 +21,4 @@ block_digicert_malaysia.patch
 #padlock_conf.patch
 defaults.patch
 openssl_fix_for_x32.patch
-disable_heartbeat_test.patch
+git_snapshot.patch
