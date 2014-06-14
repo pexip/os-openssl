@@ -1,3 +1,11 @@
+openssl (1.0.1h-3) unstable; urgency=medium
+
+  * New upstream git snapshot
+    - Allows CCS after finished message, needed for some renegiotation cases.
+      (Closes: #751093)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Sat, 14 Jun 2014 22:23:21 +0200
+
 openssl (1.0.1h-2) unstable; urgency=medium
 
   * Use upstream git snapshot:
