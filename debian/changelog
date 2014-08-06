@@ -1,3 +1,21 @@
+openssl (1.0.1i-1) unstable; urgency=high
+
+  * New upstream release
+    - Fix for CVE-2014-3512
+    - Fix for CVE-2014-3511
+    - Fix for CVE-2014-3510
+    - Fix for CVE-2014-3507
+    - Fix for CVE-2014-3506
+    - Fix for CVE-2014-3505
+    - Fix for CVE-2014-3509
+    - Fix for CVE-2014-5139
+    - Fix for CVE-2014-3508
+    - Drop upstream git snapshot patch.
+  * Add support for ppc64le (Closes: #745657)
+  * Add support for OpenRISC (Closes: #736772)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 07 Aug 2014 00:02:41 +0200
+
 openssl (1.0.1h-3) unstable; urgency=medium
 
   * New upstream git snapshot
