@@ -1,6 +1,11 @@
 openssl (1.0.1i-1pexip1) pexip; urgency=medium
 
   * New upstream release
+  * debian/patches/fips-build.patch: Only use FIPS-certified
+    GF methods if FIPS mode has been enabled. This is necessary
+    as 1.0.1i introduced a fixed ec_GFp_simple_points_make_affine
+    and corresponding test, which fails with the FIPS-certified
+    implementation. (c.f. 281720c2a38653035cf6cd6f424ded2913d4c931)
 
  -- John-Mark Bell <jmb@pexip.com>  Thu, 07 Aug 2014 02:11:12 +0100
 
