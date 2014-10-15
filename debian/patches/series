@@ -22,3 +22,4 @@ block_digicert_malaysia.patch
 defaults.patch
 openssl_fix_for_x32.patch
 fips-build.patch
+CVE-2014-3566.patch

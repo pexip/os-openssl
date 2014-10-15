@@ -1,3 +1,10 @@
+openssl (1.0.1i-1pexip2) pexip; urgency=medium
+
+  * debian/patches/CVE-2014-3566.patch: Backport support for
+    TLS_FALLBACK_SCSV to mitigate Poodle.
+
+ -- John-Mark Bell <jmb@pexip.com>  Wed, 15 Oct 2014 04:22:39 +0100
+
 openssl (1.0.1i-1pexip1) pexip; urgency=medium
 
   * New upstream release
