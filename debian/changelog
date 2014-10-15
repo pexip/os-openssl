@@ -1,3 +1,23 @@
+openssl (1.0.1j-1) unstable; urgency=high
+
+  * New upstream release
+    - Fixes CVE-2014-3513
+    - Fixes CVE-2014-3567
+    - Add Fallback SCSV support to mitigate CVE-2014-3566
+    - Fixes CVE-2014-3568
+  * Disables SSLv3 because of CVE-2014-3566
+  * Update dgst_hmac.patch to apply to new upstream version
+  * Drop rehash_pod.patch, applied upstream
+  * Fix openssl_fix_for_x32.patch to apply to new upstream version
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Wed, 15 Oct 2014 19:06:38 +0200
+
+openssl (1.0.1i-2) unstable; urgency=medium
+
+  * Fix assembler for ppc64le (Closes: #745657)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Mon, 11 Aug 2014 21:37:47 +0200
+
 openssl (1.0.1i-1) unstable; urgency=high
 
   * New upstream release
