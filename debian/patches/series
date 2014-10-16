@@ -9,7 +9,6 @@ no-symbolic.patch
 pic.patch
 valgrind.patch
 rehash-crt.patch
-rehash_pod.patch
 shared-lib-ext.patch
 stddef.patch
 version-script.patch
@@ -21,5 +20,5 @@ block_digicert_malaysia.patch
 #padlock_conf.patch
 defaults.patch
 openssl_fix_for_x32.patch
+ppc64el.patch
 fips-build.patch
-CVE-2014-3566.patch
