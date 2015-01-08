@@ -1,3 +1,18 @@
+openssl (1.0.1k-1) unstable; urgency=medium
+
+  * New upstream version
+    - Fixes CVE-2014-3571
+    - Fixes CVE-2015-0206
+    - Fixes CVE-2014-3569
+    - Fixes CVE-2014-3572
+    - Fixes CVE-2015-0204
+    - Fixes CVE-2015-0205
+    - Fixes CVE-2014-8275
+    - Fixes CVE-2014-3570
+  * Drop gnu_source.patch, dgst_hmac.patch: applied upstream
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 08 Jan 2015 20:55:26 +0100
+
 openssl (1.0.1j-1) unstable; urgency=high
 
   * New upstream release
