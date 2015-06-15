@@ -1,3 +1,15 @@
+openssl (1.0.1o-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2015-1788
+    - Fixes CVE-2015-1789
+    - Fixes CVE-2015-1790
+    - Fixes CVE-2015-1791
+    - Fixes CVE-2015-1792
+    - Fixes CVE-2015-4000
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 15 Jun 2015 19:20:31 +0100
+
 openssl (1.0.1m-0pexip1) pexip; urgency=medium
 
   * New upstream release

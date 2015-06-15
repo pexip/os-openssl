@@ -67,19 +67,6 @@ Index: openssl-1.0.1e/crypto/rsa/rsa_ameth.c
          return 1;
  
      default:
-Index: openssl-1.0.1e/apps/gendh.c
-===================================================================
---- openssl-1.0.1e.orig/apps/gendh.c	2013-12-22 15:36:37.179274819 +0100
-+++ openssl-1.0.1e/apps/gendh.c	2013-12-22 15:36:37.175274904 +0100
-@@ -80,7 +80,7 @@
- # include <openssl/x509.h>
- # include <openssl/pem.h>
- 
--# define DEFBITS 512
-+# define DEFBITS 2048
- # undef PROG
- # define PROG gendh_main
- 
 Index: openssl-1.0.1e/apps/genrsa.c
 ===================================================================
 --- openssl-1.0.1e.orig/apps/genrsa.c	2013-12-22 15:36:37.179274819 +0100
@@ -93,25 +80,3 @@ Index: openssl-1.0.1e/apps/genrsa.c
  # undef PROG
  # define PROG genrsa_main
  
-Index: openssl-1.0.1e/apps/dhparam.c
-===================================================================
---- openssl-1.0.1e.orig/apps/dhparam.c	2013-12-22 15:37:05.438669443 +0100
-+++ openssl-1.0.1e/apps/dhparam.c	2013-12-22 15:38:18.417105946 +0100
-@@ -130,7 +130,7 @@
- # undef PROG
- # define PROG    dhparam_main
- 
--# define DEFBITS 512
-+# define DEFBITS 2048
- 
- /*-
-  * -inform arg  - input format - default PEM (DER or PEM)
-@@ -254,7 +254,7 @@
-         BIO_printf(bio_err,
-                    " -5            generate parameters using  5 as the generator value\n");
-         BIO_printf(bio_err,
--                   " numbits       number of bits in to generate (default 512)\n");
-+                   " numbits       number of bits in to generate (default 2048)\n");
- # ifndef OPENSSL_NO_ENGINE
-         BIO_printf(bio_err,
-                    " -engine e     use engine e, possibly a hardware device.\n");
