@@ -4,7 +4,7 @@ Index: openssl-1.0.1e/Configure
 +++ openssl-1.0.1e/Configure	2013-08-24 07:49:19.252316478 +0000
 @@ -105,6 +105,10 @@
  
- my $gcc_devteam_warn = "-Wall -pedantic -DPEDANTIC -Wno-long-long -Wsign-compare -Wmissing-prototypes -Wshadow -Wformat -Werror -DCRYPTO_MDEBUG_ALL -DCRYPTO_MDEBUG_ABORT -DREF_CHECK -DOPENSSL_NO_DEPRECATED";
+ my $clang_devteam_warn = "-Wno-unused-parameter -Wno-missing-field-initializers -Wno-language-extension-token -Wno-extended-offsetof -Qunused-arguments";
  
 +# There are no separate CFLAGS/CPPFLAGS/LDFLAGS, set everything in CFLAGS
 +my $debian_cflags = `dpkg-buildflags --get CFLAGS` . `dpkg-buildflags --get CPPFLAGS` . `dpkg-buildflags --get LDFLAGS` . "-Wa,--noexecstack -Wall";

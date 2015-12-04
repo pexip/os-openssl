@@ -1,7 +1,20 @@
+openssl (1.0.1q-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2015-3194
+    - Fixes CVE-2015-3195
+  * debian/patches/debian-targets.patch: refresh context
+  * debian/rules:
+    - Ensure make depend is run after Configure
+    - Remove all symlinks during clean
+
+ -- John-Mark Bell <jmb@pexip.com>  Fri, 04 Dec 2015 11:40:24 +0000
+
 openssl (1.0.1p-0pexip1) pexip; urgency=medium
 
   * New upstream release
     - Fixes CVE-2015-1793
+    - Fixes CVE-2015-3196
 
  -- John-Mark Bell <jmb@pexip.com>  Tue, 09 Jul 2015 15:12:28 +0100
 
