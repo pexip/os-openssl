@@ -1,3 +1,10 @@
+openssl (1.0.1r-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2015-3197
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 28 Jan 2016 15:28:13 +0000
+
 openssl (1.0.1q-0pexip1) pexip; urgency=medium
 
   * New upstream release
