@@ -1,3 +1,16 @@
+openssl (1.0.1s-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2016-0702
+    - Fixes CVE-2016-0705
+    - Fixes CVE-2016-0797
+    - Fixes CVE-2016-0798
+    - Fixes CVE-2016-0799
+  * debian/patches/version-script.patch: Update to export new
+    symbols SRP_VBASE_get1_by_user and SRP_user_pwd_free
+
+ -- John-Mark Bell <jmb@pexip.com>  Tue, 01 Mar 2016 14:28:53 +0000
+
 openssl (1.0.1r-0pexip1) pexip; urgency=medium
 
   * New upstream release
