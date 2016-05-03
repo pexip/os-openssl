@@ -1,3 +1,15 @@
+openssl (1.0.1t-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2016-2105
+    - Fixes CVE-2016-2106
+    - Fixes CVE-2016-2107
+    - Fixes CVE-2016-2109
+    - Fixes CVE-2016-2176
+  * debian/patches/fips-build.patch: Refresh
+
+ -- John-Mark Bell <jmb@pexip.com>  Tue, 03 May 2016 15:05:31 +0100
+
 openssl (1.0.1s-0pexip1) pexip; urgency=medium
 
   * New upstream release

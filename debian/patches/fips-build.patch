@@ -37,19 +37,6 @@ index 4c9eabc..38113e3 100644
  		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
  		link_app.$${shlib_target}
  
-diff --git a/test/testfipsssl b/test/testfipsssl
-index c4836ed..cac7c98 100644
---- a/test/testfipsssl
-+++ b/test/testfipsssl
-@@ -39,7 +39,7 @@ echo test ssl3 is forbidden in FIPS mode
- $ssltest -ssl3 $extra && exit 1
- 
- echo test ssl2 is forbidden in FIPS mode
--$ssltest -ssl2 $extra && exit 1
-+$ssltest -ssl2 $extra || exit 1
- 
- echo test tls1
- $ssltest -tls1 $extra || exit 1
 diff --git a/apps/speed.c b/apps/speed.c
 index 9886ca3..138a5f4 100644
 --- a/apps/speed.c
