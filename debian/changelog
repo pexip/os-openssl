@@ -1,3 +1,19 @@
+openssl (1.0.1u-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2016-2177
+    - Fixes CVE-2016-2178
+    - Fixes CVE-2016-2179
+    - Fixes CVE-2016-2180
+    - Fixes CVE-2016-2181
+    - Fixes CVE-2016-2182
+    - Fixes CVE-2016-2183
+    - Fixes CVE-2016-6302
+    - Fixes CVE-2016-6303
+    - Fixes CVE-2016-6306
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 22 Sep 2016 12:00:27 +0100
+
 openssl (1.0.1t-0pexip1) pexip; urgency=medium
 
   * New upstream release
