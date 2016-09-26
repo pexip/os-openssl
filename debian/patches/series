@@ -1,4 +1,3 @@
-ca.patch
 config-hurd.patch
 debian-targets.patch
 engines-path.patch
@@ -8,15 +7,13 @@ no-rpath.patch
 no-symbolic.patch
 pic.patch
 valgrind.patch
-rehash-crt.patch
 shared-lib-ext.patch
-stddef.patch
 version-script.patch
 c_rehash-compat.patch
 block_diginotar.patch
 block_digicert_malaysia.patch
 #padlock_conf.patch
-defaults.patch
-openssl_fix_for_x32.patch
-ppc64el.patch
-
+disable_freelist.patch
+soname.patch
+disable_sslv3_test.patch
+libdoc-manpgs-pod-spell.patch
