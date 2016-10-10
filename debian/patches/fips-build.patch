@@ -76,7 +76,7 @@ diff --git a/crypto/o_init.c b/crypto/o_init.c
 index db4cdc4..294dc32 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -55,26 +55,51 @@
+@@ -55,29 +55,54 @@
  #include <e_os.h>
  #include <openssl/err.h>
  #ifdef OPENSSL_FIPS
@@ -121,6 +121,9 @@ index db4cdc4..294dc32 100644
      done = 1;
  #ifdef OPENSSL_FIPS
      FIPS_set_locking_callbacks(CRYPTO_lock, CRYPTO_add_lock);
+ # ifndef OPENSSL_NO_DEPRECATED
+     FIPS_crypto_set_id_callback(CRYPTO_thread_id);
+ # endif
      FIPS_set_error_callbacks(ERR_put_error, ERR_add_error_vdata);
      FIPS_set_malloc_callbacks(CRYPTO_malloc, CRYPTO_free);
      RAND_init_fips();
@@ -129,3 +132,22 @@ index db4cdc4..294dc32 100644
  #endif
  #if 0
      fprintf(stderr, "Called OPENSSL_init\n");
+diff --git a/test/testfipsssl b/test/testfipsssl
+index b8bbb25..b96eccd 100644
+--- a/test/testfipsssl
++++ b/test/testfipsssl
+@@ -35,8 +35,12 @@ fi
+ 
+ #############################################################################
+ 
+-echo test ssl3 is forbidden in FIPS mode
+-$ssltest -ssl3 $extra && exit 1
++if ../util/shlib_wrap.sh ../apps/openssl ciphers -ssl3 >/dev/null 2>&1; then
++    echo test ssl3 is forbidden in FIPS mode
++    $ssltest -ssl3 $extra && exit 1
++else
++    echo ssl3 disabled: skipping test
++fi
+ 
+ if ../util/shlib_wrap.sh ../apps/openssl ciphers SSLv2 >/dev/null 2>&1; then
+     echo test ssl2 is forbidden in FIPS mode

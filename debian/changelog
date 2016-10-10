@@ -1,3 +1,257 @@
+openssl (1.0.2j-1pexip1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 10 Oct 2016 16:43:13 +0100
+
+openssl (1.0.2j-1) unstable; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2016-7052
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Mon, 26 Sep 2016 18:17:39 +0200
+
+openssl (1.0.2i-1) unstable; urgency=high
+
+  * New upstream version
+    - Fix CVE-2016-2177
+    - Fix CVE-2016-2178
+    - Fix CVE-2016-2179
+    - Fix CVE-2016-2180
+    - Fix CVE-2016-2181
+    - Fix CVE-2016-2182
+    - Fix CVE-2016-2183
+    - Fix CVE-2016-6302
+    - Fix CVE-2016-6303
+    - Fix CVE-2016-6304
+    - Fix CVE-2016-6306
+  * Drop ca.patch, option is now documented upstream
+  * Update engines-path.patch to also update the libcrypto.pc, now that that
+    has an enginesdir in it.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 22 Sep 2016 19:39:36 +0200
+
+openssl (1.0.2h-2) unstable; urgency=medium
+
+  * Re-add libdoc-manpgs-pod-spell.patch to series files (Closes: #813191)
+  * Don't build i686 optimized version anymore on i386, it's now the default.
+    (Closes: #823774)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Sun, 08 May 2016 13:16:29 +0200
+
+openssl (1.0.2h-1) unstable; urgency=high
+
+  * New upstream version
+    - Fixes CVE-2016-2107
+    - Fixes CVE-2016-2105
+    - Fixes CVE-2016-2106
+    - Fixes CVE-2016-2109
+    - Fixes CVE-2016-2176
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Tue, 03 May 2016 18:31:22 +0200
+
+openssl (1.0.2g-2) unstable; urgency=medium
+
+  * Use assembler of arm64 (Closes: #794326)
+    Patch from Riku Voipio <riku.voipio@iki.fi>
+  * Add a udeb for libssl, based on similar changes done in Ubuntu
+    starting in version 0.9.8o-4ubuntu1 (Closes: #802591)
+    Patch from Margarita Manterola <marga@google.com>
+  * Add support for nios2 (Closes: #816239)
+    Based on patch from Marek Vasut <marex@denx.de>
+  * Update Spanish translation from Manuel "Venturi" Porras Peralta
+    <venturi@openmailbox.org> (Closes: #773601)
+  * Don't build an i586 optimized version anymore, the default
+    already targets that.  Patch from Sven Joachim <svenjoac@gmx.de>
+    (Closes: #759811)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 21 Apr 2016 23:43:06 +0200
+
+openssl (1.0.2g-1) unstable; urgency=high
+
+  * New upstream version
+  * Fix CVE-2016-0797
+  * Fix CVE-2016-0798
+  * Fix CVE-2016-0799
+  * Fix CVE-2016-0702
+  * Fix CVE-2016-0705
+  * Disable EXPORT and LOW ciphers: The DROWN attack (CVE-2016-0800)
+    makes use of those, and SLOTH attack (CVE-2015-7575) can make use of them
+    too.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Tue, 01 Mar 2016 18:31:09 +0100
+
+openssl (1.0.2f-2) unstable; urgency=high
+
+  * New upstream version.
+    - Fixes CVE-2016-0701
+    - Not affected by CVE-2015-3197 because SSLv2 is disabled.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 28 Jan 2016 19:32:02 +0100
+
+openssl (1.0.2e-1) unstable; urgency=high
+
+  * New upstream release
+    - Fix CVE-2015-3193
+    - Fix CVE-2015-3194
+    - Fix CVE-2015-3195
+    - Fix CVE-2015-3196
+  * Remove all symlinks during clean
+  * Run make depend after configure
+  * Remove openssl_button.* from the doc package
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 03 Dec 2015 19:33:05 +0100
+
+openssl (1.0.2d-3) unstable; urgency=medium
+
+  * Upload to unstable
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Sun, 01 Nov 2015 19:14:34 +0100
+
+openssl (1.0.2d-2) experimental; urgency=medium
+
+  * Build with no-ssl3-method to remove all SSLv3 support.  This results in
+    the functions SSLv3_method(), SSLv3_server_method() and
+    SSLv3_client_method() being removed from libssl.  Change the soname as
+    result of that and also changes name of the binary package.
+    (Closes: #768476)
+  * Enable rfc3779 and cms support (Closes: #630790)
+  * Fix cross compilation for mips architectures. (Closes: #782492)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Sun, 06 Sep 2015 14:21:27 +0200
+
+openssl (1.0.2d-1) unstable; urgency=high
+
+  * New upstream version
+    - Fixes CVE-2015-1793
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 09 Jul 2015 18:22:26 +0200
+
+openssl (1.0.2c-1) unstable; urgency=medium
+
+  * New upstream version
+    - Fixes ABI (Closes: #788511)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Fri, 12 Jun 2015 20:35:12 +0200
+
+openssl (1.0.2b-1) unstable; urgency=high
+
+  * New upstream version
+    - Fix CVE-2015-4000
+    - Fix CVE-2015-1788
+    - Fix CVE-2015-1789
+    - Fix CVE-2015-1790
+    - Fix CVE-2015-1792
+    - Fix CVE-2015-1791
+  * Update c_rehash-compat.patch to make it apply to the new version.
+  * Remove openssl-pod-misspell.patch applied upstream
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 11 Jun 2015 18:20:38 +0200
+
+openssl (1.0.2a-1) unstable; urgency=medium
+
+  * New upstrema version
+    - Fix CVE-2015-0286
+    - Fix CVE-2015-0287
+    - Fix CVE-2015-0289
+    - Fix CVE-2015-0293 (not affected, SSLv2 disabled)
+    - Fix CVE-2015-0209
+    - Fix CVE-2015-0288
+    - Fix CVE-2015-0291
+    - Fix CVE-2015-0290
+    - Fix CVE-2015-0207
+    - Fix CVE-2015-0208
+    - Fix CVE-2015-1787
+    - Fix CVE-2015-0285
+  * Temporary enable SSLv3 methods again, but they will go away.
+  * Don't set TERMIO anymore, use the default TERMIOS instead.
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Thu, 30 Apr 2015 23:37:27 +0200
+
+openssl (1.0.2-1) experimental; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2014-3571
+    - Fixes CVE-2015-0206
+    - Fixes CVE-2014-3569
+    - Fixes CVE-2014-3572
+    - Fixes CVE-2015-0204
+    - Fixes CVE-2015-0205
+    - Fixes CVE-2014-8275
+    - Fixes CVE-2014-3570
+    - Drop git_snapshot.patch
+  * Drop gnu_source.patch, dgst_hmac.patch, stddef.patch,
+    no_ssl3_method.patch: applied upstream
+  * Update patches to apply
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Fri, 23 Jan 2015 18:54:13 +0100
+
+openssl (1.0.2~beta3-1) experimental; urgency=low
+
+  * New usptream beta version
+  * Add git snapshot
+  * Merge changes between 1.0.1h-3 and 1.0.1j-1:
+    - Disables SSLv3 because of CVE-2014-3566
+  * Drop patch rehash-crt.patch: partially applied upstream.
+    c_rehash now doesn't support files in DER format anymore.
+  * Drop patch rehash_pod.patch: applied upstream
+  * Update c_rehash-compat.patch to apply to new upstream version.  This
+    undoes upstream's "-old" option and creates both the new and old again.
+    It now also does it for CRLs.
+  * Drop defaults.patch, applied upstream
+  * dgst_hmac.patch updated to apply to upstream version.
+  * engines-path.patch updated to apply to upstream version.
+  * Update list of exported symbols
+  * Update symbols files to require beta3
+  * Enable unit tests
+  * Add patch to add support for the no-ssl3-method option that completly
+    disable SSLv3 and pass the option.  This drops the following functions
+    from the library: SSLv3_method, SSLv3_server_method and
+    SSLv3_client_method
+  * Build using OPENSSL_NO_BUF_FREELISTS
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Fri, 07 Nov 2014 00:20:10 +0100
+
+openssl (1.0.2~beta2-1) experimental; urgency=medium
+
+  * New usptream beta version
+    - Fix CVE-2014-0224
+    - Fix CVE-2014-0221
+    - Fix CVE-2014-0195
+    - Fix CVE-2014-3470
+    - Fix CVE-2014-0198
+    - Fix CVE-2010-5298
+    - Fix CVE-2014-0160
+    - Fix CVE-2014-0076
+  * Merge changes between 1.0.1f-1 and 1.0.1h-3:
+    - postinst: Updated check for restarting services
+  * libdoc-manpgs-pod-spell.patch and openssl-pod-misspell.patch
+    partially applied upstream
+  * Drop fix-pod-errors.patch, applied upstream.
+  * Add support for ppc64le (Closes: #745657)
+  * Add support for OpenRISC (Closes: #736772)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Wed, 23 Jul 2014 19:54:09 +0200
+
+openssl (1.0.2~beta1-1) experimental; urgency=medium
+
+  * New upstream beta version
+    - Update list of symbols that should be exported and adjust the symbols
+      file.  This also removes a bunch of duplicate symbols in the linker
+      file.
+    - Fix additional pod errors
+    - Following patches have been applied upstream and are removed:
+      libssl-misspell.patch, pod_req_misspell2.patch,
+      pod_pksc12.misspell.patch, pod_s_server.misspell.patch,
+      pod_x509setflags.misspell.patch, pod_ec.misspell.patch,
+      pkcs12-doc.patch, req_bits.patch
+    - Following patches have been partially applied upstream:
+      libdoc-manpgs-pod-spell.patch, openssl-pod-misspell.patch
+    - Remove openssl_fix_for_x32.patch, different patch applied upstream.
+  * Add support for cross compiling (Closes: #465248)
+
+ -- Kurt Roeckx <kurt@roeckx.be>  Tue, 25 Feb 2014 00:36:51 +0100
+
 openssl (1.0.1u-0pexip1) pexip; urgency=medium
 
   * New upstream release
@@ -217,7 +471,7 @@ openssl (1.0.1h-1) unstable; urgency=high
 
  -- Kurt Roeckx <kurt@roeckx.be>  Thu, 05 Jun 2014 18:42:05 +0200
 
-openssl (1.0.1g-4) unstable; urgency=medium
+ openssl (1.0.1g-4) unstable; urgency=medium
 
   * Update to git snapshot
     - Fixes CVE-2014-0198 (Closes: #747432)
