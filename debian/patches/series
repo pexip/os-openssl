@@ -18,3 +18,4 @@ soname.patch
 disable_sslv3_test.patch
 libdoc-manpgs-pod-spell.patch
 fips-build.patch
+no-sslv3-client.patch

@@ -5,11 +5,9 @@ We don't define OPENSSL_NO_BUF_FREELISTS globally sinc it changes structures and
 would break the ABI.  Instead we just do it in the .c files that try to do
 something with it.
 
-Index: openssl-1.0.2/ssl/s3_both.c
-===================================================================
---- openssl-1.0.2.orig/ssl/s3_both.c
-+++ openssl-1.0.2/ssl/s3_both.c
-@@ -573,6 +573,7 @@ int ssl_verify_alarm_type(long type)
+--- a/ssl/s3_both.c
++++ b/ssl/s3_both.c
+@@ -584,6 +584,7 @@ int ssl_verify_alarm_type(long type)
      return (al);
  }
  
@@ -17,10 +15,8 @@ Index: openssl-1.0.2/ssl/s3_both.c
  #ifndef OPENSSL_NO_BUF_FREELISTS
  /*-
   * On some platforms, malloc() performance is bad enough that you can't just
-Index: openssl-1.0.2/ssl/ssl_lib.c
-===================================================================
---- openssl-1.0.2.orig/ssl/ssl_lib.c
-+++ openssl-1.0.2/ssl/ssl_lib.c
+--- a/ssl/ssl_lib.c
++++ b/ssl/ssl_lib.c
 @@ -162,6 +162,8 @@
  
  const char *SSL_version_str = OPENSSL_VERSION_TEXT;

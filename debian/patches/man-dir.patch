@@ -1,8 +1,6 @@
-Index: openssl-1.0.0c/Makefile.org
-===================================================================
---- openssl-1.0.0c.orig/Makefile.org	2010-12-12 16:11:27.000000000 +0100
-+++ openssl-1.0.0c/Makefile.org	2010-12-12 16:11:37.000000000 +0100
-@@ -131,7 +131,7 @@
+--- a/Makefile.org
++++ b/Makefile.org
+@@ -159,7 +159,7 @@ TESTS = alltests
  
  MAKEFILE= Makefile
  
