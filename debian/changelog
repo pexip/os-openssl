@@ -1,3 +1,11 @@
+openssl (1.0.2n-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2017-3737
+    - Fixes CVE-2017-3738
+
+ -- John-Mark Bell <jmb@pexip.com>  Tue, 02 Jan 2018 16:24:36 +0000
+
 openssl (1.0.2m-0pexip1) pexip; urgency=medium
 
   * New upstream release
