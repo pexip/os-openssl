@@ -66,7 +66,7 @@
  # ifndef HAVE_FORK
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -56,8 +56,31 @@
+@@ -56,13 +56,36 @@
  #include <e_os.h>
  #include <openssl/err.h>
  #ifdef OPENSSL_FIPS
@@ -75,6 +75,11 @@
 +# include <unistd.h>
  # include <openssl/fips.h>
  # include <openssl/rand.h>
+ 
+ # ifndef OPENSSL_NO_DEPRECATED
+ /* the prototype is missing in <openssl/fips.h> */
+ void FIPS_crypto_set_id_callback(unsigned long (*func)(void));
+ # endif
 +# define CONSTRUCTOR __attribute__((constructor))
 +
 +static void set_fips_mode(void)
