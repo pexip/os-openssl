@@ -1,3 +1,9 @@
+openssl (1.0.2o-0pexip2) pexip; urgency=medium
+
+  * Rename libssl-dev to libssl1.0-dev
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 23 Jul 2018 15:02:30 +0100
+
 openssl (1.0.2o-0pexip1) pexip; urgency=medium
 
   * New upstream release

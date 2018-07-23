@@ -68,7 +68,7 @@ Description: ssl shared library - udeb
  .
  Do not install it on a normal system.
 
-Package: libssl-dev
+Package: libssl1.0-dev
 Section: libdevel
 Priority: optional
 Architecture: any
