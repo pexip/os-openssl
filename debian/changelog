@@ -1,3 +1,11 @@
+openssl (1.0.2p-pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2018-0732
+    - Fixes CVE-2018-0737
+
+ -- Vincent Sanders <vince@pexip.com>  Mon, 10 Sep 2018 08:33:38 +0000
+
 openssl (1.0.2o-0pexip1) pexip; urgency=medium
 
   * New upstream release
