@@ -1,3 +1,9 @@
+openssl (1.0.2p-pexip3) pexip; urgency=medium
+
+  * Drop 0 from version for 1.0.2p
+
+ -- John-Mark Bell <jmb@pexip.com>  Fri, 14 Sep 2018 16:31:38 +0100
+
 openssl (1.0.2p-0pexip2) pexip; urgency=medium
 
   * No-change rebuild
