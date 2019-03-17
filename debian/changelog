@@ -1,3 +1,10 @@
+openssl (1.0.2r-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2019-1559
+
+ -- Vincent Sanders <vince@pexip.com>  Wed, 13 Mar 2019 21:17:14 +0000
+
 openssl (1.0.2q-0pexip1) pexip; urgency=medium
 
   * New upstream release
