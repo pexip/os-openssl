@@ -1,3 +1,9 @@
+openssl (1.0.2r-1pexip1) pexip; urgency=medium
+
+  * Bump version number
+
+ -- Vincent Sanders <vince@pexip.com>  Mon, 18 Mar 2019 12:48:14 +0000
+
 openssl (1.0.2r-0pexip1) pexip; urgency=medium
 
   * New upstream release
