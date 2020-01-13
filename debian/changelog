@@ -1,3 +1,12 @@
+openssl (1.0.2u-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+    - Fixes CVE-2019-1547
+    - Fixes CVE-2019-1551
+    - Fixes CVE-2019-1563
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 13 Jan 2020 09:52:41 +0000
+
 openssl (1.0.2r-1pexip1) pexip; urgency=medium
 
   * Bump version number
