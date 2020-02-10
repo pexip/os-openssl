@@ -1,3 +1,9 @@
+openssl (1.0.2u-1pexip1) pexip; urgency=medium
+
+  * Bump version
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 10 Feb 2020 14:59:54 +0000
+
 openssl (1.0.2u-0pexip1) pexip; urgency=medium
 
   * New upstream release
