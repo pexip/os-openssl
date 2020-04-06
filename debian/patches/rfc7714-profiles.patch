@@ -1,0 +1,46 @@
+From 43e5faa2539ae8aae6ef55be2239b9b1a77fea45 Mon Sep 17 00:00:00 2001
+From: Dmitry Sobinov <sobinoff@gmail.com>
+Date: Sat, 2 Jan 2016 22:32:36 +1100
+Subject: [PATCH] Add new DTLS-SRTP protection profiles from RFC 7714
+
+Reviewed-by: Kurt Roeckx <kurt@openssl.org>
+Reviewed-by: Matt Caswell <matt@openssl.org>
+---
+ ssl/srtp.h             | 4 ++++
+ ssl/d1_srtp.c          | 8 ++++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/ssl/srtp.h b/ssl/srtp.h
+index 1f5aed21ff60..da9369ec2ed4 100644
+--- a/ssl/srtp.h
++++ b/ssl/srtp.h
+@@ -130,6 +130,10 @@ extern "C" {
+ # define SRTP_NULL_SHA1_80      0x0005
+ # define SRTP_NULL_SHA1_32      0x0006
+ 
++/* AEAD SRTP protection profiles from RFC 7714 */
++# define SRTP_AEAD_AES_128_GCM  0x0007
++# define SRTP_AEAD_AES_256_GCM  0x0008
++
+ # ifndef OPENSSL_NO_SRTP
+ 
+ int SSL_CTX_set_tlsext_use_srtp(SSL_CTX *ctx, const char *profiles);
+diff --git a/ssl/d1_srtp.c b/ssl/d1_srtp.c
+index 587a592e82af..f969fb10b11e 100644
+--- a/ssl/d1_srtp.c
++++ b/ssl/d1_srtp.c
+@@ -130,6 +130,14 @@ static SRTP_PROTECTION_PROFILE srtp_known_profiles[] = {
+      "SRTP_AES128_CM_SHA1_32",
+      SRTP_AES128_CM_SHA1_32,
+      },
++    {
++     "SRTP_AEAD_AES_128_GCM",
++     SRTP_AEAD_AES_128_GCM
++     },
++    {
++     "SRTP_AEAD_AES_256_GCM",
++     SRTP_AEAD_AES_256_GCM
++     },
+ # if 0
+     {
+      "SRTP_NULL_SHA1_80",

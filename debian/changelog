@@ -1,3 +1,10 @@
+openssl (1.0.2u-1pexip2) pexip; urgency=medium
+
+  * rfc7714-profiles.patch: backport upstream change to enable
+    support for the DTLS-SRTP profiles defined in RFC 7714.
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 06 Apr 2020 19:04:01 +0100
+
 openssl (1.0.2u-1pexip1) pexip; urgency=medium
 
   * Bump version
