@@ -1,94 +1,122 @@
-/* crypto/cms/cms_ess.c */
 /*
- * Written by Dr Stephen N Henson (steve@openssl.org) for the OpenSSL
- * project.
- */
-/* ====================================================================
- * Copyright (c) 2008 The OpenSSL Project.  All rights reserved.
+ * Copyright 2008-2020 The OpenSSL Project Authors. All Rights Reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- *
- * 3. All advertising materials mentioning features or use of this
- *    software must display the following acknowledgment:
- *    "This product includes software developed by the OpenSSL Project
- *    for use in the OpenSSL Toolkit. (http://www.OpenSSL.org/)"
- *
- * 4. The names "OpenSSL Toolkit" and "OpenSSL Project" must not be used to
- *    endorse or promote products derived from this software without
- *    prior written permission. For written permission, please contact
- *    licensing@OpenSSL.org.
- *
- * 5. Products derived from this software may not be called "OpenSSL"
- *    nor may "OpenSSL" appear in their names without prior written
- *    permission of the OpenSSL Project.
- *
- * 6. Redistributions of any form whatsoever must retain the following
- *    acknowledgment:
- *    "This product includes software developed by the OpenSSL Project
- *    for use in the OpenSSL Toolkit (http://www.OpenSSL.org/)"
- *
- * THIS SOFTWARE IS PROVIDED BY THE OpenSSL PROJECT ``AS IS'' AND ANY
- * EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE OpenSSL PROJECT OR
- * ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
- * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
- * ====================================================================
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://www.openssl.org/source/license.html
  */
 
-#include "cryptlib.h"
+#include "internal/cryptlib.h"
 #include <openssl/asn1t.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
 #include <openssl/err.h>
 #include <openssl/cms.h>
-#include "cms_lcl.h"
+#include <openssl/ess.h>
+#include "cms_local.h"
+#include "crypto/ess.h"
+#include "crypto/cms.h"
 
-DECLARE_ASN1_ITEM(CMS_ReceiptRequest)
-DECLARE_ASN1_ITEM(CMS_Receipt)
+DEFINE_STACK_OF(GENERAL_NAMES)
+DEFINE_STACK_OF(CMS_SignerInfo)
+DEFINE_STACK_OF(ESS_CERT_ID)
+DEFINE_STACK_OF(ESS_CERT_ID_V2)
+DEFINE_STACK_OF(X509)
 
 IMPLEMENT_ASN1_FUNCTIONS(CMS_ReceiptRequest)
 
-/* ESS services: for now just Signed Receipt related */
+/* ESS services */
 
 int CMS_get1_ReceiptRequest(CMS_SignerInfo *si, CMS_ReceiptRequest **prr)
 {
     ASN1_STRING *str;
-    CMS_ReceiptRequest *rr = NULL;
-    if (prr)
+    CMS_ReceiptRequest *rr;
+    ASN1_OBJECT *obj = OBJ_nid2obj(NID_id_smime_aa_receiptRequest);
+
+    if (prr != NULL)
         *prr = NULL;
-    str = CMS_signed_get0_data_by_OBJ(si,
-                                      OBJ_nid2obj
-                                      (NID_id_smime_aa_receiptRequest), -3,
-                                      V_ASN1_SEQUENCE);
-    if (!str)
+    str = CMS_signed_get0_data_by_OBJ(si, obj, -3, V_ASN1_SEQUENCE);
+    if (str == NULL)
         return 0;
 
     rr = ASN1_item_unpack(str, ASN1_ITEM_rptr(CMS_ReceiptRequest));
-    if (!rr)
+    if (rr == NULL)
         return -1;
-    if (prr)
+    if (prr != NULL)
         *prr = rr;
     else
         CMS_ReceiptRequest_free(rr);
     return 1;
+}
+
+/*
+    First, get the ESS_SIGNING_CERT(V2) signed attribute from |si|.
+    Then check matching of each cert of trust |chain| with one of 
+    the |cert_ids|(Hash+IssuerID) list from this ESS_SIGNING_CERT.
+    Derived from ts_check_signing_certs()
+*/
+int ess_check_signing_certs(CMS_SignerInfo *si, STACK_OF(X509) *chain)
+{
+    ESS_SIGNING_CERT *ss = NULL;
+    ESS_SIGNING_CERT_V2 *ssv2 = NULL;
+    X509 *cert;
+    int i = 0, ret = 0;
+
+    if (cms_signerinfo_get_signing_cert(si, &ss) > 0 && ss->cert_ids != NULL) {
+        STACK_OF(ESS_CERT_ID) *cert_ids = ss->cert_ids;
+
+        cert = sk_X509_value(chain, 0);
+        if (ess_find_cert(cert_ids, cert) != 0)
+            goto err;
+
+        /*
+         * Check the other certificates of the chain.
+         * Fail if no signing certificate ids found for each certificate.
+         */
+        if (sk_ESS_CERT_ID_num(cert_ids) > 1) {
+            /* for each chain cert, try to find its cert id */
+            for (i = 1; i < sk_X509_num(chain); ++i) {
+                cert = sk_X509_value(chain, i);
+                if (ess_find_cert(cert_ids, cert) < 0)
+                    goto err;
+            }
+        }
+    } else if (cms_signerinfo_get_signing_cert_v2(si, &ssv2) > 0
+                   && ssv2->cert_ids!= NULL) {
+        STACK_OF(ESS_CERT_ID_V2) *cert_ids_v2 = ssv2->cert_ids;
+
+        cert = sk_X509_value(chain, 0);
+        if (ess_find_cert_v2(cert_ids_v2, cert) != 0)
+            goto err;
+
+        /*
+         * Check the other certificates of the chain.
+         * Fail if no signing certificate ids found for each certificate.
+         */
+        if (sk_ESS_CERT_ID_V2_num(cert_ids_v2) > 1) {
+            /* for each chain cert, try to find its cert id */
+            for (i = 1; i < sk_X509_num(chain); ++i) {
+                cert = sk_X509_value(chain, i);
+                if (ess_find_cert_v2(cert_ids_v2, cert) < 0)
+                    goto err;
+            }
+        }
+    } else {
+        CMSerr(CMS_F_ESS_CHECK_SIGNING_CERTS,
+               CMS_R_ESS_NO_SIGNING_CERTID_ATTRIBUTE);
+        return 0;
+    }
+    ret = 1;
+ err:
+    if (!ret)
+        CMSerr(CMS_F_ESS_CHECK_SIGNING_CERTS,
+               CMS_R_ESS_SIGNING_CERTID_MISMATCH_ERROR);
+
+    ESS_SIGNING_CERT_free(ss);
+    ESS_SIGNING_CERT_V2_free(ssv2);
+    return ret;
 }
 
 CMS_ReceiptRequest *CMS_ReceiptRequest_create0(unsigned char *id, int idlen,
@@ -97,10 +125,10 @@ CMS_ReceiptRequest *CMS_ReceiptRequest_create0(unsigned char *id, int idlen,
                                                *receiptList, STACK_OF(GENERAL_NAMES)
                                                *receiptsTo)
 {
-    CMS_ReceiptRequest *rr = NULL;
+    CMS_ReceiptRequest *rr;
 
     rr = CMS_ReceiptRequest_new();
-    if (!rr)
+    if (rr == NULL)
         goto merr;
     if (id)
         ASN1_STRING_set0(rr->signedContentIdentifier, id, idlen);
@@ -128,9 +156,7 @@ CMS_ReceiptRequest *CMS_ReceiptRequest_create0(unsigned char *id, int idlen,
     CMSerr(CMS_F_CMS_RECEIPTREQUEST_CREATE0, ERR_R_MALLOC_FAILURE);
 
  err:
-    if (rr)
-        CMS_ReceiptRequest_free(rr);
-
+    CMS_ReceiptRequest_free(rr);
     return NULL;
 
 }
@@ -154,8 +180,7 @@ int CMS_add1_ReceiptRequest(CMS_SignerInfo *si, CMS_ReceiptRequest *rr)
     if (!r)
         CMSerr(CMS_F_CMS_ADD1_RECEIPTREQUEST, ERR_R_MALLOC_FAILURE);
 
-    if (rrder)
-        OPENSSL_free(rrder);
+    OPENSSL_free(rrder);
 
     return r;
 
@@ -190,6 +215,7 @@ static int cms_msgSigDigest(CMS_SignerInfo *si,
                             unsigned char *dig, unsigned int *diglen)
 {
     const EVP_MD *md;
+
     md = EVP_get_digestbyobj(si->digestAlgorithm->algorithm);
     if (md == NULL)
         return 0;
@@ -205,6 +231,7 @@ int cms_msgSigDigest_add1(CMS_SignerInfo *dest, CMS_SignerInfo *src)
 {
     unsigned char dig[EVP_MAX_MD_SIZE];
     unsigned int diglen;
+
     if (!cms_msgSigDigest(src, dig, &diglen)) {
         CMSerr(CMS_F_CMS_MSGSIGDIGEST_ADD1, CMS_R_MSGSIGDIGEST_ERROR);
         return 0;
@@ -250,7 +277,7 @@ int cms_Receipt_verify(CMS_ContentInfo *cms, CMS_ContentInfo *req_cms)
 
     /* Extract and decode receipt content */
     pcont = CMS_get0_content(cms);
-    if (!pcont || !*pcont) {
+    if (pcont == NULL || *pcont == NULL) {
         CMSerr(CMS_F_CMS_RECEIPT_VERIFY, CMS_R_NO_CONTENT);
         goto err;
     }
@@ -338,11 +365,8 @@ int cms_Receipt_verify(CMS_ContentInfo *cms, CMS_ContentInfo *req_cms)
     r = 1;
 
  err:
-    if (rr)
-        CMS_ReceiptRequest_free(rr);
-    if (rct)
-        M_ASN1_free_of(rct, CMS_Receipt);
-
+    CMS_ReceiptRequest_free(rr);
+    M_ASN1_free_of(rct, CMS_Receipt);
     return r;
 
 }
@@ -386,9 +410,70 @@ ASN1_OCTET_STRING *cms_encode_Receipt(CMS_SignerInfo *si)
     os = ASN1_item_pack(&rct, ASN1_ITEM_rptr(CMS_Receipt), NULL);
 
  err:
-    if (rr)
-        CMS_ReceiptRequest_free(rr);
-
+    CMS_ReceiptRequest_free(rr);
     return os;
+}
 
+/*
+ * Add signer certificate's V2 digest |sc| to a SignerInfo structure |si|
+ */
+
+int cms_add1_signing_cert_v2(CMS_SignerInfo *si, ESS_SIGNING_CERT_V2 *sc)
+{
+    ASN1_STRING *seq = NULL;
+    unsigned char *p, *pp;
+    int len;
+
+    /* Add SigningCertificateV2 signed attribute to the signer info. */
+    len = i2d_ESS_SIGNING_CERT_V2(sc, NULL);
+    if ((pp = OPENSSL_malloc(len)) == NULL)
+        goto err;
+    p = pp;
+    i2d_ESS_SIGNING_CERT_V2(sc, &p);
+    if (!(seq = ASN1_STRING_new()) || !ASN1_STRING_set(seq, pp, len))
+        goto err;
+    OPENSSL_free(pp);
+    pp = NULL;
+    if (!CMS_signed_add1_attr_by_NID(si, NID_id_smime_aa_signingCertificateV2,
+                                     V_ASN1_SEQUENCE, seq, -1))
+        goto err;
+    ASN1_STRING_free(seq);
+    return 1;
+ err:
+    CMSerr(CMS_F_CMS_ADD1_SIGNING_CERT_V2, ERR_R_MALLOC_FAILURE);
+    ASN1_STRING_free(seq);
+    OPENSSL_free(pp);
+    return 0;
+}
+
+/*
+ * Add signer certificate's digest |sc| to a SignerInfo structure |si|
+ */
+
+int cms_add1_signing_cert(CMS_SignerInfo *si, ESS_SIGNING_CERT *sc)
+{
+    ASN1_STRING *seq = NULL;
+    unsigned char *p, *pp;
+    int len;
+
+    /* Add SigningCertificate signed attribute to the signer info. */
+    len = i2d_ESS_SIGNING_CERT(sc, NULL);
+    if ((pp = OPENSSL_malloc(len)) == NULL)
+        goto err;
+    p = pp;
+    i2d_ESS_SIGNING_CERT(sc, &p);
+    if (!(seq = ASN1_STRING_new()) || !ASN1_STRING_set(seq, pp, len))
+        goto err;
+    OPENSSL_free(pp);
+    pp = NULL;
+    if (!CMS_signed_add1_attr_by_NID(si, NID_id_smime_aa_signingCertificate,
+                                     V_ASN1_SEQUENCE, seq, -1))
+        goto err;
+    ASN1_STRING_free(seq);
+    return 1;
+ err:
+    CMSerr(CMS_F_CMS_ADD1_SIGNING_CERT, ERR_R_MALLOC_FAILURE);
+    ASN1_STRING_free(seq);
+    OPENSSL_free(pp);
+    return 0;
 }
