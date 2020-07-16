@@ -1,3 +1,9 @@
+openssl (1.0.2u-1pexip3) pexip; urgency=medium
+
+  * Rebuild in buster environment
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Thu, 16 Jul 2020 02:43:12 +0000
+
 openssl (1.0.2u-1pexip2) pexip; urgency=medium
 
   * rfc7714-profiles.patch: backport upstream change to enable
