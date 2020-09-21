@@ -1,140 +1,51 @@
---- a/apps/Makefile
-+++ b/apps/Makefile
-@@ -161,7 +161,7 @@ $(EXE): progs.h $(E_OBJ) $(PROGRAM).o $(
- 	fi; \
- 	LIBRARIES="$(LIBSSL) $(LIBKRB5) $(LIBCRYPTO)" ; \
- 	$(MAKE) -f $(TOP)/Makefile.shared -e \
--		APPNAME=$(EXE) OBJECTS="$(PROGRAM).o $(E_OBJ)" \
-+		MAKEFLAGS= CC="$${CC:-$(CC)}" APPNAME=$(EXE) OBJECTS="$(PROGRAM).o $(E_OBJ)" \
- 		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
- 		link_app.$${shlib_target}
- 	@(cd ..; $(MAKE) rehash)
---- a/Makefile.org
-+++ b/Makefile.org
-@@ -312,7 +312,7 @@ libcrypto$(SHLIB_EXT): libcrypto.a fips_
- 			FIPSLD_CC="$(CC)"; CC=$(FIPSDIR)/bin/fipsld; \
- 			export CC FIPSLD_CC FIPSLD_LIBCRYPTO; \
- 		fi; \
--		$(MAKE) -e SHLIBDIRS=crypto  CC="$${CC:-$(CC)}" build-shared && \
-+		$(MAKE) -e MAKEFLAGS= SHLIBDIRS=crypto CC="$${CC:-$(CC)}" build-shared && \
- 		(touch -c fips_premain_dso$(EXE_EXT) || :); \
- 	else \
- 		echo "There's no support for shared libraries on this platform" >&2; \
---- a/test/Makefile
-+++ b/test/Makefile
-@@ -424,7 +424,7 @@ FIPS_BUILD_CMD=shlib_target=; if [ -n "$
- 		FIPSLD_CC="$(CC)"; CC=$(FIPSDIR)/bin/fipsld; export CC FIPSLD_CC; \
- 	fi; \
- 	$(MAKE) -f $(TOP)/Makefile.shared -e \
--		CC="$${CC}" APPNAME=$$target$(EXE_EXT) OBJECTS="$$target.o" \
-+		MAKEFLAGS= CC="$${CC:-$(CC)}" APPNAME=$$target$(EXE_EXT) OBJECTS="$$target.o" \
- 		LIBDEPS="$(PEX_LIBS) $$LIBRARIES $(EX_LIBS)" \
- 		link_app.$${shlib_target}
- 
---- a/apps/speed.c
-+++ b/apps/speed.c
-@@ -194,21 +194,15 @@
- # include <openssl/modes.h>
- 
- # ifdef OPENSSL_FIPS
--#  ifdef OPENSSL_DOING_MAKEDEPEND
--#   undef AES_set_encrypt_key
--#   undef AES_set_decrypt_key
--#   undef DES_set_key_unchecked
--#  endif
--#  define BF_set_key      private_BF_set_key
--#  define CAST_set_key    private_CAST_set_key
--#  define idea_set_encrypt_key    private_idea_set_encrypt_key
--#  define SEED_set_key    private_SEED_set_key
--#  define RC2_set_key     private_RC2_set_key
--#  define RC4_set_key     private_RC4_set_key
--#  define DES_set_key_unchecked   private_DES_set_key_unchecked
--#  define AES_set_encrypt_key     private_AES_set_encrypt_key
--#  define AES_set_decrypt_key     private_AES_set_decrypt_key
--#  define Camellia_set_key        private_Camellia_set_key
-+#  define OPENSSL_NO_BF
-+#  define OPENSSL_NO_CAST
-+#  define OPENSSL_NO_IDEA
-+#  define OPENSSL_NO_SEED
-+#  define OPENSSL_NO_RC2
-+#  define OPENSSL_NO_RC4
-+#  define OPENSSL_NO_DES
-+#  define OPENSSL_NO_AES
-+#  define OPENSSL_NO_CAMELLIA
- # endif
- 
- # ifndef HAVE_FORK
+diff --git a/crypto/o_init.c b/crypto/o_init.c
+index a0b4256..6a32610 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -56,13 +56,36 @@
- #include <e_os.h>
+@@ -9,13 +9,45 @@
+ 
+ #include "e_os.h"
  #include <openssl/err.h>
- #ifdef OPENSSL_FIPS
++#include <openssl/provider.h>
++
 +# include <fcntl.h>
 +# include <stdlib.h>
 +# include <unistd.h>
- # include <openssl/fips.h>
- # include <openssl/rand.h>
- 
- # ifndef OPENSSL_NO_DEPRECATED
- /* the prototype is missing in <openssl/fips.h> */
- void FIPS_crypto_set_id_callback(unsigned long (*func)(void));
- # endif
-+# define CONSTRUCTOR __attribute__((constructor))
 +
-+static void set_fips_mode(void)
++
++static OSSL_PROVIDER *fips;
++
++static void fips_cleanup(void)
 +{
-+    if (!FIPS_mode()) {
-+        /* Not in FIPS mode; does flag exist? */
-+        int fd = open("/etc/fips/enabled", O_RDONLY);
-+        if (fd != -1) { 
-+            close(fd);
-+            if (!FIPS_mode_set(1)) {
-+                /* FIPS mode requested, but failed POST */
-+                ERR_load_crypto_strings();
-+                ERR_print_errors_fp(stderr);
-+                abort();
-+            }
++    if (fips != NULL)
++        OSSL_PROVIDER_unload(fips);
++}
++
++static void fips_init(void)
++{
++    /* Not in FIPS mode; does flag exist? */
++    int fd = open("/etc/fips/enabled", O_RDONLY);
++    if (fd != -1) {
++        close(fd);
++
++        fips = OSSL_PROVIDER_load(NULL, "fips");
++        if (fips == NULL) {
++            abort();
 +        }
++
++        atexit(fips_cleanup);
 +    }
 +}
-+#else
-+# define CONSTRUCTOR
- #endif
  
  /*
-@@ -65,7 +88,7 @@
-  * sets FIPS callbacks
+  * Perform any essential OpenSSL initialization operations. Currently does
+  * nothing.
   */
  
 -void OPENSSL_init(void)
-+CONSTRUCTOR void OPENSSL_init(void)
++__attribute__((constructor)) void OPENSSL_init(void)
  {
-     static int done = 0;
-     if (done)
-@@ -79,6 +102,8 @@ void OPENSSL_init(void)
-     FIPS_set_error_callbacks(ERR_put_error, ERR_add_error_vdata);
-     FIPS_set_malloc_callbacks(CRYPTO_malloc, CRYPTO_free);
-     RAND_init_fips();
-+    /* FIPS mode initialisation: must happen after the above */
-+    set_fips_mode();
- #endif
- #if 0
-     fprintf(stderr, "Called OPENSSL_init\n");
---- a/test/testfipsssl
-+++ b/test/testfipsssl
-@@ -35,8 +35,12 @@ fi
- 
- #############################################################################
- 
--echo test ssl3 is forbidden in FIPS mode
--$ssltest -ssl3 $extra && exit 1
-+if ../util/shlib_wrap.sh ../apps/openssl ciphers -ssl3 >/dev/null 2>&1; then
-+    echo test ssl3 is forbidden in FIPS mode
-+    $ssltest -ssl3 $extra && exit 1
-+else
-+    echo ssl3 disabled: skipping test
-+fi
- 
- if ../util/shlib_wrap.sh ../apps/openssl ciphers SSLv2 >/dev/null 2>&1; then
-     echo test ssl2 is forbidden in FIPS mode
++    fips_init();
++
+     return;
+ }
