@@ -8,7 +8,7 @@ XSBC-Pexip-Original-Uploaders: Christoph Martin <christoph.martin@uni-mainz.de>,
 Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/viewvc/pkg-openssl/openssl
 Vcs-Svn: svn://anonscm.debian.org/pkg-openssl/openssl/
-XS-Pexip-Upstream: http://ftp.debian.org/debian/ stretch
+XS-Pexip-Upstream: http://ftp.debian.org/debian/ experimental
 
 Package: openssl
 Priority: optional
