@@ -2,7 +2,7 @@ diff --git a/crypto/o_init.c b/crypto/o_init.c
 index a0b4256..6a32610 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -9,13 +9,45 @@
+@@ -9,13 +9,53 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
@@ -13,10 +13,12 @@ index a0b4256..6a32610 100644
 +# include <unistd.h>
 +
 +
-+static OSSL_PROVIDER *fips;
++static OSSL_PROVIDER *fips, *base;
 +
 +static void fips_cleanup(void)
 +{
++    if (base != NULL)
++        OSSL_PROVIDER_unload(base);
 +    if (fips != NULL)
 +        OSSL_PROVIDER_unload(fips);
 +}
@@ -30,6 +32,12 @@ index a0b4256..6a32610 100644
 +
 +        fips = OSSL_PROVIDER_load(NULL, "fips");
 +        if (fips == NULL) {
++            abort();
++        }
++
++        base = OSSL_PROVIDER_load(NULL, "base");
++        if (base == NULL) {
++            OSSL_PROVIDER_unload(fips);
 +            abort();
 +        }
 +
