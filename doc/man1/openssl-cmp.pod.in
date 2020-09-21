@@ -71,7 +71,7 @@ B<openssl> B<cmp>
 [B<-keyform> I<PEM|DER|P12|ENGINE>]
 [B<-certsform> I<PEM|DER|P12>]
 [B<-otherpass> I<arg>]
-[B<-engine> I<id>]
+{- $OpenSSL::safe::opt_engine_synopsis -}
 {- $OpenSSL::safe::opt_provider_synopsis -}
 
 [B<-tls_used>]
@@ -506,10 +506,11 @@ and as default value for the expected sender of incoming CMP messages.
 =item B<-recipient> I<name>
 
 Distinguished Name (DN) to use in the recipient field of CMP request messages,
-i.e., the CMP server (usually a CA or RA entity).
+i.e., the CMP server (usually the addressed CA).
 
 The argument must be formatted as I</type0=value0/type1=value1/type2=...>,
 characters may be escaped by C<\>E<nbsp>(backslash), no spaces are skipped.
+The empty name (NULL-DN) can be given explicitly as a single slash: 'I</>'.
 
 The recipient field in the header of a CMP message is mandatory.
 If not given explicitly the recipient is determined in the following order:
@@ -698,6 +699,7 @@ If not given here, the password will be prompted for if needed.
 
 For more information about the format of B<arg> see the
 B<PASS PHRASE ARGUMENTS> section in L<openssl(1)>.
+{- output_off() if $disabled{"deprecated-3.0"}; "" -}
 
 =item B<-engine> I<id>
 
@@ -714,6 +716,7 @@ the engine.
 as supported, e.g., by libp11:
 C<-key engine:pkcs11:object=my-private-key;type=private;pin-value=1234>
 
+{- output_on() if $disabled{"deprecated-3.0"}; "" -}
 {- $OpenSSL::safe::opt_provider_item -}
 
 =back
@@ -857,7 +860,7 @@ Act as CMP HTTP server mock-up listening on the given port.
 =item B<-max_msgs> I<number>
 
 Maximum number of CMP (request) messages the CMP HTTP server mock-up
-should handle, which must be non-negative.
+should handle, which must be nonnegative.
 The default value is 0, which means that no limit is imposed.
 In any case the server terminates on internal errors, but not when it
 detects a CMP-level error that it can successfully answer with an error message.
@@ -988,8 +991,10 @@ to issue the following shell commands.
 
   cd /path/to/openssl
   export OPENSSL_CONF=openssl.cnf
+=begin comment
   wget 'http://pki.certificate.fi:8080/install-ca-cert.html/ca-certificate.crt\
         ?ca-id=632&download-certificate=1' -O insta.ca.crt
+=end comment
   openssl genrsa -out insta.priv.pem
   openssl cmp -section insta
 
@@ -1045,7 +1050,11 @@ or
 
 Many more options can be used in the configuration file
 and/or on the command line.
+For instance, the B<-reqexts> CLI option may refer to a section in the
+configuration file defining X.509 extensions to use in certificate requests,
+such as B<v3_req> in F<openssl/apps/openssl.cnf>:
 
+  openssl cmp -section insta,cr -reqexts v3_req
 
 =head2 Certificate enrollment
 
@@ -1104,7 +1113,7 @@ This prints information about all received ITAV B<infoType>s to stdout.
 For CMP client invocations, in particular for certificate enrollment,
 usually many parameters need to be set, which is tedious and error-prone to do
 on the command line.
-Therefore the client offers the possibility to read
+Therefore, the client offers the possibility to read
 options from sections of the OpenSSL config file, usually called B<openssl.cnf>.
 The values found there can still be extended and even overridden by any
 subsequently loaded sections and on the command line.

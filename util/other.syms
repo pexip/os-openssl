@@ -41,6 +41,12 @@ GEN_SESSION_CB                          datatype
 OPENSSL_Applink                         external
 OPENSSL_CTX                             datatype
 NAMING_AUTHORITY                        datatype
+OSSL_DESERIALIZER                       datatype
+OSSL_DESERIALIZER_CTX                   datatype
+OSSL_DESERIALIZER_CONSTRUCT             datatype
+OSSL_DESERIALIZER_CLEANUP               datatype
+OSSL_DESERIALIZER_INSTANCE              datatype
+OSSL_DESERIALIZER_CTX                   datatype
 OSSL_HTTP_bio_cb_t                      datatype
 OSSL_PARAM                              datatype
 OSSL_PROVIDER                           datatype
@@ -299,6 +305,10 @@ EVP_PKEY_CTX_set_tls1_prf_md            define
 EVP_PKEY_assign_DH                      define
 EVP_PKEY_assign_DSA                     define
 EVP_PKEY_assign_EC_KEY                  define
+EVP_PKEY_assign_ED25519                 define
+EVP_PKEY_assign_ED448                   define
+EVP_PKEY_assign_X25519                  define
+EVP_PKEY_assign_X448                    define
 EVP_PKEY_assign_POLY1305                define
 EVP_PKEY_assign_RSA                     define
 EVP_PKEY_assign_SIPHASH                 define
@@ -362,6 +372,10 @@ OpenSSL_add_all_algorithms              define deprecated 1.1.0
 OpenSSL_add_all_ciphers                 define deprecated 1.1.0
 OpenSSL_add_all_digests                 define deprecated 1.1.0
 OpenSSL_add_ssl_algorithms              define
+OSSL_CMP_exec_IR_ses                    define
+OSSL_CMP_exec_CR_ses                    define
+OSSL_CMP_exec_P10CR_ses                 define
+OSSL_CMP_exec_KUR_ses                   define
 OSSL_CMP_CTX_set_log_verbosity          define
 OSSL_CMP_CR                             define
 OSSL_CMP_IR                             define
@@ -505,6 +519,7 @@ SSL_get_max_cert_list                   define
 SSL_get_max_proto_version               define
 SSL_get_min_proto_version               define
 SSL_get_mode                            define
+SSL_get_peer_certificate                define deprecated 3.0.0
 SSL_get_peer_signature_nid              define
 SSL_get_peer_tmp_key                    define
 SSL_get_secure_renegotiation_support    define
@@ -570,8 +585,11 @@ X509_CRL_http_nbio                      define
 X509_http_nbio                          define
 X509_LOOKUP_add_dir                     define
 X509_LOOKUP_add_store                   define
+X509_LOOKUP_add_store_with_libctx       define
 X509_LOOKUP_load_file                   define
+X509_LOOKUP_load_file_with_libctx       define
 X509_LOOKUP_load_store                  define
+X509_LOOKUP_load_store_with_libctx      define
 X509_STORE_set_lookup_crls_cb           define
 X509_STORE_set_verify_func              define
 EVP_PKEY_CTX_set1_id                    define

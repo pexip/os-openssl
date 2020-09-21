@@ -299,10 +299,15 @@ section with the configuration for that name. For example:
 
 The configuration name B<system_default> has a special meaning.  If it
 exists, it is applied whenever an B<SSL_CTX> object is created.  For example,
-to impose a system-wide minimum on protocol version:
+to impose system-wide minimum TLS and DTLS protocol versions:
 
  [tls_system_default]
  MinProtocol = TLSv1.2
+ MinProtocol = DTLSv1.2
+
+The minimum TLS protocol is applied to B<SSL_CTX> objects that are TLS-based,
+and the minimum DTLS protocol to those are DTLS-based.
+The same applies also to maximum versions set with B<MaxProtocol>.
 
 Each configuration section consists of name/value pairs that are parsed
 by B<SSL_CONF_cmd(3)>, which will be called by SSL_CTX_config() or
@@ -474,6 +479,7 @@ configuration files using that syntax will have to be modified.
 =head1 SEE ALSO
 
 L<openssl-x509(1)>, L<openssl-req(1)>, L<openssl-ca(1)>,
+L<openssl-fipsinstall(1)>,
 L<ASN1_generate_nconf(3)>,
 L<EVP_set_default_properties(3)>,
 L<CONF_modules_load_file(3)>,

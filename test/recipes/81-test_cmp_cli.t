@@ -14,20 +14,32 @@ use warnings;
 use POSIX;
 use File::Spec::Functions qw/catfile/;
 use File::Compare qw/compare_text/;
-use OpenSSL::Test qw/:DEFAULT with data_file data_dir bldtop_dir/;
+use OpenSSL::Test qw/:DEFAULT with data_file data_dir srctop_dir bldtop_dir/;
 use OpenSSL::Test::Utils;
 use Data::Dumper; # for debugging purposes only
 
-setup("test_cmp_cli");
+BEGIN {
+    setup("test_cmp_cli");
+}
+use lib srctop_dir('Configurations');
+use lib bldtop_dir('.');
+use platform;
+plan skip_all => "These tests are not supported in a fuzz build"
+    if config('options') =~ /-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION/;
 
 plan skip_all => "These tests are not supported in a no-cmp build"
     if disabled("cmp");
 plan skip_all => "These tests are not supported in a no-ec build"
     if disabled("ec");
-plan skip_all => "These tests are not supported in a fuzz build"
-    if !disabled("fuzz-libfuzzer") || !disabled("fuzz-afl");
-plan skip_all => "Tests involving server not available on Windows or VMS"
+
+plan skip_all => "Tests involving CMP server not available on Windows or VMS"
     if $^O =~ /^(VMS|MSWin32)$/;
+plan skip_all => "Tests involving CMP server not available in cross-compile builds"
+    if defined $ENV{EXE_SHELL};
+plan skip_all => "Tests involving CMP server require 'kill' command"
+    unless `which kill`;
+plan skip_all => "Tests involving CMP server require 'lsof' command"
+    unless `which lsof`; # this typically excludes Solaris
 
 sub chop_dblquot { # chop any leading & trailing '"' (needed for Windows)
     my $str = shift;
@@ -55,7 +67,6 @@ my @cmp_basic_tests = (
 my $rsp_cert = "signer_only.crt";
 my $outfile = "test.cert.pem";
 my $secret = "pass:test";
-my $localport = 1700;
 
 # this uses the mock server directly in the cmp app, without TCP
 sub use_mock_srv_internally
@@ -163,8 +174,8 @@ sub test_cmp_cli {
         my $actual_exit = shift;
         my $OK = $actual_exit == $expected_exit;
         if ($faillog && !$OK) {
-            sub quote_spc_empty(_) { $_ eq "" ? '""' : $_ =~ m/ / ? '"'.$_.'"' : $_ };
-            my $invocation = ("$path_app ").join(' ', map quote_spc_empty @$params);
+            my $quote_spc_empty = sub { $_ eq "" ? '""' : $_ =~ m/ / ? '"'.$_.'"' : $_ };
+            my $invocation = "$path_app ".join(' ', map $quote_spc_empty->($_), @$params);
             print $faillog "$server_name $aspect \"$title\" ($i/$n)".
                 " expected=$expected_exit actual=$actual_exit\n";
             print $faillog "$invocation\n\n";
@@ -206,23 +217,27 @@ indir data_dir() => sub {
     foreach my $server_name (@server_configurations) {
         $server_name = chop_dblquot($server_name);
         load_config($server_name, $server_name);
-        my $launch_mock = $server_name eq "Mock" && !$ENV{OPENSSL_CMP_CONFIG};
-        if ($launch_mock) {
-            indir "Mock" => sub {
-                stop_mock_server(); # in case a previous run did not exit properly
-                start_mock_server("") || die "Cannot start CMP mock server";
+      SKIP:
+        {
+            my $pid;
+            if ($server_name eq "Mock") {
+                indir "Mock" => sub {
+                    $pid = start_mock_server("");
+                    skip "Cannot start or find the started CMP mock server",
+                        scalar @all_aspects unless $pid;
+                }
             }
-        }
-        foreach my $aspect (@all_aspects) {
-            $aspect = chop_dblquot($aspect);
-            next if $server_name eq "Mock" && $aspect eq "certstatus";
-            load_config($server_name, $aspect); # update with any aspect-specific settings
-            indir $server_name => sub {
-                my $tests = load_tests($server_name, $aspect);
-                test_cmp_cli_aspect($server_name, $aspect, $tests);
+            foreach my $aspect (@all_aspects) {
+                $aspect = chop_dblquot($aspect);
+                next if $server_name eq "Mock" && $aspect eq "certstatus";
+                load_config($server_name, $aspect); # update with any aspect-specific settings
+                indir $server_name => sub {
+                    my $tests = load_tests($server_name, $aspect);
+                    test_cmp_cli_aspect($server_name, $aspect, $tests);
+                };
             };
-        };
-        stop_mock_server() if $launch_mock;
+            stop_mock_server($pid) if $pid;
+        }
     };
 };
 
@@ -285,19 +300,21 @@ sub load_tests {
 }
 
 sub mock_server_pid {
-    return `lsof -iTCP:$localport -sTCP:LISTEN | tail -n 1 | awk '{ print \$2 }'`;
+    return `lsof -iTCP:$server_port` =~ m/\n\S+\s+(\d+)\s+[^\n]+LISTEN/s ? $1 : 0;
 }
 
 sub start_mock_server {
-    return 0 if mock_server_pid(); # already running
     my $args = $_[0]; # optional further CLI arguments
     my $dir = bldtop_dir("");
-    return system("LD_LIBRARY_PATH=$dir DYLD_LIBRARY_PATH=$dir " .
-                  bldtop_dir($app) . " -config server.cnf " .
-                  "$args &") == 0; # start in background, check for success
+    my $cmd = "LD_LIBRARY_PATH=$dir DYLD_LIBRARY_PATH=$dir " .
+        bldtop_dir($app) . " -config server.cnf $args";
+    my $pid = mock_server_pid();
+    return $pid if $pid; # already running
+    return system("$cmd &") == 0 # start in background, check for success
+        ? (sleep 1, mock_server_pid()) : 0;
 }
 
 sub stop_mock_server {
-    my $pid = mock_server_pid();
+    my $pid = $_[0];
     system("kill $pid") if $pid;
 }

@@ -579,7 +579,7 @@ X.509 certificates received in the caPubs field of last received certificate
 response message IP/CP/KUP.
 
 OSSL_CMP_CTX_get1_extraCertsIn() returns a pointer to a duplicate of the stack
-of X.509 certificates received in the last received non-empty extraCerts field.
+of X.509 certificates received in the last received nonempty extraCerts field.
 Returns an empty stack if no extraCerts have been received in the current
 transaction.
 
@@ -682,8 +682,9 @@ the id-it-signKeyPairTypes OID and prints info on the General Response contents:
 
 =head1 SEE ALSO
 
-L<OSSL_CMP_exec_IR_ses(3)>, L<OSSL_CMP_exec_KUR_ses(3)>,
-L<OSSL_CMP_exec_GENM_ses(3)>
+L<OSSL_CMP_exec_IR_ses(3)>, L<OSSL_CMP_exec_CR_ses(3)>,
+L<OSSL_CMP_exec_KUR_ses(3)>, L<OSSL_CMP_exec_GENM_ses(3)>,
+L<OSSL_CMP_exec_certreq(3)>
 
 =head1 HISTORY
 

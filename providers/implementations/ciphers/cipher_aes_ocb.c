@@ -103,6 +103,8 @@ static int aes_ocb_init(void *vctx, const unsigned char *key, size_t keylen,
 {
    PROV_AES_OCB_CTX *ctx = (PROV_AES_OCB_CTX *)vctx;
 
+   ctx->aad_buf_len = 0;
+   ctx->data_buf_len = 0;
    ctx->base.enc = enc;
 
    if (iv != NULL) {
@@ -305,6 +307,7 @@ static void aes_ocb_freectx(void *vctx)
 
     if (ctx != NULL) {
         aes_generic_ocb_cleanup(ctx);
+        cipher_generic_reset_ctx((PROV_CIPHER_CTX *)vctx);
         OPENSSL_clear_free(ctx,  sizeof(*ctx));
     }
 }

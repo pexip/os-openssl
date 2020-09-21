@@ -105,7 +105,7 @@ They do not define the semantics of the extension.
 This is a multi-valued extension which indicates whether a certificate is
 a CA certificate. The first value is B<CA> followed by B<TRUE> or
 B<FALSE>. If B<CA> is B<TRUE> then an optional B<pathlen> name followed by a
-non-negative value can be included.
+nonnegative value can be included.
 
 For example:
 
@@ -167,7 +167,7 @@ Examples:
 This is a string extension with one of two legal values. If it is the word
 B<hash>, then OpenSSL will follow the process in RFC 5280 to calculate the
 hash value.
-Otherwise, the value should be a hex string to output directly, however this
+Otherwise, the value should be a hex string to output directly, however, this
 is strongly discouraged.
 
 Example:

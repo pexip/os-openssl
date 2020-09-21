@@ -69,11 +69,6 @@ struct evp_kdf_ctx_st {
 struct evp_rand_ctx_st {
     EVP_RAND *meth;             /* Method structure */
     void *data;                 /* Algorithm-specific data */
-    size_t max_request;         /*
-                                 * Cached: maximum number of bytes generated 
-                                 * in a single call to the generate function
-                                 */
-    unsigned int strength;      /* Cached: bit strength of generator */
 } /* EVP_RAND_CTX */ ;
 
 struct evp_rand_st {
@@ -126,6 +121,8 @@ struct evp_keymgmt_st {
     OSSL_FUNC_keymgmt_gen_settable_params_fn *gen_settable_params;
     OSSL_FUNC_keymgmt_gen_fn *gen;
     OSSL_FUNC_keymgmt_gen_cleanup_fn *gen_cleanup;
+
+    OSSL_FUNC_keymgmt_load_fn *load;
 
     /* Key object checking */
     OSSL_FUNC_keymgmt_query_operation_name_fn *query_operation_name;

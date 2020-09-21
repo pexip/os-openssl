@@ -26,8 +26,8 @@ objects
 
  #include <openssl/ec.h>
 
- EC_GROUP *EC_GROUP_new_from_ecparameters(const ECPARAMETERS *params)
- EC_GROUP *EC_GROUP_new_from_ecpkparameters(const ECPKPARAMETERS *params)
+ EC_GROUP *EC_GROUP_new_from_ecparameters(const ECPARAMETERS *params);
+ EC_GROUP *EC_GROUP_new_from_ecpkparameters(const ECPKPARAMETERS *params);
  void EC_GROUP_free(EC_GROUP *group);
 
  EC_GROUP *EC_GROUP_new_curve_GFp(const BIGNUM *p, const BIGNUM *a,
@@ -51,8 +51,10 @@ objects
  int EC_GROUP_get_curve_GF2m(const EC_GROUP *group, BIGNUM *p,
                              BIGNUM *a, BIGNUM *b, BN_CTX *ctx);
 
- ECPARAMETERS *EC_GROUP_get_ecparameters(const EC_GROUP *group, ECPARAMETERS *params)
- ECPKPARAMETERS *EC_GROUP_get_ecpkparameters(const EC_GROUP *group, ECPKPARAMETERS *params)
+ ECPARAMETERS *EC_GROUP_get_ecparameters(const EC_GROUP *group,
+                                         ECPARAMETERS *params);
+ ECPKPARAMETERS *EC_GROUP_get_ecpkparameters(const EC_GROUP *group,
+                                             ECPKPARAMETERS *params);
 
  size_t EC_get_builtin_curves(EC_builtin_curve *r, size_t nitems);
 
@@ -99,7 +101,7 @@ I<params>.
 EC_GROUP_set_curve() sets the curve parameters I<p>, I<a> and I<b>. For a curve
 over Fp I<p> is the prime for the field. For a curve over F2^m I<p> represents
 the irreducible polynomial - each bit represents a term in the polynomial.
-Therefore there will either be three or five bits set dependent on whether the
+Therefore, there will either be three or five bits set dependent on whether the
 polynomial is a trinomial or a pentanomial.
 In either case, I<a> and I<b> represents the coefficients a and b from the
 relevant equation introduced above.

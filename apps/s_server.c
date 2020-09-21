@@ -2939,12 +2939,11 @@ static void print_connection_info(SSL *con)
 
     PEM_write_bio_SSL_SESSION(bio_s_out, SSL_get_session(con));
 
-    peer = SSL_get_peer_certificate(con);
+    peer = SSL_get0_peer_certificate(con);
     if (peer != NULL) {
         BIO_printf(bio_s_out, "Client certificate\n");
         PEM_write_bio_X509(bio_s_out, peer);
         dump_cert_text(bio_s_out, peer);
-        X509_free(peer);
         peer = NULL;
     }
 
@@ -3265,12 +3264,11 @@ static int www_body(int s, int stype, int prot, unsigned char *context)
             BIO_printf(io, "---\n");
             print_stats(io, SSL_get_SSL_CTX(con));
             BIO_printf(io, "---\n");
-            peer = SSL_get_peer_certificate(con);
+            peer = SSL_get0_peer_certificate(con);
             if (peer != NULL) {
                 BIO_printf(io, "Client certificate\n");
                 X509_print(io, peer);
                 PEM_write_bio_X509(io, peer);
-                X509_free(peer);
                 peer = NULL;
             } else {
                 BIO_puts(io, "no client certificate available\n");
@@ -3649,7 +3647,7 @@ static int generate_session_id(SSL *ssl, unsigned char *id,
 
 /*
  * By default s_server uses an in-memory cache which caches SSL_SESSION
- * structures without any serialisation. This hides some bugs which only
+ * structures without any serialization. This hides some bugs which only
  * become apparent in deployed servers. By implementing a basic external
  * session cache some issues can be debugged using s_server.
  */

@@ -503,7 +503,7 @@ int PROV_DRBG_instantiate(PROV_DRBG *drbg, unsigned int strength,
                                                drbg->min_noncelen,
                                                drbg->max_noncelen)) {
                 PROVerr(0, PROV_R_ERROR_RETRIEVING_NONCE);
-                OPENSSL_free(nonce);
+                goto end;
             }
 #ifndef PROV_RAND_GET_RANDOM_NONCE
         } else if (drbg->parent != NULL) {
@@ -742,7 +742,7 @@ int PROV_DRBG_generate(PROV_DRBG *drbg, unsigned char *out, size_t outlen,
     }
 
     if (drbg->reseed_interval > 0) {
-        if (drbg->reseed_gen_counter > drbg->reseed_interval)
+        if (drbg->reseed_gen_counter >= drbg->reseed_interval)
             reseed_required = 1;
     }
     if (drbg->reseed_time_interval > 0) {

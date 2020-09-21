@@ -36,6 +36,7 @@ B<openssl> B<pkcs12>
 [B<-camellia128>]
 [B<-camellia192>]
 [B<-camellia256>]
+[B<-noenc>]
 [B<-nodes>]
 [B<-iter> I<count>]
 [B<-noiter>]
@@ -146,9 +147,13 @@ Use ARIA to encrypt private keys before outputting.
 
 Use Camellia to encrypt private keys before outputting.
 
-=item B<-nodes>
+=item B<-noenc>
 
 Don't encrypt the private keys at all.
+
+=item B<-nodes>
+
+This option is deprecated since OpenSSL 3.0; use B<-noenc> instead.
 
 =item B<-nomacver>
 
@@ -244,7 +249,7 @@ This option is only interpreted by MSIE and similar MS software. Normally
 encryption purposes but arbitrary length keys for signing. The B<-keysig>
 option marks the key for signing only. Signing only keys can be used for
 S/MIME signing, authenticode (ActiveX control signing)  and SSL client
-authentication, however due to a bug only MSIE 5.0 and later support
+authentication, however, due to a bug only MSIE 5.0 and later support
 the use of signing only keys for SSL client authentication.
 
 =item B<-macalg> I<digest>
@@ -344,7 +349,7 @@ Output only client certificates to a file:
 
 Don't encrypt the private key:
 
- openssl pkcs12 -in file.p12 -out file.pem -nodes
+ openssl pkcs12 -in file.p12 -out file.pem -noenc
 
 Print some info about a PKCS#12 file:
 
@@ -364,6 +369,11 @@ Include some extra certificates:
 L<openssl(1)>,
 L<openssl-pkcs8(1)>,
 L<ossl_store-file(7)>
+
+=head1 HISTORY
+
+The B<-engine> option was deprecated in OpenSSL 3.0.
+The <-nodes> option was deprecated in OpenSSL 3.0, too; use B<-noenc> instead.
 
 =head1 COPYRIGHT
 
