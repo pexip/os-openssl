@@ -6,6 +6,7 @@ openssl (3.0.0~~alpha6-0pexip1) pexip; urgency=medium
     debian/patches/tests-Skip-test-recipes-81-test_cmp_cli.t.patch:
     Refresh
   * debian/openssl.docs: README.ENGINE has moved
+  * Prepare FIPS canister after installation
 
  -- John-Mark Bell <jmb@pexip.com>  Mon, 21 Sep 2020 11:59:07 +0100
 

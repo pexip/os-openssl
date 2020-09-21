@@ -60,6 +60,7 @@ override_dh_auto_configure:
 	mkdir build_static; cd build_static; ../Configure no-shared $(CONFARGS) debian-$(DEB_HOST_ARCH) ;perl configdata.pm -d
 	# Debian Perl policy 5.1 (Script Magic)
 	mkdir build_shared; cd build_shared; HASHBANGPERL=/usr/bin/perl ../Configure shared $(CONFARGS) debian-$(DEB_HOST_ARCH) ;perl configdata.pm -d
+	sed -e 's/%DEB_HOST_MULTIARCH%/${DEB_HOST_MULTIARCH}/' debian/openssl.postinst.in >debian/openssl.postinst
 
 override_dh_auto_build-indep:
 	$(MAKE) -C build_shared all
@@ -120,6 +121,7 @@ override_dh_auto_install-arch:
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.so.* debian/libcrypto3-udeb/usr/lib/
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/ossl-modules/*.so debian/libcrypto3-udeb/usr/lib/ossl-modules
 	cp -pf debian/tmp/etc/ssl/openssl.cnf debian/libcrypto3-udeb/usr/lib/ssl/openssl.cnf
+	sed -i -e 's/^.include \/etc\/ssl\/fipsmodule.cnf/# .include fipsmodule.cnf/' -e 's/^fips = fips_sect/# fips = fips_sect/' debian/libcrypto3-udeb/usr/lib/ssl/openssl.cnf
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.so.* debian/libssl3-udeb/usr/lib/
 	cp -auv build_shared/lib*.so* debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/
 	for opt in $(OPTS); \
@@ -148,3 +150,6 @@ override_dh_makeshlibs:
 override_dh_shlibdeps:
 	sed -i '/^udeb: libssl/s/libcrypto3-udeb/libssl3-udeb/' debian/libssl3/DEBIAN/shlibs
 	dh_shlibdeps -a -L libssl3
+
+override_dh_clean:
+	dh_clean debian/openssl.postinst

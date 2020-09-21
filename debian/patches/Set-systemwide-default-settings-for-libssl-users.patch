@@ -17,7 +17,12 @@ diff --git a/apps/openssl.cnf b/apps/openssl.cnf
 index 4fd5286d2e25..d13b002bd8d1 100644
 --- a/apps/openssl.cnf
 +++ b/apps/openssl.cnf
-@@ -49,6 +49,7 @@
+@@ -45,17 +45,18 @@
+ # fips provider. It contains a named section e.g. [fips_sect] which is
+ # referenced from the [provider_sect] below.
+ # Refer to the OpenSSL security policy for more information.
+-# .include fipsmodule.cnf
++.include /etc/ssl/fipsmodule.cnf
  
  [openssl_init]
  providers = provider_sect
@@ -25,6 +30,14 @@ index 4fd5286d2e25..d13b002bd8d1 100644
  
  # List of providers to load
  [provider_sect]
+ default = default_sect
+ # The fips section name should match the section name inside the
+ # included fipsmodule.cnf.
+-# fips = fips_sect
++fips = fips_sect
+ 
+ [default_sect]
+ # activate = 1
 @@ -377,3 +378,9 @@ oldcert = $insta::certout # insta.cert.pem
  # Certificate revocation
  cmd = rr
