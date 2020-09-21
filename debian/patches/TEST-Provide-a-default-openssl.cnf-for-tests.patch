@@ -375,9 +375,9 @@ diff --git a/test/run_tests.pl b/test/run_tests.pl
 index 8306c6018ae0..dc0d3f8010eb 100644
 --- a/test/run_tests.pl
 +++ b/test/run_tests.pl
-@@ -31,7 +31,7 @@ my $bldtop = $ENV{BLDTOP} || $ENV{TOP};
- my $recipesdir = catdir($srctop, "test", "recipes");
+@@ -33,7 +33,7 @@ my $bldtop = $ENV{BLDTOP} || $ENV{TOP};
  my $libdir = rel2abs(catdir($srctop, "util", "perl"));
+ my $jobs = $ENV{HARNESS_JOBS};
  
 -$ENV{OPENSSL_CONF} = rel2abs(catdir($srctop, "apps", "openssl.cnf"));
 +$ENV{OPENSSL_CONF} = rel2abs(catdir($srctop, "test", "openssl.cnf"));

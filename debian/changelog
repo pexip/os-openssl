@@ -1,6 +1,10 @@
 openssl (3.0.0~~alpha6-0pexip1) pexip; urgency=medium
 
   * New upstream release
+  * debian/patches/Set-systemwide-default-settings-for-libssl-users.patch,
+    debian/patches/TEST-Provide-a-default-openssl.cnf-for-tests.patch,
+    debian/patches/tests-Skip-test-recipes-81-test_cmp_cli.t.patch:
+    Refresh
 
  -- John-Mark Bell <jmb@pexip.com>  Mon, 21 Sep 2020 11:59:07 +0100
 
