@@ -1032,7 +1032,7 @@ openssl (1.0.1h-1) unstable; urgency=high
 
  -- Kurt Roeckx <kurt@roeckx.be>  Thu, 05 Jun 2014 18:42:05 +0200
 
- openssl (1.0.1g-4) unstable; urgency=medium
+openssl (1.0.1g-4) unstable; urgency=medium
 
   * Update to git snapshot
     - Fixes CVE-2014-0198 (Closes: #747432)
