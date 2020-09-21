@@ -611,7 +611,6 @@ static int provider_activate(OSSL_PROVIDER *prov)
 
     /* With this flag set, this provider has become fully "loaded". */
     prov->flag_initialized = 1;
-
     return 1;
 }
 
@@ -831,7 +830,7 @@ int ossl_provider_get_capabilities(const OSSL_PROVIDER *prov,
                                    void *arg)
 {
     return prov->get_capabilities == NULL
-        ? 0 : prov->get_capabilities(prov->provctx, capability, cb, arg);
+        ? 1 : prov->get_capabilities(prov->provctx, capability, cb, arg);
 }
 
 
@@ -1062,6 +1061,8 @@ static const OSSL_DISPATCH core_dispatch_[] = {
     { OSSL_FUNC_BIO_NEW_MEMBUF, (void (*)(void))BIO_new_mem_buf },
     { OSSL_FUNC_BIO_READ_EX, (void (*)(void))BIO_read_ex },
     { OSSL_FUNC_BIO_WRITE_EX, (void (*)(void))BIO_write_ex },
+    { OSSL_FUNC_BIO_GETS, (void (*)(void))BIO_gets },
+    { OSSL_FUNC_BIO_PUTS, (void (*)(void))BIO_puts },
     { OSSL_FUNC_BIO_FREE, (void (*)(void))BIO_free },
     { OSSL_FUNC_BIO_VPRINTF, (void (*)(void))BIO_vprintf },
     { OSSL_FUNC_BIO_VSNPRINTF, (void (*)(void))BIO_vsnprintf },

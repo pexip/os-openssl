@@ -403,7 +403,7 @@ static int TicketKeyCallback(SSL *ssl, uint8_t *key_name, uint8_t *iv,
 
   if (!EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), NULL, kZeros, iv, encrypt)
       || !EVP_MAC_init(hmac_ctx)
-      || !EVP_MAC_set_ctx_params(hmac_ctx, params)) {
+      || !EVP_MAC_CTX_set_params(hmac_ctx, params)) {
     return -1;
   }
 
@@ -894,7 +894,7 @@ static bool CheckHandshakeProperties(SSL *ssl, bool is_resume) {
       return false;
     }
   } else if (!config->is_server || config->require_any_client_certificate) {
-    if (SSL_get_peer_certificate(ssl) == nullptr) {
+    if (SSL_get0_peer_certificate(ssl) == nullptr) {
       fprintf(stderr, "Received no peer certificate but expected one.\n");
       return false;
     }
