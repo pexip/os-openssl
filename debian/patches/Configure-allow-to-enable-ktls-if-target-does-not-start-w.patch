@@ -44,7 +44,7 @@ index 5f2be9cf3c9e..7a3e25c026a4 100755
  unless ($disabled{ktls}) {
      $config{ktls}="";
 -    if ($target =~ m/^linux/) {
-+    if (grep { $_ eq 'afalgeng' } @{$target{enable}}) {
++    if (grep { $_ eq 'ktls' } @{$target{enable}}) {
          my $usr = "/usr/$config{cross_compile_prefix}";
          chop($usr);
          if ($config{cross_compile_prefix} eq "") {
