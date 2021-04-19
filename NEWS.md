@@ -18,7 +18,7 @@ OpenSSL Releases
 OpenSSL 3.0
 -----------
 
-### Major changes between OpenSSL 1.1.1 and OpenSSL 3.0 alpha 13 [in pre-release]
+### Major changes between OpenSSL 1.1.1 and OpenSSL 3.0 alpha 14 [in pre-release]
 
   * Changed the license to the Apache License v2.0.
   * Moved all variations of the EVP ciphers CAST5, BF, IDEA, SEED, RC2,
@@ -86,6 +86,11 @@ OpenSSL 1.1.1
 -------------
 
 ### Major changes between OpenSSL 1.1.1j and OpenSSL 1.1.1k [under development]
+
+  * Fixed a problem with verifying a certificate chain when using the
+    X509_V_FLAG_X509_STRICT flag ([CVE-2021-3450])
+  * Fixed an issue where an OpenSSL TLS server may crash if sent a maliciously
+    crafted renegotiation ClientHello message from a client ([CVE-2021-3449])
 
 ### Major changes between OpenSSL 1.1.1i and OpenSSL 1.1.1j [16 Feb 2021]
 

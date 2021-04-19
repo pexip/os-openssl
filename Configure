@@ -617,6 +617,8 @@ my @disable_cascades = (
 
     "cmp"               => [ "crmf" ],
 
+    "fips"              => [ "fips-securitychecks" ],
+
     "deprecated-3.0"    => [ "engine", "srp" ]
     );
 
@@ -1571,6 +1573,20 @@ if (!$disabled{asm} && !$predefined_C{__MACH__} && $^O ne 'VMS') {
     }
 }
 
+# Check if __SIZEOF_INT128__ is defined by compiler
+$config{use_int128} = 0;
+{
+    my $cc = $config{CROSS_COMPILE}.$config{CC};
+    open(PIPE, "$cc -E -dM - </dev/null 2>&1 |");
+    while(<PIPE>) {
+        if (m/__SIZEOF_INT128__/) {
+            $config{use_int128} = 1;
+            last;
+        }
+    }
+    close(PIPE);
+}
+
 # Deal with bn_ops ###################################################
 
 $config{bn_ll}                  =0;
@@ -2349,16 +2365,16 @@ EOF
             }
             foreach (@{$depends{$dest}}) {
                 my $d = cleanfile($sourced, $_, $blddir);
+                my $d2 = cleanfile($buildd, $_, $blddir);
 
                 # If we know it's generated, or assume it is because we can't
                 # find it in the source tree, we set file we depend on to be
                 # in the build tree rather than the source tree.
                 if ($d eq $src_configdata
-                    || (grep { $d eq $_ }
-                        map { cleanfile($srcdir, $_, $blddir) }
-                        grep { /\.h$/ } keys %{$unified_info{generate}})
+                    || (grep { $d2 eq $_ }
+                        keys %{$unified_info{generate}})
                     || ! -f $d) {
-                    $d = cleanfile($buildd, $_, $blddir);
+                    $d = $d2;
                 }
                 $unified_info{depends}->{$ddest}->{$d} = 1;
 

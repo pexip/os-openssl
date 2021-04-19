@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2015-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -185,8 +185,8 @@ static int test_client_hello(int currtest)
         goto end;
     }
 
-    len = BIO_get_mem_data(wbio, (char **)&data);
-    if (!TEST_true(PACKET_buf_init(&pkt, data, len))
+    if (!TEST_long_ge(len = BIO_get_mem_data(wbio, (char **)&data), 0)
+            || !TEST_true(PACKET_buf_init(&pkt, data, len))
                /* Skip the record header */
             || !PACKET_forward(&pkt, SSL3_RT_HEADER_LENGTH))
         goto end;
