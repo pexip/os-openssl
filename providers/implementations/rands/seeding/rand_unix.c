@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -15,7 +15,7 @@
 #include "internal/cryptlib.h"
 #include <openssl/rand.h>
 #include <openssl/crypto.h>
-#include "prov/rand_pool.h"
+#include "crypto/rand_pool.h"
 #include "crypto/rand.h"
 #include <stdio.h>
 #include "internal/dso.h"
@@ -36,35 +36,9 @@
 #if defined(__OpenBSD__)
 # include <sys/param.h>
 #endif
-
-/*
- * Provide a compile time error if the FIPS module is being built and none
- * of the supported entropy sources are available.
- */
-#if defined(FIPS_MODULE)
-# if !defined(OPENSSL_RAND_SEED_GETRANDOM) \
-     && !defined(OPENSSL_RAND_SEED_DEVRANDOM) \
-     && !defined(OPENSSL_RAND_SEED_RDCPU) \
-     && !defined(OPENSSL_RAND_SEED_OS)
-#  error FIPS mode without supported randomness source
-# endif
-/* Remove the sources that are not permitted in FIPS */
-# ifdef OPENSSL_RAND_SEED_LIBRANDOM
-#  undef OPENSSL_RAND_SEED_LIBRANDOM
-#  warning FIPS mode does not support the _librandom_ randomness source
-# endif
-# ifdef OPENSSL_RAND_SEED_RDTSC
-#  undef OPENSSL_RAND_SEED_RDTSC
-#  warning FIPS mode does not support the _RDTSC_ randomness source
-# endif
-# ifdef OPENSSL_RAND_SEED_EGD
-#  undef OPENSSL_RAND_SEED_EGD
-#  warning FIPS mode does not support the _EGD_ randomness source
-# endif
-# ifdef OPENSSL_RAND_SEED_NONE
-#  undef OPENSSL_RAND_SEED_NONE
-#  warning FIPS mode does not support the _none_ randomness source
-# endif
+#if defined(__DragonFly__)
+# include <sys/param.h>
+# include <sys/random.h>
 #endif
 
 #if (defined(OPENSSL_SYS_UNIX) && !defined(OPENSSL_SYS_VXWORKS)) \
@@ -162,7 +136,7 @@ static uint64_t get_timer_bits(void);
  *
  * As a precaution, we assume only 2 bits of entropy per byte.
  */
-size_t prov_pool_acquire_entropy(RAND_POOL *pool)
+size_t ossl_pool_acquire_entropy(RAND_POOL *pool)
 {
     short int code;
     int i, k;
@@ -376,13 +350,21 @@ static ssize_t syscall_random(void *buf, size_t buflen)
      * - OpenBSD since 5.6
      * - Linux since 3.17 with glibc 2.25
      * - FreeBSD since 12.0 (1200061)
+     *
+     * Note: Sometimes getentropy() can be provided but not implemented
+     * internally. So we need to check errno for ENOSYS
      */
-#  if defined(__GNUC__) && __GNUC__>=2 && defined(__ELF__) && !defined(__hpux)
+#  if !defined(__DragonFly__) && !defined(__NetBSD__)
+#    if defined(__GNUC__) && __GNUC__>=2 && defined(__ELF__) && !defined(__hpux)
     extern int getentropy(void *buffer, size_t length) __attribute__((weak));
 
-    if (getentropy != NULL)
-        return getentropy(buf, buflen) == 0 ? (ssize_t)buflen : -1;
-#  elif !defined(FIPS_MODULE)
+    if (getentropy != NULL) {
+        if (getentropy(buf, buflen) == 0)
+            return (ssize_t)buflen;
+        if (errno != ENOSYS)
+            return -1;
+    }
+#    else
     union {
         void *p;
         int (*f)(void *buffer, size_t length);
@@ -397,13 +379,17 @@ static ssize_t syscall_random(void *buf, size_t buflen)
     ERR_pop_to_mark();
     if (p_getentropy.p != NULL)
         return p_getentropy.f(buf, buflen) == 0 ? (ssize_t)buflen : -1;
-#  endif
+#    endif
+#  endif /* !__DragonFly__ */
 
     /* Linux supports this since version 3.17 */
 #  if defined(__linux) && defined(__NR_getrandom)
     return syscall(__NR_getrandom, buf, buflen, 0);
 #  elif (defined(__FreeBSD__) || defined(__NetBSD__)) && defined(KERN_ARND)
     return sysctl_random(buf, buflen);
+#  elif (defined(__DragonFly__)  && __DragonFly_version >= 500700) \
+     || (defined(__NetBSD__) && __NetBSD_Version >= 1000000000)
+    return getrandom(buf, buflen, 0);
 #  else
     errno = ENOSYS;
     return -1;
@@ -426,12 +412,10 @@ static int keep_random_devices_open = 1;
        && defined(OPENSSL_RAND_SEED_GETRANDOM)
 static void *shm_addr;
 
-#    if !defined(FIPS_MODULE)
 static void cleanup_shm(void)
 {
     shmdt(shm_addr);
 }
-#    endif
 
 /*
  * Ensure that the system randomness source has been adequately seeded.
@@ -497,11 +481,8 @@ static int wait_random_seeded(void)
              * If this call fails, it isn't a big problem.
              */
             shm_addr = shmat(shm_id, NULL, SHM_RDONLY);
-#    ifndef FIPS_MODULE
-            /* TODO 3.0: The FIPS provider doesn't have OPENSSL_atexit */
             if (shm_addr != (void *)-1)
                 OPENSSL_atexit(&cleanup_shm);
-#    endif
         }
     }
     return seeded;
@@ -634,7 +615,7 @@ void rand_pool_keep_random_devices_open(int keep)
  * of input from the different entropy sources (trust, quality,
  * possibility of blocking).
  */
-size_t prov_pool_acquire_entropy(RAND_POOL *pool)
+size_t ossl_pool_acquire_entropy(RAND_POOL *pool)
 {
 #  if defined(OPENSSL_RAND_SEED_NONE)
     return rand_pool_entropy_available(pool);
@@ -762,7 +743,7 @@ size_t prov_pool_acquire_entropy(RAND_POOL *pool)
 
 #if (defined(OPENSSL_SYS_UNIX) && !defined(OPENSSL_SYS_VXWORKS)) \
      || defined(__DJGPP__)
-int prov_pool_add_nonce_data(RAND_POOL *pool)
+int ossl_pool_add_nonce_data(RAND_POOL *pool)
 {
     struct {
         pid_t pid;

@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-# Copyright 2019-2020 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
 #
 # Licensed under the Apache License 2.0 (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
@@ -9,7 +9,7 @@
 use strict;
 use warnings;
 
-use File::Spec;
+use File::Spec::Functions qw(:DEFAULT abs2rel);
 use File::Copy;
 use OpenSSL::Glob;
 use OpenSSL::Test qw/:DEFAULT srctop_dir srctop_file bldtop_dir bldtop_file/;
@@ -24,7 +24,7 @@ use platform;
 
 plan skip_all => "Test only supported in a fips build" if disabled("fips");
 
-plan tests => 23;
+plan tests => 24;
 
 my $infile = bldtop_file('providers', platform->dso('fips'));
 my $fipskey = $ENV{FIPSKEY} // '00';
@@ -203,7 +203,7 @@ SKIP: {
     skip "Skipping KAS DH corruption test because of no dh in this build", 1
         if disabled("dh");
 
-    ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips.conf', '-module', $infile,
+    ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips.cnf', '-module', $infile,
                 '-provider_name', 'fips', '-mac_name', 'HMAC',
                 '-macopt', 'digest:SHA256', '-macopt', "hexkey:$fipskey",
                 '-section_name', 'fips_sect',
@@ -216,7 +216,7 @@ SKIP: {
 SKIP: {
     skip "Skipping Signature DSA corruption test because of no dsa in this build", 1
         if disabled("dsa");
-    ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips.conf', '-module', $infile,
+    ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips.cnf', '-module', $infile,
                 '-provider_name', 'fips', '-mac_name', 'HMAC',
                 '-macopt', 'digest:SHA256', '-macopt', "hexkey:$fipskey",
                 '-section_name', 'fips_sect',
@@ -225,7 +225,18 @@ SKIP: {
        "fipsinstall fails when the signature result is corrupted");
 }
 
-$ENV{OPENSSL_CONF_INCLUDE} = ".";
+# corrupt an Asymmetric cipher test
+SKIP: {
+    skip "Skipping Asymmetric RSA corruption test because of no rsa in this build", 1
+        if disabled("rsa");
+    ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips.cnf', '-module', $infile,
+                '-corrupt_desc', 'RSA_Encrypt',
+                '-corrupt_type', 'KAT_AsymmetricCipher'])),
+       "fipsinstall fails when the asymmetric cipher result is corrupted");
+}
+
+# 'local' ensures that this change is only done in this file.
+local $ENV{OPENSSL_CONF_INCLUDE} = abs2rel(curdir());
 
 ok(replace_parent_line_file('fips.cnf', 'fips_parent.cnf')
    && run(app(['openssl', 'fipsinstall', '-config', 'fips_parent.cnf'])),
@@ -261,5 +272,3 @@ ok(replace_parent_line_file('fips_bad_module_mac.cnf',
    && !run(app(['openssl', 'fipsinstall',
                 '-config', 'fips_parent_bad_module_mac.cnf'])),
    "verify load config fail bad module mac");
-
-delete $ENV{OPENSSL_CONF_INCLUDE};
