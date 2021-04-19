@@ -6,6 +6,8 @@ openssl (3.0.0~~alpha14-0pexip1) pexip; urgency=medium
     Drop; merged upstream
   * debian/patches/Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch:
     Test for ktls feature, rather than afalgeng
+  * debian/patches/disable-ktls.patch:
+    Do not enable KTLS by default
 
  -- John-Mark Bell <jmb@pexip.com>  Mon, 19 Apr 2021 16:20:44 +0100
 
