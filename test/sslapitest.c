@@ -625,10 +625,14 @@ static int test_client_cert_verify_cb(void)
 end:
     X509_free(crt1);
     X509_free(crt2);
-    SSL_shutdown(clientssl);
-    SSL_shutdown(serverssl);
-    SSL_free(serverssl);
-    SSL_free(clientssl);
+    if (clientssl != NULL) {
+        SSL_shutdown(clientssl);
+        SSL_free(clientssl);
+    }
+    if (serverssl != NULL) {
+        SSL_shutdown(serverssl);
+        SSL_free(serverssl);
+    }
     SSL_CTX_free(sctx);
     SSL_CTX_free(cctx);
 
@@ -2739,8 +2743,10 @@ static int execute_test_ssl_bio(int pop_ssl, bio_change_t change_bio)
 
     /* Verify changing the rbio/wbio directly does not cause leaks */
     if (change_bio != NO_BIO_CHANGE) {
-        if (!TEST_ptr(membio2 = BIO_new(BIO_s_mem())))
+        if (!TEST_ptr(membio2 = BIO_new(BIO_s_mem()))) {
+            ssl = NULL;
             goto end;
+        }
         if (change_bio == CHANGE_RBIO)
             SSL_set0_rbio(ssl, membio2);
         else
@@ -5956,7 +5962,8 @@ static int get_MFL_from_client_hello(BIO *bio, int *mfl_codemfl_code)
     memset(&pkt2, 0, sizeof(pkt2));
     memset(&pkt3, 0, sizeof(pkt3));
 
-    if (!TEST_true( PACKET_buf_init( &pkt, data, len ) )
+    if (!TEST_long_gt(len, 0)
+            || !TEST_true( PACKET_buf_init( &pkt, data, len ) )
                /* Skip the record header */
             || !PACKET_forward(&pkt, SSL3_RT_HEADER_LENGTH)
                /* Skip the handshake message header */
@@ -8297,7 +8304,7 @@ static EVP_PKEY *get_tmp_dh_params(void)
         OSSL_PARAM_BLD_free_params(params);
     }
 
-    if (!EVP_PKEY_up_ref(tmp_dh_params))
+    if (tmp_dh_params != NULL && !EVP_PKEY_up_ref(tmp_dh_params))
         return NULL;
 
     return tmp_dh_params;

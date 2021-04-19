@@ -1115,15 +1115,16 @@ static int mac_test_parse(EVP_TEST *t,
 static int mac_test_ctrl_pkey(EVP_TEST *t, EVP_PKEY_CTX *pctx,
                               const char *value)
 {
-    int rv;
+    int rv = 0;
     char *p, *tmpval;
 
     if (!TEST_ptr(tmpval = OPENSSL_strdup(value)))
         return 0;
     p = strchr(tmpval, ':');
-    if (p != NULL)
+    if (p != NULL) {
         *p++ = '\0';
-    rv = EVP_PKEY_CTX_ctrl_str(pctx, tmpval, p);
+        rv = EVP_PKEY_CTX_ctrl_str(pctx, tmpval, p);
+    }
     if (rv == -2)
         t->err = "PKEY_CTRL_INVALID";
     else if (rv <= 0)
@@ -1199,7 +1200,7 @@ static int mac_test_run_pkey(EVP_TEST *t)
         t->err = "INTERNAL_ERROR";
         goto err;
     }
-    if (!EVP_DigestSignInit_ex(mctx, &pctx, mdname, libctx, NULL, key)) {
+    if (!EVP_DigestSignInit_ex(mctx, &pctx, mdname, libctx, NULL, key, NULL)) {
         t->err = "DIGESTSIGNINIT_ERROR";
         goto err;
     }
@@ -1459,15 +1460,16 @@ static void pkey_test_cleanup(EVP_TEST *t)
 static int pkey_test_ctrl(EVP_TEST *t, EVP_PKEY_CTX *pctx,
                           const char *value)
 {
-    int rv;
+    int rv = 0;
     char *p, *tmpval;
 
     if (!TEST_ptr(tmpval = OPENSSL_strdup(value)))
         return 0;
     p = strchr(tmpval, ':');
-    if (p != NULL)
+    if (p != NULL) {
         *p++ = '\0';
-    rv = EVP_PKEY_CTX_ctrl_str(pctx, tmpval, p);
+        rv = EVP_PKEY_CTX_ctrl_str(pctx, tmpval, p);
+    }
     if (rv == -2) {
         t->err = "PKEY_CTRL_INVALID";
         rv = 1;
@@ -1630,7 +1632,7 @@ static int pderive_test_parse(EVP_TEST *t,
         EVP_PKEY *peer;
         if (find_key(&peer, value, public_keys) == 0)
             return -1;
-        if (EVP_PKEY_derive_set_peer(kdata->ctx, peer) <= 0) {
+        if (EVP_PKEY_derive_set_peer_ex(kdata->ctx, peer, 0) <= 0) {
             t->err = "DERIVE_SET_PEER_ERROR";
             return 1;
         }
@@ -2898,12 +2900,12 @@ static int digestsigver_test_parse(EVP_TEST *t,
         }
         if (mdata->is_verify) {
             if (!EVP_DigestVerifyInit_ex(mdata->ctx, &mdata->pctx, name, libctx,
-                                         NULL, pkey))
+                                         NULL, pkey, NULL))
                 t->err = "DIGESTVERIFYINIT_ERROR";
             return 1;
         }
         if (!EVP_DigestSignInit_ex(mdata->ctx, &mdata->pctx, name, libctx, NULL,
-                                   pkey))
+                                   pkey, NULL))
             t->err = "DIGESTSIGNINIT_ERROR";
         return 1;
     }
