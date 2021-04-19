@@ -1,3 +1,12 @@
+openssl (3.0.0~~alpha14-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/patches/test-recipes-02-test_errstr.t-Do-not-test-negative-system.patch,
+    debian/patches/fixup-test-recipes-02-test_errstr.t-Do-not-test-negative-.patch:
+    Drop; merged upstream
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 19 Apr 2021 16:20:44 +0100
+
 openssl (3.0.0~~alpha13-2pexip1) pexip; urgency=medium
 
   * New upstream release
