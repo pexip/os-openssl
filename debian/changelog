@@ -8,6 +8,7 @@ openssl (3.0.0~~alpha14-0pexip1) pexip; urgency=medium
     Test for ktls feature, rather than afalgeng
   * debian/patches/disable-ktls.patch:
     Do not enable KTLS by default
+  * Create dummy fipsmodule.cnf to allow fipsinstall to work
 
  -- John-Mark Bell <jmb@pexip.com>  Mon, 19 Apr 2021 16:20:44 +0100
 
