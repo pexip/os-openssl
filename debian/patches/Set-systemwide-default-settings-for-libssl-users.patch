@@ -14,10 +14,10 @@ Signed-off-by: Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
  1 file changed, 13 insertions(+)
 
 diff --git a/apps/openssl.cnf b/apps/openssl.cnf
-index 4fd5286d2e25..d13b002bd8d1 100644
+index 97567a67be6d..38ff63d1d49b 100644
 --- a/apps/openssl.cnf
 +++ b/apps/openssl.cnf
-@@ -45,17 +45,18 @@
+@@ -49,17 +49,18 @@
  # fips provider. It contains a named section e.g. [fips_sect] which is
  # referenced from the [provider_sect] below.
  # Refer to the OpenSSL security policy for more information.
@@ -38,7 +38,7 @@ index 4fd5286d2e25..d13b002bd8d1 100644
  
  [default_sect]
  # activate = 1
-@@ -377,3 +378,9 @@ oldcert = $insta::certout # insta.cert.pem
+@@ -381,3 +382,10 @@ oldcert = $insta::certout # insta.cert.pem
  # Certificate revocation
  cmd = rr
  oldcert = $insta::certout # insta.cert.pem

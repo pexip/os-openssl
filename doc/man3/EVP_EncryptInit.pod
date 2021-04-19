@@ -48,8 +48,10 @@ EVP_CIPHER_CTX_name,
 EVP_CIPHER_CTX_nid,
 EVP_CIPHER_CTX_get_params,
 EVP_CIPHER_gettable_ctx_params,
+EVP_CIPHER_CTX_gettable_params,
 EVP_CIPHER_CTX_set_params,
 EVP_CIPHER_settable_ctx_params,
+EVP_CIPHER_CTX_settable_params,
 EVP_CIPHER_CTX_block_size,
 EVP_CIPHER_CTX_key_length,
 EVP_CIPHER_CTX_iv_length,
@@ -72,7 +74,7 @@ EVP_CIPHER_do_all_provided
 
  #include <openssl/evp.h>
 
- EVP_CIPHER *EVP_CIPHER_fetch(OPENSSL_CTX *ctx, const char *algorithm,
+ EVP_CIPHER *EVP_CIPHER_fetch(OSSL_LIB_CTX *ctx, const char *algorithm,
                               const char *properties);
  int EVP_CIPHER_up_ref(EVP_CIPHER *cipher);
  void EVP_CIPHER_free(EVP_CIPHER *cipher);
@@ -125,9 +127,9 @@ EVP_CIPHER_do_all_provided
  int EVP_CIPHER_nid(const EVP_CIPHER *e);
  int EVP_CIPHER_number(const EVP_CIPHER *e);
  int EVP_CIPHER_is_a(const EVP_CIPHER *cipher, const char *name);
- void EVP_CIPHER_names_do_all(const EVP_CIPHER *cipher,
-                              void (*fn)(const char *name, void *data),
-                              void *data);
+ int EVP_CIPHER_names_do_all(const EVP_CIPHER *cipher,
+                             void (*fn)(const char *name, void *data),
+                             void *data);
  const char *EVP_CIPHER_name(const EVP_CIPHER *cipher);
  const OSSL_PROVIDER *EVP_CIPHER_provider(const EVP_CIPHER *cipher);
  int EVP_CIPHER_block_size(const EVP_CIPHER *e);
@@ -147,6 +149,8 @@ EVP_CIPHER_do_all_provided
  const OSSL_PARAM *EVP_CIPHER_gettable_params(const EVP_CIPHER *cipher);
  const OSSL_PARAM *EVP_CIPHER_settable_ctx_params(const EVP_CIPHER *cipher);
  const OSSL_PARAM *EVP_CIPHER_gettable_ctx_params(const EVP_CIPHER *cipher);
+ const OSSL_PARAM *EVP_CIPHER_CTX_settable_params(EVP_CIPHER_CTX *ctx);
+ const OSSL_PARAM *EVP_CIPHER_CTX_gettable_params(EVP_CIPHER_CTX *ctx);
  int EVP_CIPHER_CTX_block_size(const EVP_CIPHER_CTX *ctx);
  int EVP_CIPHER_CTX_key_length(const EVP_CIPHER_CTX *ctx);
  int EVP_CIPHER_CTX_iv_length(const EVP_CIPHER_CTX *ctx);
@@ -159,7 +163,7 @@ EVP_CIPHER_do_all_provided
  int EVP_CIPHER_param_to_asn1(EVP_CIPHER_CTX *c, ASN1_TYPE *type);
  int EVP_CIPHER_asn1_to_param(EVP_CIPHER_CTX *c, ASN1_TYPE *type);
 
- void EVP_CIPHER_do_all_provided(OPENSSL_CTX *libctx,
+ void EVP_CIPHER_do_all_provided(OSSL_LIB_CTX *libctx,
                                  void (*fn)(EVP_CIPHER *cipher, void *arg),
                                  void *arg);
 
@@ -302,12 +306,28 @@ context B<ctx>.
 EVP_CIPHER_CTX_get_params() retrieves the requested list of operation
 B<params> from CIPHER context B<ctx>.
 
-EVP_CIPHER_gettable_params(), EVP_CIPHER_gettable_ctx_params(), and
-EVP_CIPHER_settable_ctx_params() get a constant B<OSSL_PARAM> array
-that describes the retrievable and settable parameters, i.e. parameters
-that can be used with EVP_CIPHER_get_params(), EVP_CIPHER_CTX_get_params()
-and EVP_CIPHER_CTX_set_params(), respectively.
-See L<OSSL_PARAM(3)> for the use of B<OSSL_PARAM> as parameter descriptor.
+EVP_CIPHER_gettable_params() returns an B<OSSL_PARAM> array that describes
+the retrievable and settable parameters.  EVP_CIPHER_gettable_params()
+returns parameters that can be used with EVP_CIPHER_get_params().  See
+L<OSSL_PARAM(3)> for the use of B<OSSL_PARAM> as a parameter descriptor.
+
+EVP_CIPHER_gettable_ctx_params() and EVP_CIPHER_CTX_gettable_params()
+return constant B<OSSL_PARAM> arrays that describe the retrievable
+parameters that can be used with EVP_CIPHER_CTX_get_params().
+EVP_CIPHER_gettable_ctx_params() returns the parameters that can be
+retrieved from the algorithm, whereas EVP_CIPHER_CTX_gettable_params()
+returns the parameters that can be retrieved in the context's current
+state.  See L<OSSL_PARAM(3)> for the use of B<OSSL_PARAM> as a parameter
+descriptor.
+
+EVP_CIPHER_settable_ctx_params() and EVP_CIPHER_CTX_settable_params()
+return constant B<OSSL_PARAM> arrays that describe the settable
+parameters that can be used with EVP_CIPHER_CTX_set_params().
+EVP_CIPHER_settable_ctx_params() returns the parameters that can be
+retrieved from the algorithm, whereas EVP_CIPHER_CTX_settable_params()
+returns the parameters that can be retrieved in the context's current
+state.  See L<OSSL_PARAM(3)> for the use of B<OSSL_PARAM> as a parameter
+descriptor.
 
 EVP_CIPHER_key_length() and EVP_CIPHER_CTX_key_length() return the key
 length of a cipher when passed an B<EVP_CIPHER> or B<EVP_CIPHER_CTX>
@@ -346,7 +366,7 @@ algorithm that's identifiable with I<name>, otherwise 0.
 If I<cipher> is a legacy cipher (it's the return value from the likes
 of EVP_aes128() rather than the result of an EVP_CIPHER_fetch()), only
 cipher names registered with the default library context (see
-L<OPENSSL_CTX(3)>) will be considered.
+L<OSSL_LIB_CTX(3)>) will be considered.
 
 EVP_CIPHER_number() returns the internal dynamic number assigned to
 the I<cipher>.  This is only useful with fetched B<EVP_CIPHER>s.
@@ -460,6 +480,9 @@ EVP_CIPHER_param_to_asn1() and EVP_CIPHER_asn1_to_param() return greater
 than zero for success and zero or a negative number on failure.
 
 EVP_CIPHER_CTX_rand_key() returns 1 for success.
+
+EVP_CIPHER_names_do_all() returns 1 if the callback was called for all names.
+A return value of 0 means that the callback was not called for any names.
 
 =head1 CIPHER LISTING
 
@@ -881,12 +904,15 @@ disappeared.  EVP_CIPHER_CTX_init() remains as an alias for
 EVP_CIPHER_CTX_reset().
 
 The EVP_CIPHER_fetch(), EVP_CIPHER_free(), EVP_CIPHER_up_ref(),
-EVP_CIPHER_CTX_set_params() and EVP_CIPHER_CTX_get_params() functions
-were added in 3.0.
+EVP_CIPHER_get_params(), EVP_CIPHER_CTX_set_params(),
+EVP_CIPHER_CTX_get_params(), EVP_CIPHER_gettable_params(),
+EVP_CIPHER_settable_ctx_params(), EVP_CIPHER_gettable_ctx_params(),
+EVP_CIPHER_CTX_settable_params() and EVP_CIPHER_CTX_gettable_params()
+functions were added in 3.0.
 
 =head1 COPYRIGHT
 
-Copyright 2000-2020 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2000-2021 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the Apache License 2.0 (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy
