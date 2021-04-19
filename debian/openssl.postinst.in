@@ -7,7 +7,7 @@ then
 fi
 
 # Configure the FIPS provider
-/usr/bin/openssl fipsinstall -module /usr/lib/%DEB_HOST_MULTIARCH%/ossl-modules/fips.so -out /etc/ssl/fipsmodule.cnf
+openssl fipsinstall -module /usr/lib/%DEB_HOST_MULTIARCH%/ossl-modules/fips.so -out /etc/ssl/fipsmodule.cnf
 sed -i -e 's/^activate = 1/#activate = 1/' /etc/ssl/fipsmodule.cnf
 
 #DEBHELPER#
