@@ -176,7 +176,7 @@ static int ecdsa_create_pkey(EVP_PKEY **pkey, const char *curve_name,
 
     ret = 1;
 err:
-    OSSL_PARAM_BLD_free_params(params);
+    OSSL_PARAM_free(params);
     OSSL_PARAM_BLD_free(bld);
     EVP_PKEY_CTX_free(ctx);
     return ret;
@@ -206,7 +206,7 @@ err:
     return ret;
 }
 
-/* Extract r and s  from a ecdsa signature */
+/* Extract r and s  from an ecdsa signature */
 static int get_ecdsa_sig_rs_bytes(const unsigned char *sig, size_t sig_len,
                                   unsigned char **r, unsigned char **s,
                                   size_t *rlen, size_t *slen)
@@ -517,7 +517,7 @@ static int dsa_create_pkey(EVP_PKEY **pkey,
 
     ret = 1;
 err:
-    OSSL_PARAM_BLD_free_params(params);
+    OSSL_PARAM_free(params);
     OSSL_PARAM_BLD_free(bld);
     EVP_PKEY_CTX_free(ctx);
     return ret;
@@ -939,7 +939,7 @@ static int dh_create_pkey(EVP_PKEY **pkey, const char *group_name,
 
     ret = 1;
 err:
-    OSSL_PARAM_BLD_free_params(params);
+    OSSL_PARAM_free(params);
     OSSL_PARAM_BLD_free(bld);
     EVP_PKEY_CTX_free(ctx);
     return ret;
@@ -1062,7 +1062,7 @@ static int rsa_create_pkey(EVP_PKEY **pkey,
 
     ret = 1;
 err:
-    OSSL_PARAM_BLD_free_params(params);
+    OSSL_PARAM_free(params);
     OSSL_PARAM_BLD_free(bld);
     EVP_PKEY_CTX_free(ctx);
     return ret;
@@ -1170,7 +1170,7 @@ err:
     OPENSSL_free(d);
     EVP_PKEY_free(pkey);
     EVP_PKEY_CTX_free(ctx);
-    OSSL_PARAM_BLD_free_params(params);
+    OSSL_PARAM_free(params);
     OSSL_PARAM_BLD_free(bld);
     return ret;
 }
@@ -1351,7 +1351,7 @@ static int drbg_test(int id)
 
     params[0] = OSSL_PARAM_construct_uint(OSSL_RAND_PARAM_STRENGTH, &strength);
     params[1] = OSSL_PARAM_construct_end();
-    if (!TEST_true(EVP_RAND_set_ctx_params(parent, params)))
+    if (!TEST_true(EVP_RAND_CTX_set_params(parent, params)))
         goto err;
 
     /* Get the DRBG */
@@ -1365,7 +1365,7 @@ static int drbg_test(int id)
     params[1] = OSSL_PARAM_construct_utf8_string(OSSL_DRBG_PARAM_CIPHER,
                                                  (char *)tst->cipher, 0);
     params[2] = OSSL_PARAM_construct_end();
-    if (!TEST_true(EVP_RAND_set_ctx_params(ctx, params)))
+    if (!TEST_true(EVP_RAND_CTX_set_params(ctx, params)))
         goto err;
 
     /* Feed in the entropy and nonce */
@@ -1376,7 +1376,7 @@ static int drbg_test(int id)
                                                   (void *)tst->nonce,
                                                   tst->nonce_len);
     params[2] = OSSL_PARAM_construct_end();
-    if (!TEST_true(EVP_RAND_set_ctx_params(parent, params)))
+    if (!TEST_true(EVP_RAND_CTX_set_params(parent, params)))
         goto err;
 
     /*

@@ -18,8 +18,9 @@ OpenSSL Releases
 OpenSSL 3.0
 -----------
 
-### Major changes between OpenSSL 1.1.1 and OpenSSL 3.0 alpha 14 [in pre-release]
+### Major changes between OpenSSL 1.1.1 and OpenSSL 3.0 alpha 15 [in pre-release]
 
+  * Added suport for Kernel TLS (KTLS)
   * Changed the license to the Apache License v2.0.
   * Moved all variations of the EVP ciphers CAST5, BF, IDEA, SEED, RC2,
     RC4, RC5, and DES to the legacy provider.

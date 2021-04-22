@@ -21,7 +21,23 @@ OpenSSL Releases
 OpenSSL 3.0
 -----------
 
-### Changes between 1.1.1 and 3.0 alpha 14 [8 Apr 2021]
+### Changes between 1.1.1 and 3.0 alpha 15 [22 Apr 2021]
+
+ * The default manual page suffix ($MANSUFFIX) has been changed to "ossl"
+
+   *Matt Caswell*
+
+ * Added support for Kernel TLS (KTLS). In order to use KTLS, support for it
+   must be compiled in using the "enable-ktls" compile time option. It must
+   also be enabled at run time using the SSL_OP_ENABLE_KTLS option.
+
+   *Boris Pismenny, John Baldwin and Andrew Gallatin*
+
+ * The error return values from some control calls (ctrl) have changed.
+   One significant change is that controls which used to return -2 for
+   invalid inputs, now return -1 indicating a generic error condition instead.
+
+   *Paul Dale*
 
  * A public key check is now performed during EVP_PKEY_derive_set_peer().
    Previously DH was internally doing this during EVP_PKEY_derive().
@@ -426,12 +442,11 @@ OpenSSL 3.0
 
    *Paul Dale*
 
- * Deprecated EVP_PKEY_set_alias_type().  This function was previously
+ * Removed EVP_PKEY_set_alias_type().  This function was previously
    needed as a workaround to recognise SM2 keys.  With OpenSSL 3.0, this key
    type is internally recognised so the workaround is no longer needed.
 
-   Functionality is still retained as it is, but will only work with
-   EVP_PKEYs with a legacy internal key.
+   This is a breaking change from previous OpenSSL versions.
 
    *Richard Levitte*
 
@@ -757,6 +772,19 @@ OpenSSL 3.0
    L<EVP_PKEY_encrypt(3)>, L<EVP_PKEY_decrypt_init(3)> and
    L<EVP_PKEY_decrypt(3)>.
 
+   All of these low level RSA functions have been deprecated without
+   replacement:
+
+   RSA_blinding_off, RSA_blinding_on, RSA_clear_flags, RSA_get_version,
+   RSAPrivateKey_dup, RSAPublicKey_dup, RSA_set_flags, RSA_setup_blinding and
+   RSA_test_flags.
+
+   All of these RSA flags have been deprecated without replacement:
+
+   RSA_FLAG_BLINDING, RSA_FLAG_CACHE_PRIVATE, RSA_FLAG_CACHE_PUBLIC,
+   RSA_FLAG_EXT_PKEY, RSA_FLAG_NO_BLINDING, RSA_FLAG_THREAD_SAFE and
+   RSA_METHOD_FLAG_NO_CHECK.
+
    *Paul Dale*
 
  * X509 certificates signed using SHA1 are no longer allowed at security
@@ -809,12 +837,22 @@ OpenSSL 3.0
    time.  Instead applications should use L<EVP_PKEY_derive_init(3)>
    and L<EVP_PKEY_derive(3)>.
 
+   These low level DH functions have been deprecated without replacement:
+
+   DH_clear_flags, DH_get_1024_160, DH_get_2048_224, DH_get_2048_256,
+   DH_set_flags and DH_test_flags.
+
+   The DH_FLAG_CACHE_MONT_P flag has been deprecated without replacement.
+   The DH_FLAG_TYPE_DH and DH_FLAG_TYPE_DHX have been deprecated.  Use
+   EVP_PKEY_is_a() to determine the type of a key.  There is no replacement for
+   setting these flags.
+
    Additionally functions that read and write DH objects such as d2i_DHparams,
    i2d_DHparams, PEM_read_DHparam, PEM_write_DHparams and other similar
    functions have also been deprecated. Applications should instead use the
    OSSL_DECODER and OSSL_ENCODER APIs to read and write DH files.
 
-   Finaly functions that assign or obtain DH objects from an EVP_PKEY such as
+   Finally functions that assign or obtain DH objects from an EVP_PKEY such as
    `EVP_PKEY_assign_DH()`, `EVP_PKEY_get0_DH()`, `EVP_PKEY_get1_DH()`, and
    `EVP_PKEY_set1_DH()` are also deprecated.
    Applications should instead either read or write an
@@ -847,7 +885,14 @@ OpenSSL 3.0
    time.  Instead applications should use L<EVP_DigestSignInit_ex(3)>,
    L<EVP_DigestSignUpdate(3)> and L<EVP_DigestSignFinal(3)>.
 
-   Finaly functions that assign or obtain DSA objects from an EVP_PKEY such as
+   These low level DSA functions have been deprecated without replacement:
+
+   DSA_clear_flags, DSA_dup_DH, DSAparams_dup, DSA_set_flags and
+   DSA_test_flags.
+
+   The DSA_FLAG_CACHE_MONT_P flag has been deprecated without replacement.
+
+   Finally functions that assign or obtain DSA objects from an EVP_PKEY such as
    `EVP_PKEY_assign_DSA()`, `EVP_PKEY_get0_DSA()`, `EVP_PKEY_get1_DSA()`, and
    `EVP_PKEY_set1_DSA()` are also deprecated.
    Applications should instead either read or write an
@@ -857,16 +902,16 @@ OpenSSL 3.0
    *Paul Dale*
 
  * Reworked the treatment of EC EVP_PKEYs with the SM2 curve to
-   automatically become EVP_PKEY_SM2 rather than EVP_PKEY_EC.
-   This means that applications don't have to look at the curve NID and
-   `EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2)` to get SM2 computations.
-   However, they still can, that `EVP_PKEY_set_alias_type()` call acts as
-   a no-op when the EVP_PKEY is already of the given type.
+   automatically become EVP_PKEY_SM2 rather than EVP_PKEY_EC. This is a breaking
+   change from previous OpenSSL versions.
+
+   Unlike in previous OpenSSL versions, this means that applications must not
+   call `EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2)` to get SM2 computations.
+   The `EVP_PKEY_set_alias_type` function has now been removed.
 
    Parameter and key generation is also reworked to make it possible
-   to generate EVP_PKEY_SM2 parameters and keys without having to go
-   through EVP_PKEY_EC generation and then change the EVP_PKEY type.
-   However, code that does the latter will still work as before.
+   to generate EVP_PKEY_SM2 parameters and keys. Applications must now generate
+   SM2 keys directly and must not create an EVP_PKEY_EC key first.
 
    *Richard Levitte*
 

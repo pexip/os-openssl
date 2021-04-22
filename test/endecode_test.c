@@ -494,7 +494,7 @@ static int check_unprotected_PKCS8_DER(const char *file, const int line,
 
         if (TEST_FL_ptr(pkey)) {
             if (!(ok = TEST_FL_true(EVP_PKEY_is_a(pkey, type)))) {
-                EVP_PKEY_typenames_do_all(pkey, collect_name, &namelist);
+                EVP_PKEY_type_names_do_all(pkey, collect_name, &namelist);
                 if (namelist != NULL)
                     TEST_note("%s isn't any of %s", type, namelist);
                 OPENSSL_free(namelist);
@@ -1332,13 +1332,13 @@ int setup_tests(void)
 void cleanup_tests(void)
 {
 #ifndef OPENSSL_NO_EC
-    OSSL_PARAM_BLD_free_params(ec_explicit_prime_params_nc);
-    OSSL_PARAM_BLD_free_params(ec_explicit_prime_params_explicit);
+    OSSL_PARAM_free(ec_explicit_prime_params_nc);
+    OSSL_PARAM_free(ec_explicit_prime_params_explicit);
     OSSL_PARAM_BLD_free(bld_prime_nc);
     OSSL_PARAM_BLD_free(bld_prime);
 # ifndef OPENSSL_NO_EC2M
-    OSSL_PARAM_BLD_free_params(ec_explicit_tri_params_nc);
-    OSSL_PARAM_BLD_free_params(ec_explicit_tri_params_explicit);
+    OSSL_PARAM_free(ec_explicit_tri_params_nc);
+    OSSL_PARAM_free(ec_explicit_tri_params_explicit);
     OSSL_PARAM_BLD_free(bld_tri_nc);
     OSSL_PARAM_BLD_free(bld_tri);
 # endif
