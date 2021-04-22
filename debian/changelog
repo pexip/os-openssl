@@ -3,6 +3,11 @@ openssl (3.0.0~~alpha15-0pexip1) pexip; urgency=medium
   * New upstream release
   * debian/patches/man-section.patch: Refresh
   * debian/patches/disable-ktls.patch: Fix description for alpha15
+  * debian/patches/Set-systemwide-default-settings-for-libssl-users.patch:
+    Remove FIPS changes
+  * debian/patches/TEST-Provide-a-default-openssl.cnf-for-tests.patch:
+    Revert local FIPS-related changes
+  * debian/rules: Configure FIPS for non-udeb package
 
  -- John-Mark Bell <jmb@pexip.com>  Thu, 22 Apr 2021 15:28:24 +0100
 
