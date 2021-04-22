@@ -1,12 +1,10 @@
-Currently (3.0.0-alpha14), enabling KTLS at build time
-also enables KTLS by default at runtime.
+Disable KTLS at build time.
 
-This is not desirable as it will mean that TLS cryptography occurs
-outwith the FIPS module boundary. As of
-https://github.com/openssl/openssl/commit/a3a54179b6754fbed6d88e434baac710a83aaf80
-an explicit SSL_OP_ENABLE_KTLS is required at runtime to enable KTLS.
+Although an explicit SSL_OP_ENABLE_KTLS is required at runtime
+to enable this functionality, using it will mean that TLS
+cryptography occurs outwith the FIPS module boundary.
 
-However, if FIPS is wanted, it's safer to disable this at build
+Therefore, if FIPS is wanted, it's safer to disable this at build
 time so that there's no opportunity for accidents later.
 diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
 index ef892b555aed..fa357dbbcb75 100644

@@ -1,3 +1,11 @@
+openssl (3.0.0~~alpha15-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/patches/man-section.patch: Refresh
+  * debian/patches/disable-ktls.patch: Fix description for alpha15
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 22 Apr 2021 15:28:24 +0100
+
 openssl (3.0.0~~alpha14-0pexip1) pexip; urgency=medium
 
   * New upstream release
