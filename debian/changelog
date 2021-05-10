@@ -1,3 +1,12 @@
+openssl (3.0.0~~alpha16-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/patches/Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch,
+    debian/patches/disable-ktls.patch:
+    Refresh
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 10 May 2021 17:49:57 +0100
+
 openssl (3.0.0~~alpha15-0pexip1) pexip; urgency=medium
 
   * New upstream release

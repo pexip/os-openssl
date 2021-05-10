@@ -33,8 +33,8 @@ index ef892b555aed..fa357dbbcb75 100644
 -        enable           => [ "afalgeng" ],
 +        enable           => [ "afalgeng", "ktls" ],
      },
-     "linux-generic64" => {
-         inherit_from     => [ "linux-generic32" ],
+     "linux-generic32" => {
+         inherit_from     => [ "linux-generic" ],
 diff --git a/Configure b/Configure
 index 5f2be9cf3c9e..7a3e25c026a4 100755
 --- a/Configure
