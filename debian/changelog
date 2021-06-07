@@ -1,3 +1,9 @@
+openssl (3.0.0~~alpha17-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 07 Jun 2021 12:50:12 +0100
+
 openssl (3.0.0~~alpha16-0pexip1) pexip; urgency=medium
 
   * New upstream release
