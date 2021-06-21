@@ -17,6 +17,5 @@ index ef892b555aed..fa357dbbcb75 100644
 -        enable           => [ "afalgeng", "ktls" ],
 +        enable           => [ "afalgeng" ],
      },
-     "linux-generic32" => {
-         inherit_from     => [ "linux-generic" ],
-
+     "linux-latomic" => {
+         inherit_from     => [ "linux-generic32" ],
