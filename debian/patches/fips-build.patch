@@ -2,13 +2,14 @@ diff --git a/crypto/o_init.c b/crypto/o_init.c
 index a0b4256..6a32610 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -9,13 +9,53 @@
+@@ -9,13 +9,61 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
 +#include <openssl/provider.h>
 +
 +# include <fcntl.h>
++# include <stdio.h>
 +# include <stdlib.h>
 +# include <unistd.h>
 +
@@ -25,11 +26,18 @@ index a0b4256..6a32610 100644
 +
 +static void fips_init(void)
 +{
-+    /* Not in FIPS mode; does flag exist? */
-+    int fd = open("/etc/fips/enabled", O_RDONLY);
-+    if (fd != -1) {
-+        close(fd);
-+
++    int want_fips = 0;
++    if (getenv("FIPS_FORCE_ENABLE") != NULL) {
++        want_fips = 1;
++    } else {
++        /* Not in FIPS mode; does flag exist? */
++        int fd = open("/etc/fips/enabled", O_RDONLY);
++        if (fd != -1) {
++            close(fd);
++            want_fips = 1;
++        }
++    }
++    if (want_fips) {
 +        fips = OSSL_PROVIDER_load(NULL, "fips");
 +        if (fips == NULL) {
 +            abort();
