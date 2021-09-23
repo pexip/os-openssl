@@ -38,6 +38,7 @@ struct decoder_process_data_st {
      */
     unsigned int flag_next_level_called : 1;
     unsigned int flag_construct_called : 1;
+    unsigned int flag_input_structure_checked : 1;
 };
 
 static int decoder_process(const OSSL_PARAM params[], void *arg);
@@ -47,6 +48,7 @@ int OSSL_DECODER_from_bio(OSSL_DECODER_CTX *ctx, BIO *in)
     struct decoder_process_data_st data;
     int ok = 0;
     BIO *new_bio = NULL;
+    unsigned long lasterr;
 
     if (in == NULL) {
         ERR_raise(ERR_LIB_OSSL_DECODER, ERR_R_PASSED_NULL_PARAMETER);
@@ -60,6 +62,8 @@ int OSSL_DECODER_from_bio(OSSL_DECODER_CTX *ctx, BIO *in)
                        "available. Did you forget to load them?");
         return 0;
     }
+
+    lasterr = ERR_peek_last_error();
 
     if (BIO_tell(in) < 0) {
         new_bio = BIO_new(BIO_f_readbuffer());
@@ -92,8 +96,8 @@ int OSSL_DECODER_from_bio(OSSL_DECODER_CTX *ctx, BIO *in)
         const char *input_structure
             = ctx->input_structure != NULL ? ctx->input_structure : "";
 
-        if (BIO_eof(in) == 0 || ERR_peek_error() == 0)
-            /* Prevent spurious decoding error */
+        if (ERR_peek_last_error() == lasterr || ERR_peek_error() == 0)
+            /* Prevent spurious decoding error but add at least something */
             ERR_raise_data(ERR_LIB_OSSL_DECODER, ERR_R_UNSUPPORTED,
                            "No supported data to decode. %s%s%s%s%s%s",
                            spaces, input_type_label, input_type, comma,
@@ -902,6 +906,26 @@ static int decoder_process(const OSSL_PARAM params[], void *arg)
         }
 
         /*
+         * If the decoder we're currently considering specifies a structure,
+         * and this check hasn't already been done earlier in this chain of
+         * decoder_process() calls, check that it matches the user provided
+         * input structure, if one is given.
+         */
+        if (!data->flag_input_structure_checked
+            && ctx->input_structure != NULL
+            && new_input_structure != NULL) {
+            data->flag_input_structure_checked = 1;
+            if (strcasecmp(new_input_structure, ctx->input_structure) != 0) {
+                OSSL_TRACE_BEGIN(DECODER) {
+                    BIO_printf(trc_out,
+                               "(ctx %p) %s [%u] the previous decoder's data structure doesn't match the input structure given by the user, skipping...\n",
+                               (void *)new_data.ctx, LEVEL, (unsigned int)i);
+                } OSSL_TRACE_END(DECODER);
+                continue;
+            }
+        }
+
+        /*
          * Checking the return value of BIO_reset() or BIO_seek() is unsafe.
          * Furthermore, BIO_reset() is unsafe to use if the source BIO happens
          * to be a BIO_s_mem(), because the earlier BIO_tell() gives us zero
@@ -930,6 +954,8 @@ static int decoder_process(const OSSL_PARAM params[], void *arg)
         ERR_set_mark();
 
         new_data.current_decoder_inst_index = i;
+        new_data.flag_input_structure_checked
+            = data->flag_input_structure_checked;
         ok = new_decoder->decode(new_decoderctx, cbio,
                                  new_data.ctx->selection,
                                  decoder_process, &new_data,

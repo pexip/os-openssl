@@ -31,6 +31,10 @@ if (disabled("rsa")) {
     note("There should not be more that at most 80 per line");
 }
 
+# Prevent MSys2 filename munging for arguments that look like file paths but
+# aren't
+$ENV{MSYS2_ARG_CONV_EXCL} = "/CN=";
+
 # Check for duplicate -addext parameters, and one "working" case.
 my @addext_args = ( "openssl", "req", "-new", "-out", "testreq.pem",
                     "-key",  srctop_file("test", "certs", "ee-key.pem"),
@@ -74,7 +78,7 @@ subtest "generating alt certificate requests with RSA" => sub {
 
 
 subtest "generating certificate requests with RSA" => sub {
-    plan tests => 7;
+    plan tests => 8;
 
     SKIP: {
         skip "RSA is not supported by this OpenSSL build", 2
@@ -101,6 +105,11 @@ subtest "generating certificate requests with RSA" => sub {
 
         ok(run(app(["openssl", "req",
                     "-config", srctop_file("test", "test.cnf"),
+                    "-modulus", "-in", "testreq-rsa.pem", "-noout"])),
+           "Printing a modulus of the request key");
+
+        ok(run(app(["openssl", "req",
+                    "-config", srctop_file("test", "test.cnf"),
                     "-new", "-out", "testreq_withattrs_pem.pem", "-utf8",
                     "-key", srctop_file("test", "testrsa_withattrs.pem")])),
            "Generating request from a key with extra attributes - PEM");
@@ -114,7 +123,7 @@ subtest "generating certificate requests with RSA" => sub {
                     "-config", srctop_file("test", "test.cnf"),
                     "-new", "-out", "testreq_withattrs_der.pem", "-utf8",
                     "-key", srctop_file("test", "testrsa_withattrs.der"),
-	            "-keyform", "DER"])),
+                    "-keyform", "DER"])),
            "Generating request from a key with extra attributes - PEM");
 
         ok(run(app(["openssl", "req",
@@ -373,7 +382,7 @@ sub generate_cert {
     my $cn = $is_ca ? "CA" : "EE";
     my $ca_key = srctop_file(@certs, "ca-key.pem");
     my $key = $is_ca ? $ca_key : srctop_file(@certs, "ee-key.pem");
-    my @cmd = ("openssl", "req", "-config", "\"\"", "-x509",
+    my @cmd = ("openssl", "req", "-config", "", "-x509",
                "-key", $key, "-subj", "/CN=$cn", @_, "-out", $cert);
     push(@cmd, ("-CA", $ca_cert, "-CAkey", $ca_key)) unless $ss;
     ok(run(app([@cmd])), "generate $cert");

@@ -61,7 +61,7 @@ void AES_xts_decrypt(const unsigned char *inp, unsigned char *out, size_t len,
 
 # if defined(OPENSSL_CPUID_OBJ)
 #  if (defined(__powerpc__) || defined(__ppc__) || defined(_ARCH_PPC))
-#   include "ppc_arch.h"
+#   include "crypto/ppc_arch.h"
 #   ifdef VPAES_ASM
 #    define VPAES_CAPABLE (OPENSSL_ppccap_P & PPC_ALTIVEC)
 #   endif
@@ -92,7 +92,7 @@ void AES_xts_decrypt(const unsigned char *inp, unsigned char *out, size_t len,
 #    define HWAES_decrypt aes_v8_decrypt
 #    define HWAES_cbc_encrypt aes_v8_cbc_encrypt
 #    define HWAES_ecb_encrypt aes_v8_ecb_encrypt
-#    if __ARM_MAX_ARCH__>=8
+#    if __ARM_MAX_ARCH__>=8 && defined(__aarch64__)
 #     define HWAES_xts_encrypt aes_v8_xts_encrypt
 #     define HWAES_xts_decrypt aes_v8_xts_decrypt
 #    endif
@@ -233,8 +233,7 @@ void gcm_ghash_avx(u64 Xi[2], const u128 Htable[16], const u8 *in, size_t len);
 # elif defined(AES_ASM) && (defined(__sparc) || defined(__sparc__))
 
 /* Fujitsu SPARC64 X support */
-extern unsigned int OPENSSL_sparcv9cap_P[];
-#  include "sparc_arch.h"
+#  include "crypto/sparc_arch.h"
 
 #  define SPARC_AES_CAPABLE       (OPENSSL_sparcv9cap_P[1] & CFR_AES)
 #  define HWAES_CAPABLE           (OPENSSL_sparcv9cap_P[0] & SPARCV9_FJAESX)
