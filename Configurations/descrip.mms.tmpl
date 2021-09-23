@@ -391,6 +391,8 @@ CPPFLAGS_Q={- (my $c = $lib_cppflags.$cppflags) =~ s|"|""|g;
 # .FIRST and .LAST are special targets with MMS and MMK.
 NODEBUG=@
 .FIRST :
+        {- join( "\n        \$(NODEBUG) ", @{ $target{setup_commands} // [] },
+                                           '!' ) -}
         $(NODEBUG) sourcetop = F$PARSE("$(SRCDIR)","[]A.;",,,"SYNTAX_ONLY,NO_CONCEAL") - ".][000000" - "[000000." - "][" - "]A.;" + ".]"
         $(NODEBUG) DEFINE ossl_sourceroot 'sourcetop'
         $(NODEBUG) !
@@ -447,7 +449,7 @@ NODEBUG=@
 
 # The main targets ###################################################
 
-{- dependmagic('build_sw'); -} : build_libs_nodep, build_modules_nodep, build_programs_nodep copy-utils
+{- dependmagic('build_sw'); -} : build_libs_nodep, build_modules_nodep, build_programs_nodep
 {- dependmagic('build_libs'); -} : build_libs_nodep
 {- dependmagic('build_modules'); -} : build_modules_nodep
 {- dependmagic('build_programs'); -} : build_programs_nodep
@@ -476,7 +478,7 @@ build_all_generated : $(GENERATED_MANDATORY) $(GENERATED) build_docs
 all : build_sw build_docs
 
 test : tests
-{- dependmagic('tests'); -} : build_programs_nodep, build_modules_nodep copy-utils run_tests
+{- dependmagic('tests'); -} : build_programs_nodep, build_modules_nodep run_tests
 run_tests :
         @ ! {- output_off() if $disabled{tests}; "" -}
         DEFINE SRCTOP "$(SRCDIR)"
@@ -500,7 +502,7 @@ list-tests :
         @ WRITE SYS$OUTPUT "Tests are not supported with your chosen Configure options"
         @ ! {- output_on() if !$disabled{tests}; "" -}
 
-install : install_sw install_ssldirs install_docs install_msg
+install : install_sw install_ssldirs install_docs {- $disabled{fips} ? "" : "install_fips" -} install_msg
 
 install_msg :
         @ WRITE SYS$OUTPUT ""
@@ -516,7 +518,7 @@ install_msg :
 check_install :
         spawn/nolog @ossl_installroot:[SYSTEST]openssl_ivp{- $osslver -}.com
 
-uninstall : uninstall_docs uninstall_sw
+uninstall : uninstall_docs uninstall_sw {- $disabled{fips} ? "" : "uninstall_fips" -}
 
 # Because VMS wants the generation number (or *) to delete files, we can't
 # use $(LIBS), $(PROGRAMS), $(GENERATED) and $(MODULES) directly.
@@ -565,14 +567,14 @@ install_docs : install_html_docs
 uninstall_docs : uninstall_html_docs
 
 {- output_off() if $disabled{fips}; "" -}
-install_fips : install_sw $(INSTALL_FIPSMODULECONF)
+install_fips : build_sw $(INSTALL_FIPSMODULECONF)
 	@ WRITE SYS$OUTPUT "*** Installing FIPS module"
 	COPY/PROT=W:RE $(INSTALL_FIPSMODULES) -
                 ossl_installroot:[MODULES{- $sover_dirname.$target{pointer_size} -}.'arch']$(FIPSMODULENAME)
 	@ WRITE SYS$OUTPUT "*** Installing FIPS module configuration"
-	COPY/PROT=W:RE $(INSTALL_FIPSMODULESCONF) OSSL_DATAROOT:[000000]
+	COPY/PROT=W:RE $(INSTALL_FIPSMODULECONF) OSSL_DATAROOT:[000000]
 
-uninstall_fips : uninstall_sw
+uninstall_fips :
 	@ WRITE SYS$OUTPUT "*** Uninstalling FIPS module configuration"
 	DELETE OSSL_DATAROOT:[000000]fipsmodule.cnf;*
 	@ WRITE SYS$OUTPUT "*** Uninstalling FIPS module"
@@ -738,16 +740,6 @@ check_INSTALLTOP :
         @ IF "$(INSTALLTOP)" .EQS. "" THEN -
                 EXIT %x10000002
 
-# Helper targets #####################################################
-
-copy-utils : [.util]wrap.pl
-
-[.util]wrap.pl : configdata.pm
-	@ IF "$(SRCDIR)" .NES. "$(BLDDIR)" THEN -
-		CREATE/DIR/LOG [.util]
-	@ IF "$(SRCDIR)" .NES. "$(BLDDIR)" THEN -
-		COPY/LOG ossl_sourceroot:[util]wrap.pl [.util]
-
 # Developer targets ##################################################
 
 debug_logicals :
@@ -896,9 +888,10 @@ EOF
           my $title = basename($args{src}, ".html");
           my $pod = $gen0;
           my $mkpod2html = sourcefile('util', 'mkpod2html.pl');
+          my $srcdoc = sourcedir('doc');
           return <<"EOF";
 $args{src} : $pod
-	\$(PERL) $mkpod2html -i $pod -o \$\@ -t "$title" -r "\$(SRCDIR)/doc"
+	\$(PERL) $mkpod2html -i $pod -o \$\@ -t "$title" -r "$srcdoc"
 EOF
       } elsif ($args{src} =~ /\.(\d)$/) {
           #
