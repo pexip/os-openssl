@@ -1,3 +1,11 @@
+openssl (3.0.3-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/libssl3.symbols: Refresh
+  * debian/patches/c_rehash-compat.patch: Refresh
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 12 May 2022 17:33:10 +0100
+
 openssl (3.0.0-0pexip1) pexip; urgency=medium
 
   * New upstream release
