@@ -1,3 +1,10 @@
+openssl (3.0.5-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/rules: build for 3.0 API; disable deprecated APIs
+
+ -- John-Mark Bell <jmb@pexip.com>  Wed, 12 Oct 2022 19:34:12 +0100
+
 openssl (3.0.3-0pexip1) pexip; urgency=medium
 
   * New upstream release
