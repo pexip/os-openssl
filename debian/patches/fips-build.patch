@@ -2,7 +2,7 @@ diff --git a/crypto/o_init.c b/crypto/o_init.c
 index a0b4256..6a32610 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -9,13 +9,61 @@
+@@ -9,6 +9,52 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
@@ -24,7 +24,7 @@ index a0b4256..6a32610 100644
 +        OSSL_PROVIDER_unload(fips);
 +}
 +
-+static void fips_init(void)
++static __attribute__((constructor)) void fips_init(void)
 +{
 +    int want_fips = 0;
 +    if (getenv("FIPS_FORCE_ENABLE") != NULL) {
@@ -55,13 +55,3 @@ index a0b4256..6a32610 100644
  
  /*
   * Perform any essential OpenSSL initialization operations. Currently does
-  * nothing.
-  */
- 
--void OPENSSL_init(void)
-+__attribute__((constructor)) void OPENSSL_init(void)
- {
-+    fips_init();
-+
-     return;
- }
