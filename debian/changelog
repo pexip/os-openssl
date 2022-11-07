@@ -1,3 +1,12 @@
+openssl (3.0.7-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/patches/Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch:
+    refresh
+  * debian/upstream/signing-key.asc: update
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 07 Nov 2022 14:35:28 +0000
+
 openssl (3.0.5-0pexip1) pexip; urgency=medium
 
   * New upstream release

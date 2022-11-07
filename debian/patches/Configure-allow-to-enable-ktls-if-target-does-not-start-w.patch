@@ -26,7 +26,7 @@ diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
 index ef892b555aed..fa357dbbcb75 100644
 --- a/Configurations/10-main.conf
 +++ b/Configurations/10-main.conf
-@@ -695,7 +695,7 @@ my %targets = (
+@@ -697,7 +697,7 @@ my %targets = (
          shared_target    => "linux-shared",
          shared_cflag     => "-fPIC",
          shared_ldflag    => sub { $disabled{pinshared} ? () : "-Wl,-znodelete" },
@@ -39,12 +39,12 @@ diff --git a/Configure b/Configure
 index 5f2be9cf3c9e..7a3e25c026a4 100755
 --- a/Configure
 +++ b/Configure
-@@ -1685,7 +1685,7 @@ unless ($disabled{devcryptoeng}) {
- 
+@@ -1715,7 +1715,7 @@ unless ($disabled{devcryptoeng}) {
  unless ($disabled{ktls}) {
      $config{ktls}="";
+     my $cc = $config{CROSS_COMPILE}.$config{CC};
 -    if ($target =~ m/^linux/) {
 +    if (grep { $_ eq 'ktls' } @{$target{enable}}) {
-         my $usr = "/usr/$config{cross_compile_prefix}";
-         chop($usr);
-         if ($config{cross_compile_prefix} eq "") {
+         system("printf '#include <sys/types.h>\n#include <linux/tls.h>' | $cc -E - >/dev/null 2>&1");
+         if ($? != 0) {
+             disable('too-old-kernel', 'ktls');
