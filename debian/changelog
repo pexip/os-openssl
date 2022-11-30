@@ -1,4 +1,4 @@
-openssl (3.0.7-0pexip1) pexip; urgency=medium
+openssl (3.0.7-0pexip1) pexip-bullseye-openssl3; urgency=medium
 
   * New upstream release
   * debian/patches/Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch:
