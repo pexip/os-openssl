@@ -2,10 +2,11 @@ diff --git a/crypto/o_init.c b/crypto/o_init.c
 index a0b4256..6a32610 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -9,6 +9,52 @@
+@@ -9,6 +9,58 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
++#include <openssl/evp.h>
 +#include <openssl/provider.h>
 +
 +# include <fcntl.h>
@@ -46,6 +47,11 @@ index a0b4256..6a32610 100644
 +        base = OSSL_PROVIDER_load(NULL, "base");
 +        if (base == NULL) {
 +            OSSL_PROVIDER_unload(fips);
++            abort();
++        }
++
++        if (EVP_default_properties_enable_fips(NULL, 1) != 1) {
++            ERR_print_errors_fp(stderr);
 +            abort();
 +        }
 +
