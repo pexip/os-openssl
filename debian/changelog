@@ -1,3 +1,9 @@
+openssl (3.0.7-0pexip2) pexip-bullseye-openssl3; urgency=medium
+
+  * No-change rebuild
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 12 Dec 2022 16:54:52 +0000
+
 openssl (3.0.7-0pexip1) pexip-bullseye-openssl3; urgency=medium
 
   * New upstream release
