@@ -29,7 +29,7 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 	MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) --api=3.0 no-deprecated no-idea no-mdc2 no-rc5 no-zlib no-ssl3 enable-unit-test no-ssl3-method enable-rfc3779 enable-cms no-capieng enable-fips
+CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) --api=3.0 no-deprecated no-idea no-mdc2 no-rc5 no-zlib no-ssl3 enable-unit-test no-ssl3-method enable-rfc3779 enable-cms no-capieng
 OPT_alpha = ev4 ev5
 ARCHOPTS  = OPT_$(DEB_HOST_ARCH)
 OPTS      = $($(ARCHOPTS))
@@ -60,7 +60,6 @@ override_dh_auto_configure:
 	mkdir build_static; cd build_static; ../Configure no-shared $(CONFARGS) debian-$(DEB_HOST_ARCH) ;perl configdata.pm -d
 	# Debian Perl policy 5.1 (Script Magic)
 	mkdir build_shared; cd build_shared; HASHBANGPERL=/usr/bin/perl ../Configure shared $(CONFARGS) debian-$(DEB_HOST_ARCH) ;perl configdata.pm -d
-	sed -e 's/%DEB_HOST_MULTIARCH%/${DEB_HOST_MULTIARCH}/' debian/openssl.postinst.in >debian/openssl.postinst
 
 override_dh_auto_build-indep:
 	$(MAKE) -C build_shared all
@@ -152,6 +151,3 @@ override_dh_makeshlibs:
 override_dh_shlibdeps:
 	sed -i '/^udeb: libssl/s/libcrypto3-udeb/libssl3-udeb/' debian/libssl3/DEBIAN/shlibs
 	dh_shlibdeps -a -L libssl3
-
-override_dh_clean:
-	dh_clean debian/openssl.postinst
