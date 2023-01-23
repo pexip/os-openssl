@@ -1,3 +1,9 @@
+openssl (3.0.7-0pexip4) pexip; urgency=medium
+
+  * Switch distribution
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 23 Jan 2023 17:51:33 +0000
+
 openssl (3.0.7-0pexip3) pexip-bullseye-openssl3; urgency=medium
 
   * debian/rules: Disable FIPS module
