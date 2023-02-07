@@ -1,3 +1,10 @@
+openssl (3.0.8-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/libssl3.symbols: update for 3.0.8
+
+ -- John-Mark Bell <jmb@pexip.com>  Tue, 07 Feb 2023 18:15:10 +0000
+
 openssl (3.0.7-0pexip4) pexip; urgency=medium
 
   * Switch distribution
