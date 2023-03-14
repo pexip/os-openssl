@@ -1,3 +1,15 @@
+openssl (3.0.8-0pexip2) pexip; urgency=medium
+
+  * Move openssl.cnf to make sure things are configured immediately
+    on installation of libssl3:
+    + Move from /etc/ssl to /usr/lib/ssl. We never need to change
+      things here, so let's avoid conffile handling.
+    + Move from the openssl binary package to libssl3, as libssl3
+      hard-depends on working config here if we're in FIPS mode.
+  * Add Replaces/Breaks to make things work on upgrade
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Tue, 14 Mar 2023 18:34:38 +0000
+
 openssl (3.0.8-0pexip1) pexip; urgency=medium
 
   * New upstream release
