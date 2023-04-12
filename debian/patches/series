@@ -10,3 +10,4 @@ Configurations-Add-latomic-on-Linux.patch
 
 fips-build.patch
 disable-ktls.patch
+x509-serial.patch

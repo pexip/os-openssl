@@ -1,0 +1,183 @@
+diff --git a/crypto/x509/x_x509.c b/crypto/x509/x_x509.c
+index 010578b1..e215ae62 100644
+--- a/crypto/x509/x_x509.c
++++ b/crypto/x509/x_x509.c
+@@ -15,9 +15,73 @@
+ #include <openssl/x509v3.h>
+ #include "crypto/x509.h"
++#include "crypto/asn1/asn1_local.h"
+ 
++DECLARE_ASN1_ITEM_attr(static, tolerant_ASN1_INTEGER);
++
++static int tolerant_ASN1_INTEGER_c2i(ASN1_VALUE **pval,
++                                     const unsigned char *cont, int len,
++                                     int utype, char *free_cont,
++                                     const ASN1_ITEM *it)
++{
++    ASN1_INTEGER **tint = (ASN1_INTEGER **)pval;
++    int ret = 0;
++
++    /* Sort out bogus leading padding */
++    if (len > 1) {
++        int pad = 0;
++
++        if (cont[0] == 0) {
++            pad = 1;
++        } else if (cont[0] == 0xFF) {
++            int i = 1;
++
++            /* Skip leading 0xFF */
++            while (i < len && cont[i] == 0xFF)
++                i++;
++
++            /* Padded if at least one remaining byte is non-zero */
++            while (i < len)
++                pad |= cont[i++];
++            pad = pad != 0 ? 1 : 0;
++        }
++
++        /* Skip over bogus additional padding */
++        while (pad && pad < len &&
++               ((cont[pad-1] == 0 && (cont[pad] & 0x80) == 0) ||
++               (cont[pad-1] == 0xFF && (cont[pad] & 0x80) == 0x80)))
++            pad++;
++
++        if (pad) {
++            cont += pad-1;
++            len -= pad-1;
++        }
++    }
++
++    if (ossl_c2i_ASN1_INTEGER(tint, &cont, len)) {
++        /* Fixup type to match the expected form */
++        (*tint)->type = utype | ((*tint)->type & V_ASN1_NEG);
++        ret = 1;
++    }
++    return ret;
++}
++
++static ASN1_PRIMITIVE_FUNCS tolerant_pf = {
++    NULL, 0,
++    NULL,
++    NULL,
++    NULL,
++    tolerant_ASN1_INTEGER_c2i,
++    NULL,
++    NULL
++};
++
++ASN1_ITEM_start(tolerant_ASN1_INTEGER)
++        ASN1_ITYPE_PRIMITIVE, V_ASN1_INTEGER, NULL, 0, &tolerant_pf, 0, "ASN1_INTEGER"
++ASN1_ITEM_end(tolerant_ASN1_INTEGER)
++
+ ASN1_SEQUENCE_enc(X509_CINF, enc, 0) = {
+         ASN1_EXP_OPT(X509_CINF, version, ASN1_INTEGER, 0),
+-        ASN1_EMBED(X509_CINF, serialNumber, ASN1_INTEGER),
++        ASN1_EMBED(X509_CINF, serialNumber, tolerant_ASN1_INTEGER),
+         ASN1_EMBED(X509_CINF, signature, X509_ALGOR),
+         ASN1_SIMPLE(X509_CINF, issuer, X509_NAME),
+         ASN1_EMBED(X509_CINF, validity, X509_VAL),
+diff --git a/test/recipes/25-test_x509.t b/test/recipes/25-test_x509.t
+index 95df179b..bcddb9de 100644
+--- a/test/recipes/25-test_x509.t
++++ b/test/recipes/25-test_x509.t
+@@ -16,7 +16,7 @@ use OpenSSL::Test qw/:DEFAULT srctop_file/;
+ 
+ setup("test_x509");
+ 
+-plan tests => 28;
++plan tests => 30;
+ 
+ # Prevent MSys2 filename munging for arguments that look like file paths but
+ # aren't
+@@ -201,3 +201,10 @@ ok(run(app(["openssl", "x509", "-req", "-text", "-CAcreateserial",
+             "-in", $b_csr, "-out", $b_cert])));
+ # Verify issuer is CA
+ ok(get_issuer($b_cert) =~ /CN = ca.example.com/);
++
++ok(run(app(["openssl", "x509", "-text",
++           "-in", srctop_file("test/certs", "x509-bad-serial-positive.pem")])),
++   "X.509 bad serial positive");
++ok(run(app(["openssl", "x509", "-text",
++           "-in", srctop_file("test/certs", "x509-bad-serial-negative.pem")])),
++   "X.509 bad serial negative");
+diff --git a/test/certs/x509-bad-serial-negative.pem b/test/certs/x509-bad-serial-negative.pem
+new file mode 100644
+index 00000000..7b2046c5
+--- /dev/null
++++ b/test/certs/x509-bad-serial-negative.pem
+@@ -0,0 +1,36 @@
++-----BEGIN CERTIFICATE-----
++MIIGMjCCBRqgAwIBAgIQ/9XVRT0yTpWLf8XQR3fbvjANBgkqhkiG9w0BAQUFADBc
++MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
++d3cuZGlnaWNlcnQuY29tMRswGQYDVQQDExJEaWdpQ2VydCBHbG9iYWwgQ0EwHhcN
++MDUxMjEyMDAwMDAwWhcNMDgxMjExMjM1OTU5WjCB2DELMAkGA1UEBhMCVVMxETAP
++BgNVBAgTCE5ldyBZb3JrMREwDwYDVQQHEwhOZXcgWW9yazEcMBoGA1UECRMTMTUg
++TWV0cm90ZWNoIENlbnRlcjEZMBcGA1UEChMQQ2l0eSBvZiBOZXcgWW9yazESMBAG
++A1UECxMJTllDIERvSVRUMSMwIQYDVQQLExpQcm92aWRlZCBieSBEaWdpQ2VydCwg
++SW5jLjEdMBsGA1UECxMURGlnaUNlcnRTU0wgV2lsZGNhcmQxEjAQBgNVBAMUCSou
++bnljLmdvdjBcMA0GCSqGSIb3DQEBAQUAA0sAMEgCQQDibo6NVCYn0yihBTX9ltfs
++YAEzkfjKtpEy1mQ3Y9EPeYvCU9GVi450Ml3Io/7SFfHe0MUF3gdq09YG8spMF4gL
++AgMBAAGjggM5MIIDNTAfBgNVHSMEGDAWgBSnxxOgegE8ne+CSIJI1XNRthJWKjAd
++BgNVHQ4EFgQU2RyNDwrjNjd2TNZqLvq4ulDH5GwwdwYIKwYBBQUHAQEEazBpMCUG
++CCsGAQUFBzABhhlodHRwczovL29jc3AuZGlnaWNlcnQuY29tMEAGCCsGAQUFBzAC
++hjRodHRwOi8vd3d3LmRpZ2ljZXJ0LmNvbS9DQUNlcnRzL0RpZ2lDZXJ0R2xvYmFs
++Q0EuY3J0MA4GA1UdDwEB/wQEAwIFoDAMBgNVHRMBAf8EAjAAMHMGA1UdHwRsMGow
++M6AxoC+GLWh0dHA6Ly9jcmwzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydEdsb2JhbENB
++LmNybDAzoDGgL4YtaHR0cDovL2NybDQuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0R2xv
++YmFsQ0EuY3JsMIIBxgYDVR0gBIIBvTCCAbkwggG1BgtghkgBhv1sAQMAATCCAaQw
++OgYIKwYBBQUHAgEWLmh0dHA6Ly93d3cuZGlnaWNlcnQuY29tL3NzbC1jcHMtcmVw
++b3NpdG9yeS5odG0wggFkBggrBgEFBQcCAjCCAVYeggFSAEEAbgB5ACAAdQBzAGUA
++IABvAGYAIAB0AGgAaQBzACAAQwBlAHIAdABpAGYAaQBjAGEAdABlACAAYwBvAG4A
++cwB0AGkAdAB1AHQAZQBzACAAYQBjAGMAZQBwAHQAYQBuAGMAZQAgAG8AZgAgAHQA
++aABlACAARABpAGcAaQBDAGUAcgB0ACAAQwBQAC8AQwBQAFMAIABhAG4AZAAgAHQA
++aABlACAAUgBlAGwAeQBpAG4AZwAgAFAAYQByAHQAeQAgAEEAZwByAGUAZQBtAGUA
++bgB0ACAAdwBoAGkAYwBoACAAbABpAG0AaQB0ACAAbABpAGEAYgBpAGwAaQB0AHkA
++IABhAG4AZAAgAGEAcgBlACAAaQBuAGMAbwByAHAAbwByAGEAdABlAGQAIABoAGUA
++cgBlAGkAbgAgAGIAeQAgAHIAZQBmAGUAcgBlAG4AYwBlAC4wHQYDVR0lBBYwFAYI
++KwYBBQUHAwEGCCsGAQUFBwMCMA0GCSqGSIb3DQEBBQUAA4IBAQCEroBYbs9kfHP3
++pioKRfnp75ClUBl2FgRG8SDraqYAbgMMZP95WbEnK/JG8U2Ou0+xFTkZzt77N7in
++TDmimHfCydXX1IxmEFPIxlUqp1VhjOzjJVMPTRJgm8FWJhDcJSnxTqOAMhIn+5CZ
++XsyOdDA531KFB6omuF9e27Zm0cQmXPJRLnnXWETgHmMALiwpfaErdL7VhnZN5pnt
++ofHsFYJxrWdvHNcoq0bfNAzzOXjFHlj4L7tQ2NJCCWmicjx0jFv+tm2QoZ1OHGdO
++mY85PtCUkxsWO2I7+hbLpLzHQhlxZbwD1gM7UNhpY+weF+e0vrtoSUwxQVbv4QkM
++z9Vk7OKe
++-----END CERTIFICATE-----
+diff --git a/test/certs/x509-bad-serial-positive.pem b/test/certs/x509-bad-serial-positive.pem
+new file mode 100644
+index 00000000..96b136c5
+--- /dev/null
++++ b/test/certs/x509-bad-serial-positive.pem
+@@ -0,0 +1,32 @@
++-----BEGIN CERTIFICATE-----
++MIIFcDCCA1igAwIBAgIIACA7Rwn+4n0wDQYJKoZIhvcNAQEMBQAwVjELMAkGA1UE
++BhMCVUsxEjAQBgNVBAgTCUJlcmtzaGlyZTEQMA4GA1UEBxMHUmVhZGluZzEOMAwG
++A1UEChMFUGV4aXAxETAPBgNVBAMTCFBleGlwIENBMB4XDTIzMDQwNjA4NTIwMloX
++DTI4MDQwNTA4NTIwMlowVjELMAkGA1UEBhMCVUsxEjAQBgNVBAgTCUJlcmtzaGly
++ZTEQMA4GA1UEBxMHUmVhZGluZzEOMAwGA1UEChMFUGV4aXAxETAPBgNVBAMTCFBl
++eGlwIENBMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAv9DsF/9BynUp
++JfDVhl89l/y3bQDKy012H0Y8hx8LMF5tpT60wFMY6Uz4IdgJwXGqessRdUue4N9I
++sYEQFCNj+Zx6hpNTHOhOW9O/a7dyLB+ba6xh3Z178up6fSOAP3ZGhbcoJgv68m3+
++0sOzXOTgqgdtc7/EFnVy577TrqAwHPBo58dbVU7NupI/OJVZ8dTwhEentFngsJDz
++Vp5F137CjMGvu9YCc3nEenV9vBBPzmGa9vyL27vdrBpFynaG6VFaErvClu4+SIaf
++uM6BhzNR+btfb8qxXjbOSpGbGBz46RIYKJXELoOGN4xYkRJjtOHu8gA1RWg/5jiF
++Z4ucmnt7fuXtbOG6IGMcknNaPIeY+eYlBgeeda6PCVqFb2E/CXTCh77Sq0zWZvqS
++oLF1u5j3dOlYDHPrrogETpgsYzKV2CU7m1qmF0Ny6bYqYM5QvBgymhKxKXTDpadt
++84IoFVJFU90sBuXC4Y0404iKFdw7TTcitSfMB44xwOmXBw8wWlWQgwtXkGPf2a8+
++2j4aO9eKSliZ/8SW6Ys4Sg6bHkO7wP+ThzONlqCwYYnIcfGfBQH7fYqkmLoM+TZ4
++IML6XS2TvOn5tCftOVl5HJB8BFx+9YIZE5QWAjlk49m0gbeikfzWZW3N89h0Iv35
++iiEcUjayBqXnt5pdfGcy8m7/XDf3RK0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB
++/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFLcbzecA4S3hKVr3a2hklWe3HgRE
++MA0GCSqGSIb3DQEBDAUAA4ICAQATPV+HLccsA23P30acGVcOephXsBjXGMedCkRd
++B88fR+Pth1ScGRxTdnrizHOMyXqV0fNK39dJVWlWZsfipRcgwgHFFKZqxXv9Dl0z
+++oNhqn1XRqXtHHKVdDgKNfnlgQx2NUCr25TxTZ+mlDmNzFLjsiXvisMtUEZXKwg8
++pjbkPnmEIUjsHbNnE6SXH7wXDKGZ+fgfBM7/i+eGd785wXtlKWqTs7UMI8d020lr
++wnaGDNf8ykwSk8smR1AAmnyD5J00yYoM3hBSiq+UieQP57F/fRy0M6zBtECBa4GM
++fsO7Z/9zfG82rBzGpkp8Z9YVz2ODj9UlKw/9PczRrfi9K+qmM8+vnh6cfbe1Ud0E
++XfOWFjDo7/ur1EesyGBt6xKO8LqquDJP9q4JaI07sbe3vVUPklnh9eMfPQS4Y3SW
++iBpwtqDQVzzA8JLBSzUrx4wi/zXL9fUbzlpNyoWPYzeF6fsDyE5clvqyCaRXk0VC
++OfHtTCee7of6uHHkjMMXbZlTaHcajnFXpavheKYfW7NSzQ/lFGLDDcwxAZd1rhIs
++62a//kqwF6GWZ/j3IzrwHnaSLv2MyGpjLiSR7ujJvJpQajR8OkqaYBPlTdcgGyei
++R4MwYrjm+P/8HxqKI1Ijy/HrrsB6Dq0qh6I6KrFukg7KrMcD2CNHh8yRLTXsoISv
++9GCE7w==
++-----END CERTIFICATE-----
