@@ -1,0 +1,67 @@
+diff --git a/crypto/ec/ec_key.c b/crypto/ec/ec_key.c
+index 729d338b..9faafd4b 100644
+--- a/crypto/ec/ec_key.c
++++ b/crypto/ec/ec_key.c
+@@ -891,7 +891,8 @@ int EC_KEY_oct2key(EC_KEY *key, const unsigned char *buf, size_t len,
+      * EC_POINT_oct2point() has already performed sanity checking of
+      * the buffer so we know it is valid.
+      */
+-    if ((key->group->meth->flags & EC_FLAGS_CUSTOM_CURVE) == 0)
++    if ((key->group->meth->flags & EC_FLAGS_CUSTOM_CURVE) == 0
++        && (buf[0] & ~0x01) != 0)
+         key->conv_form = (point_conversion_form_t)(buf[0] & ~0x01);
+     return 1;
+ }
+diff --git a/test/evp_extra_test.c b/test/evp_extra_test.c
+index 3747532f..56ec1c86 100644
+--- a/test/evp_extra_test.c
++++ b/test/evp_extra_test.c
+@@ -1811,6 +1811,40 @@ static int test_EC_keygen_with_enc(int idx)
+     EVP_PKEY_CTX_free(pctx);
+     return ret;
+ }
++
++static int test_EVP_EC_infinity(void)
++{
++    const char *pubkey =
++        "-----BEGIN PUBLIC KEY-----\n"
++	"MBkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDAgAA\n"
++	"-----END PUBLIC KEY-----\n";
++
++    int rc = 0;
++    BIO *bio = NULL;
++    EVP_PKEY *pkey = NULL;
++    size_t len = 0;
++
++    bio = BIO_new_mem_buf(pubkey, strlen(pubkey));
++    if (!TEST_true(bio != NULL))
++        goto done;
++
++    pkey = PEM_read_bio_PUBKEY_ex(bio, NULL, NULL, NULL, testctx, testpropq);
++    if (!TEST_true(pkey != NULL))
++        goto done;
++
++    if (!TEST_true(EVP_PKEY_get_octet_string_param(pkey,
++                                                   OSSL_PKEY_PARAM_PUB_KEY,
++                                                   NULL, 0, &len))
++            || !TEST_size_t_ne(len, 0))
++        goto done;
++
++    rc = 1;
++
++done:
++    EVP_PKEY_free(pkey);
++    BIO_free(bio);
++    return rc;
++}
+ #endif
+ 
+ #if !defined(OPENSSL_NO_SM2)
+@@ -4758,6 +4792,7 @@ int setup_tests(void)
+ #endif
+ #ifndef OPENSSL_NO_EC
+     ADD_ALL_TESTS(test_EC_keygen_with_enc, OSSL_NELEM(ec_encodings));
++    ADD_TEST(test_EVP_EC_infinity);
+ #endif
+ #if !defined(OPENSSL_NO_SM2)
+     ADD_TEST(test_EVP_SM2);
