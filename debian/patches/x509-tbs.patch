@@ -1,0 +1,37 @@
+diff --git a/crypto/x509/x_x509.c b/crypto/x509/x_x509.c
+index 010578b1..cd4fde6a 100644
+--- a/crypto/x509/x_x509.c
++++ b/crypto/x509/x_x509.c
+@@ -292,6 +292,11 @@ int i2d_re_X509_tbs(X509 *x, unsigned char **pp)
+     return i2d_X509_CINF(&x->cert_info, pp);
+ }
+ 
++int i2d_X509_tbs(X509 *x, unsigned char **pp)
++{
++    return i2d_X509_CINF(&x->cert_info, pp);
++}
++
+ void X509_get0_signature(const ASN1_BIT_STRING **psig,
+                          const X509_ALGOR **palg, const X509 *x)
+ {
+diff --git a/include/openssl/x509.h.in b/include/openssl/x509.h.in
+index 3ef741f6..4226b393 100644
+--- a/include/openssl/x509.h.in
++++ b/include/openssl/x509.h.in
+@@ -559,6 +559,7 @@ int X509_set_ex_data(X509 *r, int idx, void *arg);
+ void *X509_get_ex_data(const X509 *r, int idx);
+ DECLARE_ASN1_ENCODE_FUNCTIONS_only(X509,X509_AUX)
+ 
++int i2d_X509_tbs(X509 *x, unsigned char **pp);
+ int i2d_re_X509_tbs(X509 *x, unsigned char **pp);
+ 
+ int X509_SIG_INFO_get(const X509_SIG_INFO *siginf, int *mdnid, int *pknid,
+diff --git a/util/libcrypto.num b/util/libcrypto.num
+index 716aa0cb..ba20450b 100644
+--- a/util/libcrypto.num
++++ b/util/libcrypto.num
+@@ -5428,3 +5428,4 @@ EVP_PKEY_CTX_get0_provider              5555	3_0_0	EXIST::FUNCTION:
+ OPENSSL_strcasecmp                      5556	3_0_3	EXIST::FUNCTION:
+ OPENSSL_strncasecmp                     5557	3_0_3	EXIST::FUNCTION:
+ OSSL_CMP_CTX_reset_geninfo_ITAVs        5558	3_0_8	EXIST::FUNCTION:CMP
++i2d_X509_tbs                            5559	3_0_8	EXIST::FUNCTION:

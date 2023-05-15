@@ -12,3 +12,4 @@ fips-build.patch
 disable-ktls.patch
 x509-serial.patch
 ec-infinity.patch
+x509-tbs.patch
