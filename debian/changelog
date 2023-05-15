@@ -1,3 +1,9 @@
+openssl (3.0.8-0pexip4) pexip; urgency=medium
+
+  * debian/x509-tbs.patch: Expose verbatim TBS encoding
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 15 May 2023 15:59:30 +0100
+
 openssl (3.0.8-0pexip3) pexip; urgency=medium
 
   * debian/ec-infinity.patch: Fix handling of EC points at infinity
