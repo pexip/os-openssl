@@ -1,0 +1,536 @@
+From fe2a7341b50450dc6acd6f8a17d4420511a5aefe Mon Sep 17 00:00:00 2001
+From: slontis <shane.lontis@oracle.com>
+Date: Wed, 21 Dec 2022 14:39:07 +1000
+Subject: [PATCH] PKCS12 - Add additional libctx and propq support.
+
+Fixes #19718
+Fixes #19716
+
+Added PKCS12_SAFEBAG_get1_cert_ex(), PKCS12_SAFEBAG_get1_crl_ex() and
+ASN1_item_unpack_ex().
+
+parse_bag and parse_bags now use the libctx/propq stored in the P7_CTX.
+PKCS12_free() needed to be manually constructed in order to free the propq.
+
+pkcs12_api_test.c changed so that it actually tests the libctx, propq.
+
+Reviewed-by: Paul Dale <pauli@openssl.org>
+Reviewed-by: Tomas Mraz <tomas@openssl.org>
+(Merged from https://github.com/openssl/openssl/pull/19942)
+---
+ crypto/asn1/asn_pack.c                | 13 ++++++++++
+ crypto/pkcs12/p12_add.c               | 12 ++++++---
+ crypto/pkcs12/p12_asn.c               | 17 +++++++++++-
+ crypto/pkcs12/p12_init.c              |  6 +++++
+ crypto/pkcs12/p12_kiss.c              | 30 ++++++++++++++--------
+ crypto/pkcs12/p12_local.h             |  2 ++
+ crypto/pkcs12/p12_sbag.c              | 37 +++++++++++++++++++++++++++
+ crypto/pkcs12/p12_utl.c               | 28 ++++++++++++++++++--
+ doc/man3/ASN1_item_d2i_bio.pod        | 33 +++++++++++++++++++++---
+ doc/man3/PKCS12_SAFEBAG_get1_cert.pod | 23 ++++++++++++++---
+ include/openssl/asn1.h.in             |  2 ++
+ include/openssl/pkcs12.h.in           |  2 ++
+ test/pkcs12_api_test.c                | 20 +++++++--------
+ util/libcrypto.num                    |  3 +++
+ util/missingcrypto.txt                |  2 --
+ 15 files changed, 194 insertions(+), 36 deletions(-)
+
+diff --git a/crypto/asn1/asn_pack.c b/crypto/asn1/asn_pack.c
+index 0744e7b4348f..0d1f3406db81 100644
+--- a/crypto/asn1/asn_pack.c
++++ b/crypto/asn1/asn_pack.c
+@@ -60,3 +60,16 @@ void *ASN1_item_unpack(const ASN1_STRING *oct, const ASN1_ITEM *it)
+         ERR_raise(ERR_LIB_ASN1, ASN1_R_DECODE_ERROR);
+     return ret;
+ }
++
++void *ASN1_item_unpack_ex(const ASN1_STRING *oct, const ASN1_ITEM *it,
++                          OSSL_LIB_CTX *libctx, const char *propq)
++{
++    const unsigned char *p;
++    void *ret;
++
++    p = oct->data;
++    if ((ret = ASN1_item_d2i_ex(NULL, &p, oct->length, it,\
++                                libctx, propq)) == NULL)
++        ERR_raise(ERR_LIB_ASN1, ASN1_R_DECODE_ERROR);
++    return ret;
++}
+diff --git a/crypto/pkcs12/p12_add.c b/crypto/pkcs12/p12_add.c
+index 8a56644368d3..aaef5874f158 100644
+--- a/crypto/pkcs12/p12_add.c
++++ b/crypto/pkcs12/p12_add.c
+@@ -78,7 +78,9 @@ STACK_OF(PKCS12_SAFEBAG) *PKCS12_unpack_p7data(PKCS7 *p7)
+         ERR_raise(ERR_LIB_PKCS12, PKCS12_R_CONTENT_TYPE_NOT_DATA);
+         return NULL;
+     }
+-    return ASN1_item_unpack(p7->d.data, ASN1_ITEM_rptr(PKCS12_SAFEBAGS));
++    return ASN1_item_unpack_ex(p7->d.data, ASN1_ITEM_rptr(PKCS12_SAFEBAGS),
++                               ossl_pkcs7_ctx_get0_libctx(&p7->ctx),
++                               ossl_pkcs7_ctx_get0_propq(&p7->ctx));
+ }
+ 
+ /* Turn a stack of SAFEBAGS into a PKCS#7 encrypted data ContentInfo */
+@@ -181,6 +183,7 @@ int PKCS12_pack_authsafes(PKCS12 *p12, STACK_OF(PKCS7) *safes)
+ STACK_OF(PKCS7) *PKCS12_unpack_authsafes(const PKCS12 *p12)
+ {
+     STACK_OF(PKCS7) *p7s;
++    PKCS7_CTX *p7ctx;
+     PKCS7 *p7;
+     int i;
+ 
+@@ -188,8 +191,11 @@ STACK_OF(PKCS7) *PKCS12_unpack_authsafes(const PKCS12 *p12)
+         ERR_raise(ERR_LIB_PKCS12, PKCS12_R_CONTENT_TYPE_NOT_DATA);
+         return NULL;
+     }
+-    p7s = ASN1_item_unpack(p12->authsafes->d.data,
+-                           ASN1_ITEM_rptr(PKCS12_AUTHSAFES));
++    p7ctx = &p12->authsafes->ctx;
++    p7s = ASN1_item_unpack_ex(p12->authsafes->d.data,
++                              ASN1_ITEM_rptr(PKCS12_AUTHSAFES),
++                              ossl_pkcs7_ctx_get0_libctx(p7ctx),
++                              ossl_pkcs7_ctx_get0_propq(p7ctx));
+     if (p7s != NULL) {
+         for (i = 0; i < sk_PKCS7_num(p7s); i++) {
+             p7 = sk_PKCS7_value(p7s, i);
+diff --git a/crypto/pkcs12/p12_asn.c b/crypto/pkcs12/p12_asn.c
+index aabbd38eefbe..caae639f8835 100644
+--- a/crypto/pkcs12/p12_asn.c
++++ b/crypto/pkcs12/p12_asn.c
+@@ -12,6 +12,7 @@
+ #include <openssl/asn1t.h>
+ #include <openssl/pkcs12.h>
+ #include "p12_local.h"
++#include "crypto/pkcs7.h"
+ 
+ /* PKCS#12 ASN1 module */
+ 
+@@ -21,7 +22,21 @@ ASN1_SEQUENCE(PKCS12) = {
+         ASN1_OPT(PKCS12, mac, PKCS12_MAC_DATA)
+ } ASN1_SEQUENCE_END(PKCS12)
+ 
+-IMPLEMENT_ASN1_FUNCTIONS(PKCS12)
++IMPLEMENT_ASN1_ENCODE_FUNCTIONS_fname(PKCS12, PKCS12, PKCS12)
++
++PKCS12 *PKCS12_new(void)
++{
++    return (PKCS12 *)ASN1_item_new(ASN1_ITEM_rptr(PKCS12));
++}
++
++void PKCS12_free(PKCS12 *p12)
++{
++    if (p12 != NULL && p12->authsafes != NULL) {
++        OPENSSL_free(p12->authsafes->ctx.propq);
++        p12->authsafes->ctx.propq = NULL;
++    }
++    ASN1_item_free((ASN1_VALUE *)p12, ASN1_ITEM_rptr(PKCS12));
++}
+ 
+ ASN1_SEQUENCE(PKCS12_MAC_DATA) = {
+         ASN1_SIMPLE(PKCS12_MAC_DATA, dinfo, X509_SIG),
+diff --git a/crypto/pkcs12/p12_init.c b/crypto/pkcs12/p12_init.c
+index dd469b5c5c35..1d6c74b8c438 100644
+--- a/crypto/pkcs12/p12_init.c
++++ b/crypto/pkcs12/p12_init.c
+@@ -56,3 +56,9 @@ PKCS12 *PKCS12_init(int mode)
+     return PKCS12_init_ex(mode, NULL, NULL);
+ }
+ 
++const PKCS7_CTX *ossl_pkcs12_get0_pkcs7ctx(const PKCS12 *p12)
++{
++    if (p12 == NULL || p12->authsafes == NULL)
++        return NULL;
++    return &p12->authsafes->ctx;
++}
+diff --git a/crypto/pkcs12/p12_kiss.c b/crypto/pkcs12/p12_kiss.c
+index 0f7a437a28d7..f172e8b96d39 100644
+--- a/crypto/pkcs12/p12_kiss.c
++++ b/crypto/pkcs12/p12_kiss.c
+@@ -18,10 +18,12 @@ static int parse_pk12(PKCS12 *p12, const char *pass, int passlen,
+                       EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
+ 
+ static int parse_bags(const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pass,
+-                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
++                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++                      OSSL_LIB_CTX *libctx, const char *propq);
+ 
+ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+-                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
++                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++                     OSSL_LIB_CTX *libctx, const char *propq);
+ 
+ /*
+  * Parse and decrypt a PKCS#12 structure returning user key, user cert and
+@@ -156,7 +158,8 @@ static int parse_pk12(PKCS12 *p12, const char *pass, int passlen,
+             sk_PKCS7_pop_free(asafes, PKCS7_free);
+             return 0;
+         }
+-        if (!parse_bags(bags, pass, passlen, pkey, ocerts)) {
++        if (!parse_bags(bags, pass, passlen, pkey, ocerts,
++                        p7->ctx.libctx, p7->ctx.propq)) {
+             sk_PKCS12_SAFEBAG_pop_free(bags, PKCS12_SAFEBAG_free);
+             sk_PKCS7_pop_free(asafes, PKCS7_free);
+             return 0;
+@@ -169,12 +172,14 @@ static int parse_pk12(PKCS12 *p12, const char *pass, int passlen,
+ 
+ /* pkey and/or ocerts may be NULL */
+ static int parse_bags(const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pass,
+-                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts)
++                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++                      OSSL_LIB_CTX *libctx, const char *propq)
+ {
+     int i;
+     for (i = 0; i < sk_PKCS12_SAFEBAG_num(bags); i++) {
+         if (!parse_bag(sk_PKCS12_SAFEBAG_value(bags, i),
+-                       pass, passlen, pkey, ocerts))
++                       pass, passlen, pkey, ocerts,
++                       libctx, propq))
+             return 0;
+     }
+     return 1;
+@@ -182,7 +187,8 @@ static int parse_bags(const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pass,
+ 
+ /* pkey and/or ocerts may be NULL */
+ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+-                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts)
++                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++                     OSSL_LIB_CTX *libctx, const char *propq)
+ {
+     PKCS8_PRIV_KEY_INFO *p8;
+     X509 *x509;
+@@ -200,7 +206,8 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+     case NID_keyBag:
+         if (pkey == NULL || *pkey != NULL)
+             return 1;
+-        *pkey = EVP_PKCS82PKEY(PKCS12_SAFEBAG_get0_p8inf(bag));
++        *pkey = EVP_PKCS82PKEY_ex(PKCS12_SAFEBAG_get0_p8inf(bag),
++                                  libctx, propq);
+         if (*pkey == NULL)
+             return 0;
+         break;
+@@ -208,9 +215,10 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+     case NID_pkcs8ShroudedKeyBag:
+         if (pkey == NULL || *pkey != NULL)
+             return 1;
+-        if ((p8 = PKCS12_decrypt_skey(bag, pass, passlen)) == NULL)
++        if ((p8 = PKCS12_decrypt_skey_ex(bag, pass, passlen,
++                                         libctx, propq)) == NULL)
+             return 0;
+-        *pkey = EVP_PKCS82PKEY(p8);
++        *pkey = EVP_PKCS82PKEY_ex(p8, libctx, propq);
+         PKCS8_PRIV_KEY_INFO_free(p8);
+         if (!(*pkey))
+             return 0;
+@@ -220,7 +228,7 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+         if (ocerts == NULL
+                 || PKCS12_SAFEBAG_get_bag_nid(bag) != NID_x509Certificate)
+             return 1;
+-        if ((x509 = PKCS12_SAFEBAG_get1_cert(bag)) == NULL)
++        if ((x509 = PKCS12_SAFEBAG_get1_cert_ex(bag, libctx, propq)) == NULL)
+             return 0;
+         if (lkid && !X509_keyid_set1(x509, lkid->data, lkid->length)) {
+             X509_free(x509);
+@@ -250,7 +258,7 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+ 
+     case NID_safeContentsBag:
+         return parse_bags(PKCS12_SAFEBAG_get0_safes(bag), pass, passlen, pkey,
+-                          ocerts);
++                          ocerts, libctx, propq);
+ 
+     default:
+         return 1;
+diff --git a/crypto/pkcs12/p12_local.h b/crypto/pkcs12/p12_local.h
+index acaa27b193fa..97697922bd72 100644
+--- a/crypto/pkcs12/p12_local.h
++++ b/crypto/pkcs12/p12_local.h
+@@ -41,3 +41,5 @@ struct pkcs12_bag_st {
+         ASN1_TYPE *other;       /* Secret or other bag */
+     } value;
+ };
++
++const PKCS7_CTX *ossl_pkcs12_get0_pkcs7ctx(const PKCS12 *p12);
+diff --git a/crypto/pkcs12/p12_sbag.c b/crypto/pkcs12/p12_sbag.c
+index 7106936c62cc..73e55461eb18 100644
+--- a/crypto/pkcs12/p12_sbag.c
++++ b/crypto/pkcs12/p12_sbag.c
+@@ -11,6 +11,7 @@
+ #include "internal/cryptlib.h"
+ #include <openssl/pkcs12.h>
+ #include "p12_local.h"
++#include "crypto/x509.h"
+ 
+ #ifndef OPENSSL_NO_DEPRECATED_1_1_0
+ ASN1_TYPE *PKCS12_get_attr(const PKCS12_SAFEBAG *bag, int attr_nid)
+@@ -101,6 +102,42 @@ X509_CRL *PKCS12_SAFEBAG_get1_crl(const PKCS12_SAFEBAG *bag)
+                             ASN1_ITEM_rptr(X509_CRL));
+ }
+ 
++X509 *PKCS12_SAFEBAG_get1_cert_ex(const PKCS12_SAFEBAG *bag,
++                                  OSSL_LIB_CTX *libctx, const char *propq)
++{
++    X509 *ret = NULL;
++
++    if (PKCS12_SAFEBAG_get_nid(bag) != NID_certBag)
++        return NULL;
++    if (OBJ_obj2nid(bag->value.bag->type) != NID_x509Certificate)
++        return NULL;
++    ret = ASN1_item_unpack_ex(bag->value.bag->value.octet,
++                              ASN1_ITEM_rptr(X509), libctx, propq);
++    if (!ossl_x509_set0_libctx(ret, libctx, propq)) {
++        X509_free(ret);
++        return NULL;
++    }
++    return ret;
++}
++
++X509_CRL *PKCS12_SAFEBAG_get1_crl_ex(const PKCS12_SAFEBAG *bag,
++                                     OSSL_LIB_CTX *libctx, const char *propq)
++{
++    X509_CRL *ret = NULL;
++
++    if (PKCS12_SAFEBAG_get_nid(bag) != NID_crlBag)
++        return NULL;
++    if (OBJ_obj2nid(bag->value.bag->type) != NID_x509Crl)
++        return NULL;
++    ret = ASN1_item_unpack_ex(bag->value.bag->value.octet,
++                              ASN1_ITEM_rptr(X509_CRL), libctx, propq);
++    if (!ossl_x509_crl_set0_libctx(ret, libctx, propq)) {
++        X509_CRL_free(ret);
++        return NULL;
++    }
++    return ret;
++}
++
+ PKCS12_SAFEBAG *PKCS12_SAFEBAG_create_cert(X509 *x509)
+ {
+     return PKCS12_item_pack_safebag(x509, ASN1_ITEM_rptr(X509),
+diff --git a/crypto/pkcs12/p12_utl.c b/crypto/pkcs12/p12_utl.c
+index 6046b70886c0..59e0cda814c8 100644
+--- a/crypto/pkcs12/p12_utl.c
++++ b/crypto/pkcs12/p12_utl.c
+@@ -10,6 +10,8 @@
+ #include <stdio.h>
+ #include "internal/cryptlib.h"
+ #include <openssl/pkcs12.h>
++#include "p12_local.h"
++#include "crypto/pkcs7/pk7_local.h"
+ 
+ /* Cheap and nasty Unicode stuff */
+ 
+@@ -238,12 +240,34 @@ int i2d_PKCS12_fp(FILE *fp, const PKCS12 *p12)
+ 
+ PKCS12 *d2i_PKCS12_bio(BIO *bp, PKCS12 **p12)
+ {
+-    return ASN1_item_d2i_bio(ASN1_ITEM_rptr(PKCS12), bp, p12);
++    OSSL_LIB_CTX *libctx = NULL;
++    const char *propq = NULL;
++    const PKCS7_CTX *p7ctx = NULL;
++
++    if (p12 != NULL) {
++        p7ctx = ossl_pkcs12_get0_pkcs7ctx(*p12);
++        if (p7ctx != NULL) {
++            libctx = ossl_pkcs7_ctx_get0_libctx(p7ctx);
++            propq = ossl_pkcs7_ctx_get0_propq(p7ctx);
++        }
++    }
++    return ASN1_item_d2i_bio_ex(ASN1_ITEM_rptr(PKCS12), bp, p12, libctx, propq);
+ }
+ 
+ #ifndef OPENSSL_NO_STDIO
+ PKCS12 *d2i_PKCS12_fp(FILE *fp, PKCS12 **p12)
+ {
+-    return ASN1_item_d2i_fp(ASN1_ITEM_rptr(PKCS12), fp, p12);
++    OSSL_LIB_CTX *libctx = NULL;
++    const char *propq = NULL;
++    const PKCS7_CTX *p7ctx = NULL;
++
++    if (p12 != NULL) {
++        p7ctx = ossl_pkcs12_get0_pkcs7ctx(*p12);
++        if (p7ctx != NULL) {
++            libctx = ossl_pkcs7_ctx_get0_libctx(p7ctx);
++            propq = ossl_pkcs7_ctx_get0_propq(p7ctx);
++        }
++    }
++    return ASN1_item_d2i_fp_ex(ASN1_ITEM_rptr(PKCS12), fp, p12, libctx, propq);
+ }
+ #endif
+diff --git a/doc/man3/ASN1_item_d2i_bio.pod b/doc/man3/ASN1_item_d2i_bio.pod
+index bdf5c48096ab..0f391440cee8 100644
+--- a/doc/man3/ASN1_item_d2i_bio.pod
++++ b/doc/man3/ASN1_item_d2i_bio.pod
+@@ -3,7 +3,8 @@
+ =head1 NAME
+ 
+ ASN1_item_d2i_ex, ASN1_item_d2i, ASN1_item_d2i_bio_ex, ASN1_item_d2i_bio,
+-ASN1_item_d2i_fp_ex, ASN1_item_d2i_fp, ASN1_item_i2d_mem_bio
++ASN1_item_d2i_fp_ex, ASN1_item_d2i_fp, ASN1_item_i2d_mem_bio,
++ASN1_item_pack, ASN1_item_unpack_ex, ASN1_item_unpack
+ - decode and encode DER-encoded ASN.1 structures
+ 
+ =head1 SYNOPSIS
+@@ -26,6 +27,13 @@ ASN1_item_d2i_fp_ex, ASN1_item_d2i_fp, ASN1_item_i2d_mem_bio
+ 
+  BIO *ASN1_item_i2d_mem_bio(const ASN1_ITEM *it, const ASN1_VALUE *val);
+ 
++ ASN1_STRING *ASN1_item_pack(void *obj, const ASN1_ITEM *it, ASN1_STRING **oct);
++
++ void *ASN1_item_unpack(const ASN1_STRING *oct, const ASN1_ITEM *it);
++
++ void *ASN1_item_unpack_ex(const ASN1_STRING *oct, const ASN1_ITEM *it,
++                          OSSL_LIB_CTX *libctx, const char *propq);
++
+ =head1 DESCRIPTION
+ 
+ ASN1_item_d2i_ex() decodes the contents of the data stored in I<*in> of length
+@@ -65,20 +73,39 @@ string.
+ ASN1_item_i2d_mem_bio() encodes the given ASN.1 value I<val>
+ using the ASN.1 template I<it> and returns the result in a memory BIO.
+ 
++ASN1_item_pack() encodes the given ASN.1 value in I<obj> using the
++ASN.1 template I<it> and returns an B<ASN1_STRING> object. If the passed in
++I<*oct> is not NULL then this is used to store the returned result, otherwise
++a new B<ASN1_STRING> object is created. If I<oct> is not NULL and I<*oct> is NULL
++then the returned return is also set into I<*oct>. If there is an error the optional
++passed in B<ASN1_STRING> will not be freed, but the previous value may be cleared when
++ASN1_STRING_set0(*oct, NULL, 0) is called internally.
++
++ASN1_item_unpack() uses ASN1_item_d2i() to decode the DER-encoded B<ASN1_STRING>
++I<oct> using the ASN.1 template I<it>.
++
++ASN1_item_unpack_ex() is similar to ASN1_item_unpack(), but uses ASN1_item_d2i_ex() so
++that the I<libctx> and I<propq> can be used when doing algorithm fetching.
++
+ =head1 RETURN VALUES
+ 
+-ASN1_item_d2i_bio() returns a pointer to an B<ASN1_VALUE> or NULL.
++ASN1_item_d2i_bio(), ASN1_item_unpack_ex() and ASN1_item_unpack() return a pointer to
++an B<ASN1_VALUE> or NULL on error.
+ 
+ ASN1_item_i2d_mem_bio() returns a pointer to a memory BIO or NULL on error.
+ 
++ASN1_item_pack() returns a pointer to an B<ASN1_STRING> or NULL on error.
++
+ =head1 HISTORY
+ 
+ The functions ASN1_item_d2i_ex(), ASN1_item_d2i_bio_ex(), ASN1_item_d2i_fp_ex()
+ and ASN1_item_i2d_mem_bio() were added in OpenSSL 3.0.
+ 
++The function ASN1_item_unpack_ex() was added in OpenSSL 3.2.
++
+ =head1 COPYRIGHT
+ 
+-Copyright 2021 The OpenSSL Project Authors. All Rights Reserved.
++Copyright 2021-2022 The OpenSSL Project Authors. All Rights Reserved.
+ 
+ Licensed under the Apache License 2.0 (the "License").  You may not use
+ this file except in compliance with the License.  You can obtain a copy
+diff --git a/doc/man3/PKCS12_SAFEBAG_get1_cert.pod b/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
+index 13f1263fe667..25338c4ac70b 100644
+--- a/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
++++ b/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
+@@ -5,7 +5,8 @@
+ PKCS12_SAFEBAG_get0_attr, PKCS12_SAFEBAG_get0_type,
+ PKCS12_SAFEBAG_get_nid, PKCS12_SAFEBAG_get_bag_nid,
+ PKCS12_SAFEBAG_get0_bag_obj, PKCS12_SAFEBAG_get0_bag_type,
+-PKCS12_SAFEBAG_get1_cert, PKCS12_SAFEBAG_get1_crl,
++PKCS12_SAFEBAG_get1_cert_ex, PKCS12_SAFEBAG_get1_cert,
++PKCS12_SAFEBAG_get1_crl_ex, PKCS12_SAFEBAG_get1_crl,
+ PKCS12_SAFEBAG_get0_safes, PKCS12_SAFEBAG_get0_p8inf,
+ PKCS12_SAFEBAG_get0_pkcs8 - Get objects from a PKCS#12 safeBag
+ 
+@@ -20,7 +21,11 @@ PKCS12_SAFEBAG_get0_pkcs8 - Get objects from a PKCS#12 safeBag
+  int PKCS12_SAFEBAG_get_bag_nid(const PKCS12_SAFEBAG *bag);
+  const ASN1_TYPE *PKCS12_SAFEBAG_get0_bag_obj(const PKCS12_SAFEBAG *bag);
+  const ASN1_OBJECT *PKCS12_SAFEBAG_get0_bag_type(const PKCS12_SAFEBAG *bag);
++ X509_CRL *PKCS12_SAFEBAG_get1_cert_ex(const PKCS12_SAFEBAG *bag,
++                                       OSSL_LIB_CTX *libctx, const char *propq);
+  X509 *PKCS12_SAFEBAG_get1_cert(const PKCS12_SAFEBAG *bag);
++ X509_CRL *PKCS12_SAFEBAG_get1_crl_ex(const PKCS12_SAFEBAG *bag,
++                                      OSSL_LIB_CTX *libctx, const char *propq);
+  X509_CRL *PKCS12_SAFEBAG_get1_crl(const PKCS12_SAFEBAG *bag);
+  const STACK_OF(PKCS12_SAFEBAG) *PKCS12_SAFEBAG_get0_safes(const PKCS12_SAFEBAG *bag);
+  const PKCS8_PRIV_KEY_INFO *PKCS12_SAFEBAG_get0_p8inf(const PKCS12_SAFEBAG *bag);
+@@ -41,8 +46,13 @@ arbitrary for B<secretBag>s. PKCS12_SAFEBAG_get0_bag_type() gets this type as an
+ 
+ PKCS12_SAFEBAG_get0_bag_obj() retrieves the object contained within the safeBag.
+ 
+-PKCS12_SAFEBAG_get1_cert() and PKCS12_SAFEBAG_get1_crl() return new B<X509> or
+-B<X509_CRL> objects from the item in the safeBag.
++PKCS12_SAFEBAG_get1_cert_ex() and PKCS12_SAFEBAG_get1_crl_ex() return new B<X509> or
++B<X509_CRL> objects from the item in the safeBag. I<libctx> and I<propq> are used when
++fetching algorithms, and may optionally be set to NULL.
++
++PKCS12_SAFEBAG_get1_cert() and PKCS12_SAFEBAG_get1_crl() are the same as
++PKCS12_SAFEBAG_get1_cert_ex() and PKCS12_SAFEBAG_get1_crl_ex() and set the I<libctx> and
++I<prop> to NULL. This will use the default library context.
+ 
+ PKCS12_SAFEBAG_get0_p8inf() and PKCS12_SAFEBAG_get0_pkcs8() return the PKCS8 object
+ from a PKCS8shroudedKeyBag or a keyBag.
+@@ -62,9 +72,14 @@ L<PKCS12_create(3)>,
+ L<PKCS12_add_safe(3)>,
+ L<PKCS12_add_safes(3)>
+ 
++=head1 HISTORY
++
++The functions PKCS12_SAFEBAG_get1_cert_ex() and PKCS12_SAFEBAG_get1_crl_ex() were
++added in OpenSSL 3.2.
++
+ =head1 COPYRIGHT
+ 
+-Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
++Copyright 2019-2022 The OpenSSL Project Authors. All Rights Reserved.
+ 
+ Licensed under the Apache License 2.0 (the "License").  You may not use
+ this file except in compliance with the License.  You can obtain a copy
+diff --git a/include/openssl/asn1.h.in b/include/openssl/asn1.h.in
+index a6001d2b03b7..beeac1b37f6f 100644
+--- a/include/openssl/asn1.h.in
++++ b/include/openssl/asn1.h.in
+@@ -829,6 +829,8 @@ int ASN1_TYPE_get_int_octetstring(const ASN1_TYPE *a, long *num,
+                                   unsigned char *data, int max_len);
+ 
+ void *ASN1_item_unpack(const ASN1_STRING *oct, const ASN1_ITEM *it);
++void *ASN1_item_unpack_ex(const ASN1_STRING *oct, const ASN1_ITEM *it,
++                          OSSL_LIB_CTX *libctx, const char *propq);
+ 
+ ASN1_STRING *ASN1_item_pack(void *obj, const ASN1_ITEM *it,
+                             ASN1_OCTET_STRING **oct);
+diff --git a/include/openssl/pkcs12.h.in b/include/openssl/pkcs12.h.in
+index 990fb84e3252..ad235391e06c 100644
+--- a/include/openssl/pkcs12.h.in
++++ b/include/openssl/pkcs12.h.in
+@@ -107,7 +107,9 @@ int PKCS12_SAFEBAG_get_bag_nid(const PKCS12_SAFEBAG *bag);
+ const ASN1_TYPE *PKCS12_SAFEBAG_get0_bag_obj(const PKCS12_SAFEBAG *bag);
+ const ASN1_OBJECT *PKCS12_SAFEBAG_get0_bag_type(const PKCS12_SAFEBAG *bag);
+ 
++X509 *PKCS12_SAFEBAG_get1_cert_ex(const PKCS12_SAFEBAG *bag, OSSL_LIB_CTX *libctx, const char *propq);
+ X509 *PKCS12_SAFEBAG_get1_cert(const PKCS12_SAFEBAG *bag);
++X509_CRL *PKCS12_SAFEBAG_get1_crl_ex(const PKCS12_SAFEBAG *bag, OSSL_LIB_CTX *libctx, const char *propq);
+ X509_CRL *PKCS12_SAFEBAG_get1_crl(const PKCS12_SAFEBAG *bag);
+ const STACK_OF(PKCS12_SAFEBAG) *
+ PKCS12_SAFEBAG_get0_safes(const PKCS12_SAFEBAG *bag);
+diff --git a/util/libcrypto.num b/util/libcrypto.num
+index f195c5f7199b..905272f7e020 100644
+--- a/util/libcrypto.num
++++ b/util/libcrypto.num
+@@ -5429,3 +5429,6 @@ OSSL_HPKE_get_recommended_ikmelen       ?	3_2_0	EXIST::FUNCTION:
+ OPENSSL_strncasecmp                     5557	3_0_3	EXIST::FUNCTION:
+ OSSL_CMP_CTX_reset_geninfo_ITAVs        5558	3_0_8	EXIST::FUNCTION:CMP
+ i2d_X509_tbs                            5559	3_0_8	EXIST::FUNCTION:
++ASN1_item_unpack_ex                     5560	3_0_8	EXIST::FUNCTION:
++PKCS12_SAFEBAG_get1_cert_ex             5561	3_0_8	EXIST::FUNCTION:
++PKCS12_SAFEBAG_get1_crl_ex              5562	3_0_8	EXIST::FUNCTION:
+diff --git a/util/missingcrypto.txt b/util/missingcrypto.txt
+index 3090d5047367..98052f0cb1c6 100644
+--- a/util/missingcrypto.txt
++++ b/util/missingcrypto.txt
+@@ -148,9 +148,7 @@ ASN1_item_i2d(3)
+ ASN1_item_i2d_bio(3)
+ ASN1_item_i2d_fp(3)
+ ASN1_item_ndef_i2d(3)
+-ASN1_item_pack(3)
+ ASN1_item_print(3)
+-ASN1_item_unpack(3)
+ ASN1_mbstring_copy(3)
+ ASN1_mbstring_ncopy(3)
+ ASN1_object_size(3)
