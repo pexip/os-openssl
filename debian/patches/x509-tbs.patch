@@ -30,8 +30,8 @@ diff --git a/util/libcrypto.num b/util/libcrypto.num
 index 716aa0cb..ba20450b 100644
 --- a/util/libcrypto.num
 +++ b/util/libcrypto.num
-@@ -5428,3 +5428,4 @@ EVP_PKEY_CTX_get0_provider              5555	3_0_0	EXIST::FUNCTION:
- OPENSSL_strcasecmp                      5556	3_0_3	EXIST::FUNCTION:
+@@ -5429,3 +5429,4 @@ EVP_PKEY_CTX_get0_provider              5555	3_0_0	EXIST::FUNCTION:
  OPENSSL_strncasecmp                     5557	3_0_3	EXIST::FUNCTION:
  OSSL_CMP_CTX_reset_geninfo_ITAVs        5558	3_0_8	EXIST::FUNCTION:CMP
-+i2d_X509_tbs                            5559	3_0_8	EXIST::FUNCTION:
+ OSSL_CMP_MSG_update_recipNonce          5559	3_0_9	EXIST::FUNCTION:CMP
++i2d_X509_tbs                            5560	3_0_9	EXIST::FUNCTION:
