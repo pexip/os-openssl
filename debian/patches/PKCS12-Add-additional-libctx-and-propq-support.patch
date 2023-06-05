@@ -516,10 +516,10 @@ index f195c5f7199b..905272f7e020 100644
 @@ -5430,3 +5430,6 @@ OSSL_HPKE_get_recommended_ikmelen       ?	3_2_0	EXIST::FUNCTION:
  OSSL_CMP_CTX_reset_geninfo_ITAVs        5558	3_0_8	EXIST::FUNCTION:CMP
  OSSL_CMP_MSG_update_recipNonce          5559	3_0_9	EXIST::FUNCTION:CMP
- i2d_X509_tbs                            5560	3_0_9	EXIST::FUNCTION:
-+ASN1_item_unpack_ex                     5561	3_0_9	EXIST::FUNCTION:
-+PKCS12_SAFEBAG_get1_cert_ex             5562	3_0_9	EXIST::FUNCTION:
-+PKCS12_SAFEBAG_get1_crl_ex              5563	3_0_9	EXIST::FUNCTION:
+ i2d_X509_tbs                            5560	3_0_8	EXIST::FUNCTION:
++ASN1_item_unpack_ex                     5561	3_0_8	EXIST::FUNCTION:
++PKCS12_SAFEBAG_get1_cert_ex             5562	3_0_8	EXIST::FUNCTION:
++PKCS12_SAFEBAG_get1_crl_ex              5563	3_0_8	EXIST::FUNCTION:
 diff --git a/util/missingcrypto.txt b/util/missingcrypto.txt
 index 3090d5047367..98052f0cb1c6 100644
 --- a/util/missingcrypto.txt
