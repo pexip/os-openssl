@@ -10,7 +10,7 @@ Vcs-Browser: https://salsa.debian.org/debian/openssl
 Vcs-Git: https://salsa.debian.org/debian/openssl.git
 Homepage: https://www.openssl.org/
 Rules-Requires-Root: no
-XS-Pexip-Upstream: http://ftp.debian.org/debian/ experimental
+XS-Pexip-Upstream: http://ftp.debian.org/debian/ bookworm
 
 Package: openssl
 Architecture: any
