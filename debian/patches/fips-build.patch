@@ -55,7 +55,7 @@ index a0b4256..6a32610 100644
 +            abort();
 +        }
 +
-+        atexit(fips_cleanup);
++        OPENSSL_atexit(fips_cleanup);
 +    }
 +}
  
