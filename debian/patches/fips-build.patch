@@ -1,8 +1,8 @@
 diff --git a/crypto/o_init.c b/crypto/o_init.c
-index a0b4256..6a32610 100644
+index a0b4256f..4ac15e4d 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -9,6 +9,57 @@
+@@ -9,6 +9,59 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
@@ -13,7 +13,8 @@ index a0b4256..6a32610 100644
 +# include <stdio.h>
 +# include <stdlib.h>
 +
-+
++/* Don't attempt to build this on Windows (yet) */
++#if defined(OPENSSL_SYS_UNIX)
 +static OSSL_PROVIDER *fips, *base;
 +
 +static void fips_cleanup(void)
@@ -57,6 +58,7 @@ index a0b4256..6a32610 100644
 +        OPENSSL_atexit(fips_cleanup);
 +    }
 +}
++#endif
  
  /*
   * Perform any essential OpenSSL initialization operations. Currently does
