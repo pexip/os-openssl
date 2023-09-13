@@ -1,3 +1,9 @@
+openssl (3.0.10-0pexip3) pexip; urgency=medium
+
+  * Tweak the fips patch - it doesn't need unistd.h
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Wed, 13 Sep 2023 15:45:22 +0100
+
 openssl (3.0.10-0pexip2) pexip; urgency=medium
 
   * debian/patches/fips-build.patch: register fips_cleanup using

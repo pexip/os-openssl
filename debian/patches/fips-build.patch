@@ -2,7 +2,7 @@ diff --git a/crypto/o_init.c b/crypto/o_init.c
 index a0b4256..6a32610 100644
 --- a/crypto/o_init.c
 +++ b/crypto/o_init.c
-@@ -9,6 +9,58 @@
+@@ -9,6 +9,57 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
@@ -12,7 +12,6 @@ index a0b4256..6a32610 100644
 +# include <fcntl.h>
 +# include <stdio.h>
 +# include <stdlib.h>
-+# include <unistd.h>
 +
 +
 +static OSSL_PROVIDER *fips, *base;
