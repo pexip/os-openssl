@@ -1,10 +1,10 @@
-openssl (3.0.10-0pexip4) UNRELEASED; urgency=medium
+openssl (3.0.10-0pexip4) pexip; urgency=medium
 
   * Tweak the fips patch some more to nobble it on Windows
   * debian/patches/fips-ignore-edwards.patch: Ignore FIPS provider claiming
     support for X25519/X448
 
- -- Steve McIntyre <steve.mcintyre@pexip.com>  Wed, 13 Sep 2023 17:08:50 +0100
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Thu, 14 Sep 2023 11:42:03 +0100
 
 openssl (3.0.10-0pexip3) pexip; urgency=medium
 
