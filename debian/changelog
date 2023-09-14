@@ -1,6 +1,8 @@
 openssl (3.0.10-0pexip4) UNRELEASED; urgency=medium
 
   * Tweak the fips patch some more to nobble it on Windows
+  * debian/patches/fips-ignore-edwards.patch: Ignore FIPS provider claiming
+    support for X25519/X448
 
  -- Steve McIntyre <steve.mcintyre@pexip.com>  Wed, 13 Sep 2023 17:08:50 +0100
 

@@ -1,0 +1,17 @@
+diff --git a/ssl/t1_lib.c b/ssl/t1_lib.c
+index 8be00a4f..da82d469 100644
+--- a/ssl/t1_lib.c
++++ b/ssl/t1_lib.c
+@@ -266,6 +266,12 @@ static int add_provider_groups(const OSSL_PARAM params[], void *data)
+         ERR_raise(ERR_LIB_SSL, ERR_R_PASSED_INVALID_ARGUMENT);
+         goto err;
+     }
++    if (strcmp(OSSL_PROVIDER_get0_name(provider), "fips") == 0
++        && (OPENSSL_strcasecmp(p->data, "X25519") == 0
++           || OPENSSL_strcasecmp(p->data, "X448") == 0)) {
++        /* Ignore FIPS provider claiming support for Edwards curves */
++        return 1;
++    }
+     ginf->tlsname = OPENSSL_strdup(p->data);
+     if (ginf->tlsname == NULL) {
+         ERR_raise(ERR_LIB_SSL, ERR_R_MALLOC_FAILURE);
