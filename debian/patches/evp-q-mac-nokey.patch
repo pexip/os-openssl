@@ -1,0 +1,18 @@
+diff --git a/crypto/evp/mac_lib.c b/crypto/evp/mac_lib.c
+index 90c79715..61cba1dd 100644
+--- a/crypto/evp/mac_lib.c
++++ b/crypto/evp/mac_lib.c
+@@ -276,8 +276,11 @@ unsigned char *EVP_Q_mac(OSSL_LIB_CTX *libctx,
+             OSSL_PARAM_construct_utf8_string(param_name, (char *)subalg, 0);
+     }
+     /* Single-shot - on NULL key input, set dummy key value for EVP_MAC_Init. */
+-    if (key == NULL && keylen == 0)
+-        key = data;
++    if (key == NULL && keylen == 0) {
++        static const char dummy_key[32] = {0};
++        key = dummy_key;
++        keylen = sizeof(dummy_key);
++    }
+     if ((ctx = EVP_MAC_CTX_new(mac)) != NULL
+             && EVP_MAC_CTX_set_params(ctx, subalg_param)
+             && EVP_MAC_CTX_set_params(ctx, params)

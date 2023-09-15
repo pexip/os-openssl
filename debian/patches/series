@@ -16,3 +16,4 @@ x509-tbs.patch
 PKCS12-Add-additional-libctx-and-propq-support.patch
 default-seclevel.patch
 fips-ignore-edwards.patch
+evp-q-mac-nokey.patch
