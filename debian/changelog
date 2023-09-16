@@ -1,3 +1,10 @@
+openssl (3.0.10-0pexip5) pexip; urgency=medium
+
+  * debian/patches/evp-q-mac-nokey.patch: fix legacy HMAC/EVP_Q_mac usage with
+    NULL key when provider enforces a minimum key length
+
+ -- John-Mark Bell <jmb@pexip.com>  Sat, 16 Sep 2023 18:55:00 +0100
+
 openssl (3.0.10-0pexip4) pexip; urgency=medium
 
   * Tweak the fips patch some more to nobble it on Windows
