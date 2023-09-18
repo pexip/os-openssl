@@ -1,3 +1,9 @@
+openssl (3.0.10-0pexip6) pexip; urgency=medium
+
+  * debian/patches/fips-ignore-edwards.patch: drop; no longer necessary
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 18 Sep 2023 17:29:01 +0100
+
 openssl (3.0.10-0pexip5) pexip; urgency=medium
 
   * debian/patches/evp-q-mac-nokey.patch: fix legacy HMAC/EVP_Q_mac usage with
