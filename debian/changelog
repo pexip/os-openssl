@@ -1,3 +1,9 @@
+openssl (3.0.11-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- John-Mark Bell <jmb@pexip.com>  Tue, 19 Sep 2023 15:50:04 +0100
+
 openssl (3.0.10-0pexip6) pexip; urgency=medium
 
   * debian/patches/fips-ignore-edwards.patch: drop; no longer necessary
