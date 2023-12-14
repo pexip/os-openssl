@@ -239,6 +239,10 @@ static int get_cert_by_subject_ex(X509_LOOKUP *xl, X509_LOOKUP_TYPE type,
     X509_OBJECT stmp, *tmp;
     const char *postfix = "";
 
+    int hash_index;
+    int hash_last = 0;
+    unsigned long hash_array[2];
+
     if (name == NULL)
         return 0;
 
@@ -261,10 +265,17 @@ static int get_cert_by_subject_ex(X509_LOOKUP *xl, X509_LOOKUP_TYPE type,
     }
 
     ctx = (BY_DIR *)xl->method_data;
-    h = X509_NAME_hash_ex(name, libctx, propq, &i);
+    hash_array[hash_last++] = X509_NAME_hash_ex(name, libctx, propq, &i);
     if (i == 0)
-        goto finish;
-    for (i = 0; i < sk_BY_DIR_ENTRY_num(ctx->dirs); i++) {
+        hash_last--;
+#if defined(__ANDROID__)
+    hash_array[hash_last++] = X509_NAME_hash_old(name);
+#endif
+
+    for (hash_index = 0; hash_index < hash_last; hash_index++) {
+      h = hash_array[hash_index];
+
+      for (i = 0; i < sk_BY_DIR_ENTRY_num(ctx->dirs); i++) {
         BY_DIR_ENTRY *ent;
         int idx;
         BY_DIR_HASH htmp, *hent;
@@ -417,6 +428,7 @@ static int get_cert_by_subject_ex(X509_LOOKUP *xl, X509_LOOKUP_TYPE type,
             goto finish;
         }
     }
+  }
  finish:
     BUF_MEM_free(b);
     return ok;
