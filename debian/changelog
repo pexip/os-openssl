@@ -1,3 +1,9 @@
+openssl (3.0.12-0pexip4) pexip-bookworm; urgency=medium
+
+  * Apply pexip_android_fix.patch to fix cert hashing on Android.
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Fri, 15 Dec 2023 10:00:56 +0000
+
 openssl (3.0.12-0pexip3) pexip-bookworm; urgency=medium
 
   * Bookworm build for product distribution
