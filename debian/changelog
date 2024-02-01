@@ -1,3 +1,11 @@
+openssl (3.0.13-0pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * debian/patches/PKCS12-Add-additional-libctx-and-propq-support.patch,
+    debian/patches/x509-serial.patch: Refresh
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 01 Feb 2024 15:17:47 +0000
+
 openssl (3.0.12-0pexip1) pexip; urgency=medium
 
   * New upstream release
