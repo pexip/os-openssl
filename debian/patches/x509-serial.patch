@@ -85,8 +85,8 @@ index 95df179b..bcddb9de 100644
  
  setup("test_x509");
  
--plan tests => 28;
-+plan tests => 30;
+-plan tests => 29;
++plan tests => 31;
  
  # Prevent MSys2 filename munging for arguments that look like file paths but
  # aren't
