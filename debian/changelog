@@ -1,3 +1,9 @@
+openssl (3.0.13-0+pexip24u3) pexip-bookworm; urgency=medium
+
+  * New versioning scheme
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Thu, 01 Feb 2024 16:15:12 +0000
+
 openssl (3.0.13-0pexip2) pexip-bookworm; urgency=medium
 
   * Bump version for bookworm
