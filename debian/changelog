@@ -1,3 +1,9 @@
+openssl (3.0.13-0pexip2) pexip-bookworm; urgency=medium
+
+  * Bump version for bookworm
+
+ -- John-Mark Bell <jmb@pexip.com>  Thu, 01 Feb 2024 15:48:27 +0000
+
 openssl (3.0.13-0pexip1) pexip; urgency=medium
 
   * New upstream release
