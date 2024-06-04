@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2007-2021 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright Nokia 2007-2019
  * Copyright Siemens AG 2015-2019
  *
@@ -9,15 +9,14 @@
  * https://www.openssl.org/source/license.html
  */
 
-#include "cmp_testlib.h"
+#include "helpers/cmp_testlib.h"
 
 #include <openssl/x509_vfy.h>
 
-DEFINE_STACK_OF(X509)
-DEFINE_STACK_OF(ASN1_UTF8STRING)
-DEFINE_STACK_OF(X509_EXTENSION)
-DEFINE_STACK_OF(OSSL_CMP_ITAV)
-DEFINE_STACK_OF(POLICYINFO)
+static X509 *test_cert;
+
+/* Avoid using X509_new() via the generic macros below. */
+#define X509_new() X509_dup(test_cert)
 
 typedef struct test_fixture {
     const char *test_case_name;
@@ -37,7 +36,7 @@ static OSSL_CMP_CTX_TEST_FIXTURE *set_up(const char *const test_case_name)
 
     if (!TEST_ptr(fixture = OPENSSL_zalloc(sizeof(*fixture))))
         return NULL;
-    if (!TEST_ptr(fixture->ctx = OSSL_CMP_CTX_new())) {
+    if (!TEST_ptr(fixture->ctx = OSSL_CMP_CTX_new(NULL, NULL))) {
         tear_down(fixture);
         return NULL;
     }
@@ -48,7 +47,7 @@ static OSSL_CMP_CTX_TEST_FIXTURE *set_up(const char *const test_case_name)
 static STACK_OF(X509) *sk_X509_new_1(void)
 {
     STACK_OF(X509) *sk = sk_X509_new_null();
-    X509 *x = X509_new();
+    X509 *x = X509_dup(test_cert);
 
     if (x == NULL || !sk_X509_push(sk, x)) {
         sk_X509_free(sk);
@@ -74,11 +73,12 @@ static int execute_CTX_reinit_test(OSSL_CMP_CTX_TEST_FIXTURE *fixture)
     ctx->status = 1;
     ctx->failInfoCode = 1;
     if (!ossl_cmp_ctx_set0_statusString(ctx, sk_ASN1_UTF8STRING_new_null())
-            || !ossl_cmp_ctx_set0_newCert(ctx, X509_new())
+            || !ossl_cmp_ctx_set0_newCert(ctx, X509_dup(test_cert))
             || !TEST_ptr(certs = sk_X509_new_1())
+            || !ossl_cmp_ctx_set1_newChain(ctx, certs)
             || !ossl_cmp_ctx_set1_caPubs(ctx, certs)
             || !ossl_cmp_ctx_set1_extraCertsIn(ctx, certs)
-            || !ossl_cmp_ctx_set0_validatedSrvCert(ctx, X509_new())
+            || !ossl_cmp_ctx_set0_validatedSrvCert(ctx, X509_dup(test_cert))
             || !TEST_ptr(bytes = ASN1_OCTET_STRING_new())
             || !OSSL_CMP_CTX_set1_transactionID(ctx, bytes)
             || !OSSL_CMP_CTX_set1_senderNonce(ctx, bytes)
@@ -93,6 +93,7 @@ static int execute_CTX_reinit_test(OSSL_CMP_CTX_TEST_FIXTURE *fixture)
                        && ctx->failInfoCode == -1
                        && ctx->statusString == NULL
                        && ctx->newCert == NULL
+                       && ctx->newChain == NULL
                        && ctx->caPubs == NULL
                        && ctx->extraCertsIn == NULL
                        && ctx->validatedSrvCert == NULL
@@ -147,7 +148,7 @@ static int execute_CTX_print_errors_test(OSSL_CMP_CTX_TEST_FIXTURE *fixture)
         res = 0;
 
 # ifndef OPENSSL_NO_STDIO
-    CMPerr(0, CMP_R_MULTIPLE_SAN_SOURCES);
+    ERR_raise(ERR_LIB_CMP, CMP_R_MULTIPLE_SAN_SOURCES);
     OSSL_CMP_CTX_print_errors(ctx); /* should print above error to STDERR */
 # endif
 
@@ -157,13 +158,13 @@ static int execute_CTX_print_errors_test(OSSL_CMP_CTX_TEST_FIXTURE *fixture)
     if (!TEST_true(ctx->log_cb == msg_total_size_log_cb)) {
         res = 0;
     } else {
-        CMPerr(0, CMP_R_INVALID_ARGS);
+        ERR_raise(ERR_LIB_CMP, CMP_R_INVALID_ARGS);
         base_err_msg_size = strlen("INVALID_ARGS");
-        CMPerr(0, CMP_R_NULL_ARGUMENT);
+        ERR_raise(ERR_LIB_CMP, CMP_R_NULL_ARGUMENT);
         base_err_msg_size += strlen("NULL_ARGUMENT");
         expected_size = base_err_msg_size;
-        ossl_cmp_add_error_data("data1"); /* should prepend separator " : " */
-        expected_size += strlen(" : " "data1");
+        ossl_cmp_add_error_data("data1"); /* should prepend separator ":" */
+        expected_size += strlen(":" "data1");
         ossl_cmp_add_error_data("data2"); /* should prepend separator " : " */
         expected_size += strlen(" : " "data2");
         ossl_cmp_add_error_line("new line"); /* should prepend separator "\n" */
@@ -172,8 +173,8 @@ static int execute_CTX_print_errors_test(OSSL_CMP_CTX_TEST_FIXTURE *fixture)
         if (!TEST_int_eq(msg_total_size, expected_size))
             res = 0;
 
-        CMPerr(0, CMP_R_INVALID_ARGS);
-        base_err_msg_size = strlen("INVALID_ARGS") + strlen(" : ");
+        ERR_raise(ERR_LIB_CMP, CMP_R_INVALID_ARGS);
+        base_err_msg_size = strlen("INVALID_ARGS") + strlen(":");
         expected_size = base_err_msg_size;
         while (expected_size < 4096) { /* force split */
             ERR_add_error_txt(STR_SEP, max_str_literal);
@@ -390,6 +391,7 @@ execute_CTX_##SETN##_##GETN##_##FIELD(OSSL_CMP_CTX_TEST_FIXTURE *fixture) \
     } else { \
         if (DUP && val1_read == val1) { \
             TEST_error("first set did not dup the value"); \
+            val1_read = 0; \
             res = 0; \
         } \
         if (DEFAULT(val1_read)) { \
@@ -418,6 +420,7 @@ execute_CTX_##SETN##_##GETN##_##FIELD(OSSL_CMP_CTX_TEST_FIXTURE *fixture) \
     } else { \
         if (DUP && val2_read == val2) { \
             TEST_error("second set did not dup the value"); \
+            val2_read = 0; \
             res = 0; \
         } \
         if (val2 == val1) { \
@@ -447,6 +450,7 @@ execute_CTX_##SETN##_##GETN##_##FIELD(OSSL_CMP_CTX_TEST_FIXTURE *fixture) \
     } else { \
         if (DUP && val3_read == val2_read) { \
             TEST_error("third get did not create a new dup"); \
+            val3_read = 0; \
             res = 0; \
         } \
     } \
@@ -502,7 +506,7 @@ static X509_STORE *X509_STORE_new_1(void)
 
 #define RET_IF_NULL_ARG(ctx, ret) \
     if (ctx == NULL) { \
-        CMPerr(0, CMP_R_NULL_ARGUMENT); \
+        ERR_raise(ERR_LIB_CMP, CMP_R_NULL_ARGUMENT); \
         return ret; \
     }
 
@@ -721,9 +725,8 @@ void cleanup_tests(void)
     return;
 }
 
-DEFINE_SET_GET_ARG_FN(set, get, option, 16, int)
-/* option == OSSL_CMP_OPT_IGNORE_KEYUSAGE */
-DEFINE_SET_GET_BASE_TEST(OSSL_CMP_CTX, set, get, 0, option_16, int, -1, IS_0, \
+DEFINE_SET_GET_ARG_FN(set, get, option, 35, int) /* OPT_IGNORE_KEYUSAGE */
+DEFINE_SET_GET_BASE_TEST(OSSL_CMP_CTX, set, get, 0, option_35, int, -1, IS_0, \
                          1 /* true */, DROP)
 
 DEFINE_SET_CB_TEST(log_cb)
@@ -744,7 +747,7 @@ DEFINE_SET_TEST(OSSL_CMP, CTX, 1, 1, expected_sender, X509_NAME)
 DEFINE_SET_GET_BASE_TEST(OSSL_CMP_CTX, set0, get0, 0, trustedStore,
                          X509_STORE *, NULL,
                          DEFAULT_STORE, X509_STORE_new_1(), X509_STORE_free)
-DEFINE_SET_GET_SK_X509_TEST(OSSL_CMP, CTX, 1, 0, untrusted_certs)
+DEFINE_SET_GET_SK_X509_TEST(OSSL_CMP, CTX, 1, 0, untrusted)
 
 DEFINE_SET_TEST(OSSL_CMP, CTX, 1, 0, cert, X509)
 DEFINE_SET_TEST(OSSL_CMP, CTX, 1, 0, pkey, EVP_PKEY)
@@ -780,6 +783,7 @@ DEFINE_SET_GET_INT_TEST(ossl_cmp, ctx, status)
 DEFINE_SET_GET_SK_TEST(ossl_cmp, ctx, 0, 0, statusString, ASN1_UTF8STRING)
 DEFINE_SET_GET_INT_TEST(ossl_cmp, ctx, failInfoCode)
 DEFINE_SET_GET_TEST(ossl_cmp, ctx, 0, 0, 0, newCert, X509)
+DEFINE_SET_GET_SK_X509_TEST(ossl_cmp, ctx, 1, 1, newChain)
 DEFINE_SET_GET_SK_X509_TEST(ossl_cmp, ctx, 1, 1, caPubs)
 DEFINE_SET_GET_SK_X509_TEST(ossl_cmp, ctx, 1, 1, extraCertsIn)
 
@@ -790,12 +794,23 @@ DEFINE_SET_TEST(ossl_cmp, ctx, 1, 1, recipNonce, ASN1_OCTET_STRING)
 
 int setup_tests(void)
 {
+    char *cert_file;
+
+    if (!test_skip_common_options()) {
+        TEST_error("Error parsing test options\n");
+        return 0;
+    }
+
+    if (!TEST_ptr(cert_file = test_get_argument(0))
+        || !TEST_ptr(test_cert = load_cert_pem(cert_file, NULL)))
+        return 0;
+
     /* OSSL_CMP_CTX_new() is tested by set_up() */
     /* OSSL_CMP_CTX_free() is tested by tear_down() */
     ADD_TEST(test_CTX_reinit);
 
     /* various CMP options: */
-    ADD_TEST(test_CTX_set_get_option_16);
+    ADD_TEST(test_CTX_set_get_option_35);
     /* CMP-specific callback for logging and outputting the error queue: */
     ADD_TEST(test_CTX_set_get_log_cb);
     /*
@@ -827,7 +842,7 @@ int setup_tests(void)
     ADD_TEST(test_CTX_set0_get0_validatedSrvCert);
     ADD_TEST(test_CTX_set1_get0_expected_sender);
     ADD_TEST(test_CTX_set0_get0_trustedStore);
-    ADD_TEST(test_CTX_set1_get0_untrusted_certs);
+    ADD_TEST(test_CTX_set1_get0_untrusted);
     /* client authentication: */
     ADD_TEST(test_CTX_set1_get0_cert);
     ADD_TEST(test_CTX_set1_get0_pkey);
@@ -869,6 +884,7 @@ int setup_tests(void)
     ADD_TEST(test_CTX_set0_get0_statusString);
     ADD_TEST(test_CTX_set_get_failInfoCode);
     ADD_TEST(test_CTX_set0_get0_newCert);
+    ADD_TEST(test_CTX_set1_get1_newChain);
     ADD_TEST(test_CTX_set1_get1_caPubs);
     ADD_TEST(test_CTX_set1_get1_extraCertsIn);
     /* exported for testing and debugging purposes: */
@@ -876,6 +892,5 @@ int setup_tests(void)
     ADD_TEST(test_CTX_set1_get0_transactionID);
     ADD_TEST(test_CTX_set1_get0_senderNonce);
     ADD_TEST(test_CTX_set1_get0_recipNonce);
-    /* ossl_cmp_build_cert_chain() is tested in cmp_protect.c */
     return 1;
 }

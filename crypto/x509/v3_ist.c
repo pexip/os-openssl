@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2020-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -14,8 +14,6 @@
 #include <openssl/asn1t.h>
 #include <openssl/x509v3.h>
 #include "ext_dat.h"
-
-DEFINE_STACK_OF(CONF_VALUE)
 
 /*
  * Issuer Sign Tool (1.2.643.100.112) The name of the tool used to signs the subject (ASN1_SEQUENCE)
@@ -41,7 +39,7 @@ static ISSUER_SIGN_TOOL *v2i_issuer_sign_tool(X509V3_EXT_METHOD *method, X509V3_
     int i;
 
     if (ist == NULL) {
-        X509V3err(X509V3_F_V2I_ISSUER_SIGN_TOOL, ERR_R_MALLOC_FAILURE);
+        ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
         return NULL;
     }
     for (i = 0; i < sk_CONF_VALUE_num(nval); ++i) {
@@ -52,43 +50,46 @@ static ISSUER_SIGN_TOOL *v2i_issuer_sign_tool(X509V3_EXT_METHOD *method, X509V3_
         }
         if (strcmp(cnf->name, "signTool") == 0) {
             ist->signTool = ASN1_UTF8STRING_new();
-            if (ist->signTool == NULL) {
-                X509V3err(X509V3_F_V2I_ISSUER_SIGN_TOOL, ERR_R_MALLOC_FAILURE);
-                ISSUER_SIGN_TOOL_free(ist);
-                return NULL;
+            if (ist->signTool == NULL
+                || cnf->value == NULL
+                || !ASN1_STRING_set(ist->signTool, cnf->value, strlen(cnf->value))) {
+                ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
+                goto err;
             }
-            ASN1_STRING_set(ist->signTool, cnf->value, strlen(cnf->value));
         } else if (strcmp(cnf->name, "cATool") == 0) {
             ist->cATool = ASN1_UTF8STRING_new();
-            if (ist->cATool == NULL) {
-                X509V3err(X509V3_F_V2I_ISSUER_SIGN_TOOL, ERR_R_MALLOC_FAILURE);
-                ISSUER_SIGN_TOOL_free(ist);
-                return NULL;
+            if (ist->cATool == NULL
+                || cnf->value == NULL
+                || !ASN1_STRING_set(ist->cATool, cnf->value, strlen(cnf->value))) {
+                ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
+                goto err;
             }
-            ASN1_STRING_set(ist->cATool, cnf->value, strlen(cnf->value));
         } else if (strcmp(cnf->name, "signToolCert") == 0) {
             ist->signToolCert = ASN1_UTF8STRING_new();
-            if (ist->signToolCert == NULL) {
-                X509V3err(X509V3_F_V2I_ISSUER_SIGN_TOOL, ERR_R_MALLOC_FAILURE);
-                ISSUER_SIGN_TOOL_free(ist);
-                return NULL;
+            if (ist->signToolCert == NULL
+                || cnf->value == NULL
+                || !ASN1_STRING_set(ist->signToolCert, cnf->value, strlen(cnf->value))) {
+                ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
+                goto err;
             }
-            ASN1_STRING_set(ist->signToolCert, cnf->value, strlen(cnf->value));
         } else if (strcmp(cnf->name, "cAToolCert") == 0) {
             ist->cAToolCert = ASN1_UTF8STRING_new();
-            if (ist->cAToolCert == NULL) {
-                X509V3err(X509V3_F_V2I_ISSUER_SIGN_TOOL, ERR_R_MALLOC_FAILURE);
-                ISSUER_SIGN_TOOL_free(ist);
-                return NULL;
+            if (ist->cAToolCert == NULL
+                || cnf->value == NULL
+                || !ASN1_STRING_set(ist->cAToolCert, cnf->value, strlen(cnf->value))) {
+                ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
+                goto err;
             }
-            ASN1_STRING_set(ist->cAToolCert, cnf->value, strlen(cnf->value));
         } else {
-            X509V3err(X509V3_F_V2I_ISSUER_SIGN_TOOL, ERR_R_PASSED_INVALID_ARGUMENT);
-            ISSUER_SIGN_TOOL_free(ist);
-            return NULL;
+            ERR_raise(ERR_LIB_X509V3, ERR_R_PASSED_INVALID_ARGUMENT);
+            goto err;
         }
     }
     return ist;
+
+err:
+    ISSUER_SIGN_TOOL_free(ist);
+    return NULL;
 }
 
 static int i2r_issuer_sign_tool(X509V3_EXT_METHOD *method,
@@ -98,7 +99,7 @@ static int i2r_issuer_sign_tool(X509V3_EXT_METHOD *method,
     int new_line = 0;
 
     if (ist == NULL) {
-        X509V3err(X509V3_F_I2R_ISSUER_SIGN_TOOL, ERR_R_PASSED_INVALID_ARGUMENT);
+        ERR_raise(ERR_LIB_X509V3, ERR_R_PASSED_INVALID_ARGUMENT);
         return 0;
     }
     if (ist->signTool != NULL) {
@@ -136,7 +137,7 @@ static int i2r_issuer_sign_tool(X509V3_EXT_METHOD *method,
     return 1;
 }
 
-const X509V3_EXT_METHOD v3_issuer_sign_tool = {
+const X509V3_EXT_METHOD ossl_v3_issuer_sign_tool = {
     NID_issuerSignTool,                   /* nid */
     X509V3_EXT_MULTILINE,                 /* flags */
     ASN1_ITEM_ref(ISSUER_SIGN_TOOL),      /* template */

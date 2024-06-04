@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -8,10 +8,8 @@
  */
 
 #include <string.h>
-#include "ssltestlib.h"
+#include "helpers/ssltestlib.h"
 #include "testutil.h"
-
-DEFINE_STACK_OF(SSL_CIPHER)
 
 static int docorrupt = 0;
 
@@ -194,8 +192,6 @@ static int test_ssl_corrupt(int testidx)
 
     docorrupt = 0;
 
-    ERR_clear_error();
-
     TEST_info("Starting #%d, %s", testidx, cipher_list[testidx]);
 
     if (!TEST_true(create_ssl_ctx_pair(NULL, TLS_server_method(),
@@ -204,7 +200,8 @@ static int test_ssl_corrupt(int testidx)
                                        &sctx, &cctx, cert, privkey)))
         return 0;
 
-    if (!TEST_true(SSL_CTX_set_cipher_list(cctx, cipher_list[testidx]))
+    if (!TEST_true(SSL_CTX_set_dh_auto(sctx, 1))
+            || !TEST_true(SSL_CTX_set_cipher_list(cctx, cipher_list[testidx]))
             || !TEST_true(SSL_CTX_set_ciphersuites(cctx, ""))
             || !TEST_ptr(ciphers = SSL_CTX_get_ciphers(cctx))
             || !TEST_int_eq(sk_SSL_CIPHER_num(ciphers), 1)

@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -20,6 +20,9 @@
 #include <openssl/sha.h>
 #include "dsa_local.h"
 #include <openssl/asn1.h>
+
+#define MIN_DSA_SIGN_QBITS   128
+#define MAX_DSA_SIGN_RETRIES 8
 
 static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa);
 static int dsa_sign_setup_no_digest(DSA *dsa, BN_CTX *ctx_in, BIGNUM **kinvp,
@@ -67,7 +70,7 @@ const DSA_METHOD *DSA_OpenSSL(void)
     return &openssl_dsa_meth;
 }
 
-DSA_SIG *dsa_do_sign_int(const unsigned char *dgst, int dlen, DSA *dsa)
+DSA_SIG *ossl_dsa_do_sign_int(const unsigned char *dgst, int dlen, DSA *dsa)
 {
     BIGNUM *kinv = NULL;
     BIGNUM *m, *blind, *blindm, *tmp;
@@ -75,6 +78,7 @@ DSA_SIG *dsa_do_sign_int(const unsigned char *dgst, int dlen, DSA *dsa)
     int reason = ERR_R_BN_LIB;
     DSA_SIG *ret = NULL;
     int rv = 0;
+    int retries = 0;
 
     if (dsa->params.p == NULL
         || dsa->params.q == NULL
@@ -129,10 +133,13 @@ DSA_SIG *dsa_do_sign_int(const unsigned char *dgst, int dlen, DSA *dsa)
      *   s := blind^-1 * k^-1 * (blind * m + blind * r * priv_key) mod q
      */
 
-    /* Generate a blinding value */
+    /*
+     * Generate a blinding value
+     * The size of q is tested in dsa_sign_setup() so there should not be an infinite loop here.
+     */
     do {
         if (!BN_priv_rand_ex(blind, BN_num_bits(dsa->params.q) - 1,
-                             BN_RAND_TOP_ANY, BN_RAND_BOTTOM_ANY, ctx))
+                             BN_RAND_TOP_ANY, BN_RAND_BOTTOM_ANY, 0, ctx))
             goto err;
     } while (BN_is_zero(blind));
     BN_set_flags(blind, BN_FLG_CONSTTIME);
@@ -164,17 +171,22 @@ DSA_SIG *dsa_do_sign_int(const unsigned char *dgst, int dlen, DSA *dsa)
         goto err;
 
     /*
-     * Redo if r or s is zero as required by FIPS 186-3: this is very
-     * unlikely.
+     * Redo if r or s is zero as required by FIPS 186-4: Section 4.6
+     * This is very unlikely.
+     * Limit the retries so there is no possibility of an infinite
+     * loop for bad domain parameter values.
      */
-    if (BN_is_zero(ret->r) || BN_is_zero(ret->s))
+    if (BN_is_zero(ret->r) || BN_is_zero(ret->s)) {
+        if (retries++ > MAX_DSA_SIGN_RETRIES) {
+            reason = DSA_R_TOO_MANY_RETRIES;
+            goto err;
+        }
         goto redo;
-
+    }
     rv = 1;
-
  err:
     if (rv == 0) {
-        DSAerr(0, reason);
+        ERR_raise(ERR_LIB_DSA, reason);
         DSA_SIG_free(ret);
         ret = NULL;
     }
@@ -185,7 +197,7 @@ DSA_SIG *dsa_do_sign_int(const unsigned char *dgst, int dlen, DSA *dsa)
 
 static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa)
 {
-    return dsa_do_sign_int(dgst, dlen, dsa);
+    return ossl_dsa_do_sign_int(dgst, dlen, dsa);
 }
 
 static int dsa_sign_setup_no_digest(DSA *dsa, BN_CTX *ctx_in,
@@ -205,22 +217,24 @@ static int dsa_sign_setup(DSA *dsa, BN_CTX *ctx_in,
     int q_bits, q_words;
 
     if (!dsa->params.p || !dsa->params.q || !dsa->params.g) {
-        DSAerr(DSA_F_DSA_SIGN_SETUP, DSA_R_MISSING_PARAMETERS);
+        ERR_raise(ERR_LIB_DSA, DSA_R_MISSING_PARAMETERS);
         return 0;
     }
 
     /* Reject obviously invalid parameters */
     if (BN_is_zero(dsa->params.p)
         || BN_is_zero(dsa->params.q)
-        || BN_is_zero(dsa->params.g)) {
-        DSAerr(DSA_F_DSA_SIGN_SETUP, DSA_R_INVALID_PARAMETERS);
+        || BN_is_zero(dsa->params.g)
+        || BN_is_negative(dsa->params.p)
+        || BN_is_negative(dsa->params.q)
+        || BN_is_negative(dsa->params.g)) {
+        ERR_raise(ERR_LIB_DSA, DSA_R_INVALID_PARAMETERS);
         return 0;
     }
     if (dsa->priv_key == NULL) {
-        DSAerr(DSA_F_DSA_SIGN_SETUP, DSA_R_MISSING_PRIVATE_KEY);
+        ERR_raise(ERR_LIB_DSA, DSA_R_MISSING_PRIVATE_KEY);
         return 0;
     }
-
     k = BN_new();
     l = BN_new();
     if (k == NULL || l == NULL)
@@ -236,7 +250,8 @@ static int dsa_sign_setup(DSA *dsa, BN_CTX *ctx_in,
     /* Preallocate space */
     q_bits = BN_num_bits(dsa->params.q);
     q_words = bn_get_top(dsa->params.q);
-    if (!bn_wexpand(k, q_words + 2)
+    if (q_bits < MIN_DSA_SIGN_QBITS
+        || !bn_wexpand(k, q_words + 2)
         || !bn_wexpand(l, q_words + 2))
         goto err;
 
@@ -247,12 +262,13 @@ static int dsa_sign_setup(DSA *dsa, BN_CTX *ctx_in,
              * We calculate k from SHA512(private_key + H(message) + random).
              * This protects the private key from a weak PRNG.
              */
-            if (!BN_generate_dsa_nonce(k, dsa->params.q, dsa->priv_key, dgst,
-                                       dlen, ctx))
+            if (!ossl_bn_gen_dsa_nonce_fixed_top(k, dsa->params.q,
+                                                 dsa->priv_key, dgst,
+                                                 dlen, ctx))
                 goto err;
-        } else if (!BN_priv_rand_range_ex(k, dsa->params.q, ctx))
+        } else if (!ossl_bn_priv_rand_range_fixed_top(k, dsa->params.q, 0, ctx))
             goto err;
-    } while (BN_is_zero(k));
+    } while (ossl_bn_is_word_fixed_top(k, 0));
 
     BN_set_flags(k, BN_FLG_CONSTTIME);
     BN_set_flags(l, BN_FLG_CONSTTIME);
@@ -307,7 +323,7 @@ static int dsa_sign_setup(DSA *dsa, BN_CTX *ctx_in,
     ret = 1;
  err:
     if (!ret)
-        DSAerr(DSA_F_DSA_SIGN_SETUP, ERR_R_BN_LIB);
+        ERR_raise(ERR_LIB_DSA, ERR_R_BN_LIB);
     if (ctx != ctx_in)
         BN_CTX_free(ctx);
     BN_clear_free(k);
@@ -327,19 +343,19 @@ static int dsa_do_verify(const unsigned char *dgst, int dgst_len,
     if (dsa->params.p == NULL
         || dsa->params.q == NULL
         || dsa->params.g == NULL) {
-        DSAerr(DSA_F_DSA_DO_VERIFY, DSA_R_MISSING_PARAMETERS);
+        ERR_raise(ERR_LIB_DSA, DSA_R_MISSING_PARAMETERS);
         return -1;
     }
 
     i = BN_num_bits(dsa->params.q);
     /* fips 186-3 allows only different sizes for q */
     if (i != 160 && i != 224 && i != 256) {
-        DSAerr(DSA_F_DSA_DO_VERIFY, DSA_R_BAD_Q_VALUE);
+        ERR_raise(ERR_LIB_DSA, DSA_R_BAD_Q_VALUE);
         return -1;
     }
 
     if (BN_num_bits(dsa->params.p) > OPENSSL_DSA_MAX_MODULUS_BITS) {
-        DSAerr(DSA_F_DSA_DO_VERIFY, DSA_R_MODULUS_TOO_LARGE);
+        ERR_raise(ERR_LIB_DSA, DSA_R_MODULUS_TOO_LARGE);
         return -1;
     }
     u1 = BN_new();
@@ -415,7 +431,7 @@ static int dsa_do_verify(const unsigned char *dgst, int dgst_len,
 
  err:
     if (ret < 0)
-        DSAerr(DSA_F_DSA_DO_VERIFY, ERR_R_BN_LIB);
+        ERR_raise(ERR_LIB_DSA, ERR_R_BN_LIB);
     BN_CTX_free(ctx);
     BN_free(u1);
     BN_free(u2);
@@ -426,7 +442,6 @@ static int dsa_do_verify(const unsigned char *dgst, int dgst_len,
 static int dsa_init(DSA *dsa)
 {
     dsa->flags |= DSA_FLAG_CACHE_MONT_P;
-    ffc_params_init(&dsa->params);
     dsa->dirty_cnt++;
     return 1;
 }

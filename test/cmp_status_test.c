@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2007-2021 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright Nokia 2007-2019
  * Copyright Siemens AG 2015-2019
  *
@@ -9,9 +9,7 @@
  * https://www.openssl.org/source/license.html
  */
 
-#include "cmp_testlib.h"
-
-DEFINE_STACK_OF(ASN1_UTF8STRING)
+#include "helpers/cmp_testlib.h"
 
 typedef struct test_fixture {
     const char *test_case_name;
@@ -60,7 +58,8 @@ static int execute_PKISI_test(CMP_STATUS_TEST_FIXTURE *fixture)
     if (!TEST_ptr(statusString =
                   sk_ASN1_UTF8STRING_value(ossl_cmp_pkisi_get0_statusString(si),
                                            0))
-            || !TEST_str_eq(fixture->text, (char *)statusString->data))
+            || !TEST_mem_eq(fixture->text, strlen(fixture->text),
+                            (char *)statusString->data, statusString->length))
         goto end;
 
     if (!TEST_int_eq(fixture->pkifailure,

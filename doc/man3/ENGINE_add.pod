@@ -46,9 +46,9 @@ ENGINE_unregister_digests
 
  #include <openssl/engine.h>
 
-Deprecated since OpenSSL 3.0, can be hidden entirely by defining
-B<OPENSSL_API_COMPAT> with a suitable version value, see
-L<openssl_user_macros(7)>:
+The following functions have been deprecated since OpenSSL 3.0, and can be
+hidden entirely by defining B<OPENSSL_API_COMPAT> with a suitable version value,
+see L<openssl_user_macros(7)>:
 
  ENGINE *ENGINE_get_first(void);
  ENGINE *ENGINE_get_last(void);
@@ -158,9 +158,9 @@ L<openssl_user_macros(7)>:
  EVP_PKEY *ENGINE_load_public_key(ENGINE *e, const char *key_id,
                                   UI_METHOD *ui_method, void *callback_data);
 
-Deprecated since OpenSSL 1.1.0, can be hidden entirely by defining
-B<OPENSSL_API_COMPAT> with a suitable version value, see
-L<openssl_user_macros(7)>:
+The following function has been deprecated since OpenSSL 1.1.0, and can be
+hidden entirely by defining B<OPENSSL_API_COMPAT> with a suitable version value,
+see L<openssl_user_macros(7)>:
 
  void ENGINE_cleanup(void);
 
@@ -247,7 +247,7 @@ released on behalf of the caller.
 
 To clarify a particular function's handling of references, one should
 always consult that function's documentation "man" page, or failing that
-the openssl/engine.h header file includes some hints.
+the F<< <openssl/engine.h> >> header file includes some hints.
 
 I<Functional references>
 
@@ -498,10 +498,10 @@ and input parameters of the control commands supported by an ENGINE using a
 structural reference. Note that some control commands are defined by OpenSSL
 itself and it will intercept and handle these control commands on behalf of the
 ENGINE, i.e. the ENGINE's ctrl() handler is not used for the control command.
-openssl/engine.h defines an index, ENGINE_CMD_BASE, that all control commands
-implemented by ENGINEs should be numbered from. Any command value lower than
-this symbol is considered a "generic" command is handled directly by the
-OpenSSL core routines.
+F<< <openssl/engine.h> >> defines an index, ENGINE_CMD_BASE, that all control
+commands implemented by ENGINEs should be numbered from. Any command value
+lower than this symbol is considered a "generic" command is handled directly
+by the OpenSSL core routines.
 
 It is using these "core" control commands that one can discover the control
 commands implemented by a given ENGINE, specifically the commands:
@@ -604,8 +604,7 @@ B<ENGINE> implementations.
 
 All ENGINE_register_TYPE() functions return 1 on success or 0 on error.
 
-ENGINE_register_complete() and ENGINE_register_all_complete() return 1 on success
-or 0 on error.
+ENGINE_register_complete() and ENGINE_register_all_complete() always return 1.
 
 ENGINE_ctrl() returns a positive value on success or others on error.
 
@@ -616,7 +615,7 @@ ENGINE_ctrl_cmd() and ENGINE_ctrl_cmd_string() return 1 on success or 0 on error
 ENGINE_new() returns a valid B<ENGINE> structure on success or NULL if an error
 occurred.
 
-ENGINE_free() returns 1 on success or 0 on error.
+ENGINE_free() always returns 1.
 
 ENGINE_up_ref() returns 1 on success or 0 on error.
 
@@ -666,7 +665,7 @@ and should not be used.
 
 =head1 COPYRIGHT
 
-Copyright 2002-2020 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2002-2021 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the Apache License 2.0 (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy

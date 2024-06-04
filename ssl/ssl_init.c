@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -14,6 +14,7 @@
 #include <openssl/evp.h>
 #include <openssl/trace.h>
 #include "ssl_local.h"
+#include "sslerr.h"
 #include "internal/thread_once.h"
 
 static int stopped;
@@ -45,7 +46,7 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_ssl_base)
 }
 
 static CRYPTO_ONCE ssl_strings = CRYPTO_ONCE_STATIC_INIT;
-static int ssl_strings_inited = 0;
+
 DEFINE_RUN_ONCE_STATIC(ossl_init_load_ssl_strings)
 {
     /*
@@ -53,9 +54,8 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_load_ssl_strings)
      * pulling in all the error strings during static linking
      */
 #if !defined(OPENSSL_NO_ERR) && !defined(OPENSSL_NO_AUTOERRINIT)
-    OSSL_TRACE(INIT, "ossl_init_load_ssl_strings: ERR_load_SSL_strings()\n");
-    ERR_load_SSL_strings();
-    ssl_strings_inited = 1;
+    OSSL_TRACE(INIT, "ossl_init_load_ssl_strings: ossl_err_load_SSL_strings()\n");
+    ossl_err_load_SSL_strings();
 #endif
     return 1;
 }
@@ -81,17 +81,6 @@ static void ssl_library_stop(void)
         ssl_comp_free_compression_methods_int();
 #endif
     }
-
-    if (ssl_strings_inited) {
-        OSSL_TRACE(INIT, "ssl_library_stop: err_free_strings_int()\n");
-        /*
-         * If both crypto and ssl error strings are inited we will end up
-         * calling err_free_strings_int() twice - but that's ok. The second
-         * time will be a no-op. It's easier to do that than to try and track
-         * between the two libraries whether they have both been inited.
-         */
-        err_free_strings_int();
-    }
 }
 
 /*
@@ -111,7 +100,7 @@ int OPENSSL_init_ssl(uint64_t opts, const OPENSSL_INIT_SETTINGS * settings)
              * sets an error etc
              */
             stoperrset = 1;
-            SSLerr(SSL_F_OPENSSL_INIT_SSL, ERR_R_INIT_FAIL);
+            ERR_raise(ERR_LIB_SSL, ERR_R_INIT_FAIL);
         }
         return 0;
     }

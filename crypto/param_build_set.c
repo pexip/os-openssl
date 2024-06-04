@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2020-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -27,6 +27,17 @@ int ossl_param_build_set_int(OSSL_PARAM_BLD *bld, OSSL_PARAM *p,
     p = OSSL_PARAM_locate(p, key);
     if (p != NULL)
         return OSSL_PARAM_set_int(p, num);
+    return 1;
+}
+
+int ossl_param_build_set_long(OSSL_PARAM_BLD *bld, OSSL_PARAM *p,
+                              const char *key, long num)
+{
+    if (bld != NULL)
+        return OSSL_PARAM_BLD_push_long(bld, key, num);
+    p = OSSL_PARAM_locate(p, key);
+    if (p != NULL)
+        return OSSL_PARAM_set_long(p, num);
     return 1;
 }
 
@@ -64,7 +75,6 @@ int ossl_param_build_set_bn_pad(OSSL_PARAM_BLD *bld, OSSL_PARAM *p,
     if (p != NULL) {
         if (sz > p->data_size)
             return 0;
-        /* TODO(3.0) Change to use OSSL_PARAM_set_BN_pad */
         p->data_size = sz;
         return OSSL_PARAM_set_BN(p, bn);
     }
@@ -89,21 +99,22 @@ int ossl_param_build_set_multi_key_bn(OSSL_PARAM_BLD *bld, OSSL_PARAM *params,
 {
     int i, sz = sk_BIGNUM_const_num(stk);
     OSSL_PARAM *p;
-
+    const BIGNUM *bn;
 
     if (bld != NULL) {
         for (i = 0; i < sz && names[i] != NULL; ++i) {
-            if (!OSSL_PARAM_BLD_push_BN(bld, names[i],
-                                        sk_BIGNUM_const_value(stk, i)))
+            bn = sk_BIGNUM_const_value(stk, i);
+            if (bn != NULL && !OSSL_PARAM_BLD_push_BN(bld, names[i], bn))
                 return 0;
         }
         return 1;
     }
 
     for (i = 0; i < sz && names[i] != NULL; ++i) {
+        bn = sk_BIGNUM_const_value(stk, i);
         p = OSSL_PARAM_locate(params, names[i]);
-        if (p != NULL) {
-            if (!OSSL_PARAM_set_BN(p, sk_BIGNUM_const_value(stk, i)))
+        if (p != NULL && bn != NULL) {
+            if (!OSSL_PARAM_set_BN(p, bn))
                 return 0;
         }
     }

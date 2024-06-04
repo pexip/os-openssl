@@ -49,15 +49,11 @@ emailAddress		= optional
 
 ####################################################################
 [ req ]
-default_bits		= 2048
-default_keyfile 	= testkey.pem
 distinguished_name	= req_distinguished_name
 encrypt_rsa_key		= no
 
 # Make altreq be identical to req
 [ altreq ]
-default_bits		= 2048
-default_keyfile 	= testkey.pem
 distinguished_name	= req_distinguished_name
 encrypt_rsa_key		= no
 
@@ -76,3 +72,9 @@ commonName			= CN field
 commonName_value		= Eric Young
 emailAddress			= email field
 emailAddress_value		= eay@mincom.oz.au
+
+[ dirname_sec ]
+C  = UK
+O  = My Organization
+OU = My Unit
+CN = My Name

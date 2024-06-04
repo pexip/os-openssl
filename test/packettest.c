@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2015-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -12,13 +12,13 @@
 
 #define BUF_LEN 255
 
-static unsigned char smbuf[BUF_LEN];
+static unsigned char smbuf[BUF_LEN + 1];
 
 static int test_PACKET_remaining(void)
 {
     PACKET pkt;
 
-    if (!TEST_true(PACKET_buf_init(&pkt, smbuf, sizeof(smbuf)))
+    if (!TEST_true(PACKET_buf_init(&pkt, smbuf, BUF_LEN))
             || !TEST_size_t_eq(PACKET_remaining(&pkt), BUF_LEN)
             || !TEST_true(PACKET_forward(&pkt, BUF_LEN - 1))
             || !TEST_size_t_eq(PACKET_remaining(&pkt), 1)
@@ -33,7 +33,7 @@ static int test_PACKET_end(void)
 {
     PACKET pkt;
 
-    if (!TEST_true(PACKET_buf_init(&pkt, smbuf, sizeof(smbuf)))
+    if (!TEST_true(PACKET_buf_init(&pkt, smbuf, BUF_LEN))
             || !TEST_size_t_eq(PACKET_remaining(&pkt), BUF_LEN)
             || !TEST_ptr_eq(PACKET_end(&pkt), smbuf + BUF_LEN)
             || !TEST_true(PACKET_forward(&pkt, BUF_LEN - 1))
@@ -302,7 +302,7 @@ static int test_PACKET_forward(void)
 
 static int test_PACKET_buf_init(void)
 {
-    unsigned char buf1[BUF_LEN];
+    unsigned char buf1[BUF_LEN] = { 0 };
     PACKET pkt;
 
     /* Also tests PACKET_remaining() */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2020-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -69,19 +69,20 @@
 /* This can be used for all items that don't have a context */
 #define DER_NO_CONTEXT  -1
 
-int DER_w_precompiled(WPACKET *pkt, int tag,
-                      const unsigned char *precompiled, size_t precompiled_n);
+int ossl_DER_w_precompiled(WPACKET *pkt, int tag,
+                           const unsigned char *precompiled,
+                           size_t precompiled_n);
 
-int DER_w_boolean(WPACKET *pkt, int tag, int b);
-int DER_w_ulong(WPACKET *pkt, int tag, unsigned long v);
-int DER_w_bn(WPACKET *pkt, int tag, const BIGNUM *v);
-int DER_w_null(WPACKET *pkt, int tag);
-int DER_w_octet_string(WPACKET *pkt, int tag,
-                       const unsigned char *data, size_t data_n);
-int DER_w_octet_string_uint32(WPACKET *pkt, int tag, uint32_t value);
+int ossl_DER_w_boolean(WPACKET *pkt, int tag, int b);
+int ossl_DER_w_uint32(WPACKET *pkt, int tag, uint32_t v);
+int ossl_DER_w_bn(WPACKET *pkt, int tag, const BIGNUM *v);
+int ossl_DER_w_null(WPACKET *pkt, int tag);
+int ossl_DER_w_octet_string(WPACKET *pkt, int tag,
+                            const unsigned char *data, size_t data_n);
+int ossl_DER_w_octet_string_uint32(WPACKET *pkt, int tag, uint32_t value);
 
 /*
  * All constructors for constructed elements have a begin and a end function
  */
-int DER_w_begin_sequence(WPACKET *pkt, int tag);
-int DER_w_end_sequence(WPACKET *pkt, int tag);
+int ossl_DER_w_begin_sequence(WPACKET *pkt, int tag);
+int ossl_DER_w_end_sequence(WPACKET *pkt, int tag);

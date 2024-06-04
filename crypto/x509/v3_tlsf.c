@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2015-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -16,9 +16,6 @@
 #include "ext_dat.h"
 #include "x509_local.h"
 
-DEFINE_STACK_OF(ASN1_INTEGER)
-DEFINE_STACK_OF(CONF_VALUE)
-
 static STACK_OF(CONF_VALUE) *i2v_TLS_FEATURE(const X509V3_EXT_METHOD *method,
                                              TLS_FEATURE *tls_feature,
                                              STACK_OF(CONF_VALUE) *ext_list);
@@ -32,7 +29,7 @@ static_ASN1_ITEM_TEMPLATE_END(TLS_FEATURE)
 
 IMPLEMENT_ASN1_ALLOC_FUNCTIONS(TLS_FEATURE)
 
-const X509V3_EXT_METHOD v3_tls_feature = {
+const X509V3_EXT_METHOD ossl_v3_tls_feature = {
     NID_tlsfeature, 0,
     ASN1_ITEM_ref(TLS_FEATURE),
     0, 0, 0, 0,
@@ -99,7 +96,7 @@ static TLS_FEATURE *v2i_TLS_FEATURE(const X509V3_EXT_METHOD *method,
     long tlsextid;
 
     if ((tlsf = sk_ASN1_INTEGER_new_null()) == NULL) {
-        X509V3err(X509V3_F_V2I_TLS_FEATURE, ERR_R_MALLOC_FAILURE);
+        ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
         return NULL;
     }
 
@@ -111,7 +108,7 @@ static TLS_FEATURE *v2i_TLS_FEATURE(const X509V3_EXT_METHOD *method,
             extval = val->name;
 
         for (j = 0; j < OSSL_NELEM(tls_feature_tbl); j++)
-            if (strcasecmp(extval, tls_feature_tbl[j].name) == 0)
+            if (OPENSSL_strcasecmp(extval, tls_feature_tbl[j].name) == 0)
                 break;
         if (j < OSSL_NELEM(tls_feature_tbl))
             tlsextid = tls_feature_tbl[j].num;
@@ -119,7 +116,7 @@ static TLS_FEATURE *v2i_TLS_FEATURE(const X509V3_EXT_METHOD *method,
             tlsextid = strtol(extval, &endptr, 10);
             if (((*endptr) != '\0') || (extval == endptr) || (tlsextid < 0) ||
                 (tlsextid > 65535)) {
-                X509V3err(X509V3_F_V2I_TLS_FEATURE, X509V3_R_INVALID_SYNTAX);
+                ERR_raise(ERR_LIB_X509V3, X509V3_R_INVALID_SYNTAX);
                 X509V3_conf_add_error_name_value(val);
                 goto err;
             }
@@ -128,7 +125,7 @@ static TLS_FEATURE *v2i_TLS_FEATURE(const X509V3_EXT_METHOD *method,
         if ((ai = ASN1_INTEGER_new()) == NULL
                 || !ASN1_INTEGER_set(ai, tlsextid)
                 || sk_ASN1_INTEGER_push(tlsf, ai) <= 0) {
-            X509V3err(X509V3_F_V2I_TLS_FEATURE, ERR_R_MALLOC_FAILURE);
+            ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
             goto err;
         }
         /* So it doesn't get purged if an error occurs next time around */

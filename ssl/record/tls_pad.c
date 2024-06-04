@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -29,7 +29,7 @@ static int ssl3_cbc_copy_mac(size_t *reclen,
                              size_t block_size,
                              size_t mac_size,
                              size_t good,
-                             OPENSSL_CTX *libctx);
+                             OSSL_LIB_CTX *libctx);
 
 int ssl3_cbc_remove_padding_and_mac(size_t *reclen,
                                     size_t origreclen,
@@ -37,7 +37,7 @@ int ssl3_cbc_remove_padding_and_mac(size_t *reclen,
                                     unsigned char **mac,
                                     int *alloced,
                                     size_t block_size, size_t mac_size,
-                                    OPENSSL_CTX *libctx);
+                                    OSSL_LIB_CTX *libctx);
 
 int tls1_cbc_remove_padding_and_mac(size_t *reclen,
                                     size_t origreclen,
@@ -46,7 +46,7 @@ int tls1_cbc_remove_padding_and_mac(size_t *reclen,
                                     int *alloced,
                                     size_t block_size, size_t mac_size,
                                     int aead,
-                                    OPENSSL_CTX *libctx);
+                                    OSSL_LIB_CTX *libctx);
 
 /*-
  * ssl3_cbc_remove_padding removes padding from the decrypted, SSLv3, CBC
@@ -71,7 +71,7 @@ int ssl3_cbc_remove_padding_and_mac(size_t *reclen,
                                     unsigned char **mac,
                                     int *alloced,
                                     size_t block_size, size_t mac_size,
-                                    OPENSSL_CTX *libctx)
+                                    OSSL_LIB_CTX *libctx)
 {
     size_t padding_length;
     size_t good;
@@ -117,7 +117,7 @@ int tls1_cbc_remove_padding_and_mac(size_t *reclen,
                                     int *alloced,
                                     size_t block_size, size_t mac_size,
                                     int aead,
-                                    OPENSSL_CTX *libctx)
+                                    OSSL_LIB_CTX *libctx)
 {
     size_t good = -1;
     size_t padding_length, to_check, i;
@@ -138,8 +138,6 @@ int tls1_cbc_remove_padding_and_mac(size_t *reclen,
         if (aead) {
             /* padding is already verified and we don't need to check the MAC */
             *reclen -= padding_length + 1 + mac_size;
-            *mac = NULL;
-            *alloced = 0;
             return 1;
         }
 
@@ -204,11 +202,12 @@ static int ssl3_cbc_copy_mac(size_t *reclen,
                              size_t block_size,
                              size_t mac_size,
                              size_t good,
-                             OPENSSL_CTX *libctx)
+                             OSSL_LIB_CTX *libctx)
 {
 #if defined(CBC_MAC_ROTATE_IN_PLACE)
     unsigned char rotated_mac_buf[64 + EVP_MAX_MD_SIZE];
     unsigned char *rotated_mac;
+    char aux1, aux2, aux3, mask;
 #else
     unsigned char rotated_mac[EVP_MAX_MD_SIZE];
 #endif
@@ -253,7 +252,7 @@ static int ssl3_cbc_copy_mac(size_t *reclen,
     }
 
     /* Create the random MAC we will emit if padding is bad */
-    if (!RAND_bytes_ex(libctx, randmac, mac_size))
+    if (RAND_bytes_ex(libctx, randmac, mac_size, 0) <= 0)
         return 0;
 
     if (!ossl_assert(mac != NULL && alloced != NULL))
@@ -290,12 +289,19 @@ static int ssl3_cbc_copy_mac(size_t *reclen,
 #if defined(CBC_MAC_ROTATE_IN_PLACE)
     j = 0;
     for (i = 0; i < mac_size; i++) {
-        /* in case cache-line is 32 bytes, touch second line */
-        ((volatile unsigned char *)rotated_mac)[rotate_offset ^ 32];
+        /*
+         * in case cache-line is 32 bytes,
+         * load from both lines and select appropriately
+         */
+        aux1 = rotated_mac[rotate_offset & ~32];
+        aux2 = rotated_mac[rotate_offset | 32];
+        mask = constant_time_eq_8(rotate_offset & ~32, rotate_offset);
+        aux3 = constant_time_select_8(mask, aux1, aux2);
+        rotate_offset++;
 
         /* If the padding wasn't good we emit a random MAC */
         out[j++] = constant_time_select_8((unsigned char)(good & 0xff),
-                                          rotated_mac[rotate_offset++],
+                                          aux3,
                                           randmac[i]);
         rotate_offset &= constant_time_lt_s(rotate_offset, mac_size);
     }

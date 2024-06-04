@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2017-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -16,7 +16,7 @@
 #include <openssl/kdf.h>
 #include "testutil.h"
 
-static int test_kdf_tls1_prf(void)
+static int test_kdf_tls1_prf(int index)
 {
     int ret = 0;
     EVP_PKEY_CTX *pctx;
@@ -35,13 +35,28 @@ static int test_kdf_tls1_prf(void)
         TEST_error("EVP_PKEY_CTX_set_tls1_prf_md");
         goto err;
     }
-    if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, "secret", 6) <= 0) {
+    if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx,
+                                          (unsigned char *)"secret", 6) <= 0) {
         TEST_error("EVP_PKEY_CTX_set1_tls1_prf_secret");
         goto err;
     }
-    if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, "seed", 4) <= 0) {
-        TEST_error("EVP_PKEY_CTX_add1_tls1_prf_seed");
-        goto err;
+    if (index == 0) {
+        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx,
+                                            (unsigned char *)"seed", 4) <= 0) {
+            TEST_error("EVP_PKEY_CTX_add1_tls1_prf_seed");
+            goto err;
+        }
+    } else {
+        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx,
+                                            (unsigned char *)"se", 2) <= 0) {
+            TEST_error("EVP_PKEY_CTX_add1_tls1_prf_seed");
+            goto err;
+        }
+        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx,
+                                            (unsigned char *)"ed", 2) <= 0) {
+            TEST_error("EVP_PKEY_CTX_add1_tls1_prf_seed");
+            goto err;
+        }
     }
     if (EVP_PKEY_derive(pctx, out, &outlen) <= 0) {
         TEST_error("EVP_PKEY_derive");
@@ -63,7 +78,7 @@ err:
     return ret;
 }
 
-static int test_kdf_hkdf(void)
+static int test_kdf_hkdf(int index)
 {
     int ret = 0;
     EVP_PKEY_CTX *pctx;
@@ -82,17 +97,33 @@ static int test_kdf_hkdf(void)
         TEST_error("EVP_PKEY_CTX_set_hkdf_md");
         goto err;
     }
-    if (EVP_PKEY_CTX_set1_hkdf_salt(pctx, "salt", 4) <= 0) {
+    if (EVP_PKEY_CTX_set1_hkdf_salt(pctx, (const unsigned char *)"salt", 4)
+            <= 0) {
         TEST_error("EVP_PKEY_CTX_set1_hkdf_salt");
         goto err;
     }
-    if (EVP_PKEY_CTX_set1_hkdf_key(pctx, "secret", 6) <= 0) {
+    if (EVP_PKEY_CTX_set1_hkdf_key(pctx, (const unsigned char *)"secret", 6)
+            <= 0) {
         TEST_error("EVP_PKEY_CTX_set1_hkdf_key");
         goto err;
     }
-    if (EVP_PKEY_CTX_add1_hkdf_info(pctx, "label", 5) <= 0) {
-        TEST_error("EVP_PKEY_CTX_set1_hkdf_info");
-        goto err;
+    if (index == 0) {
+        if (EVP_PKEY_CTX_add1_hkdf_info(pctx, (const unsigned char *)"label", 5)
+            <= 0) {
+            TEST_error("EVP_PKEY_CTX_add1_hkdf_info");
+            goto err;
+        }
+    } else {
+        if (EVP_PKEY_CTX_add1_hkdf_info(pctx, (const unsigned char *)"lab", 3)
+            <= 0) {
+            TEST_error("EVP_PKEY_CTX_add1_hkdf_info");
+            goto err;
+        }
+        if (EVP_PKEY_CTX_add1_hkdf_info(pctx, (const unsigned char *)"el", 2)
+            <= 0) {
+            TEST_error("EVP_PKEY_CTX_add1_hkdf_info");
+            goto err;
+        }
     }
     if (EVP_PKEY_derive(pctx, out, &outlen) <= 0) {
         TEST_error("EVP_PKEY_derive");
@@ -133,7 +164,7 @@ static int test_kdf_scrypt(void)
         TEST_error("EVP_PKEY_CTX_set1_pbe_pass");
         goto err;
     }
-    if (EVP_PKEY_CTX_set1_scrypt_salt(pctx, "NaCl", 4) <= 0) {
+    if (EVP_PKEY_CTX_set1_scrypt_salt(pctx, (unsigned char *)"NaCl", 4) <= 0) {
         TEST_error("EVP_PKEY_CTX_set1_scrypt_salt");
         goto err;
     }
@@ -190,8 +221,13 @@ err:
 
 int setup_tests(void)
 {
-    ADD_TEST(test_kdf_tls1_prf);
-    ADD_TEST(test_kdf_hkdf);
+    int tests = 1;
+
+    if (fips_provider_version_ge(NULL, 3, 3, 1))
+        tests = 2;
+
+    ADD_ALL_TESTS(test_kdf_tls1_prf, tests);
+    ADD_ALL_TESTS(test_kdf_hkdf, tests);
 #ifndef OPENSSL_NO_SCRYPT
     ADD_TEST(test_kdf_scrypt);
 #endif
