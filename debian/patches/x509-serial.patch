@@ -1,12 +1,13 @@
-diff --git a/crypto/x509/x_x509.c b/crypto/x509/x_x509.c
-index 010578b1..e215ae62 100644
---- a/crypto/x509/x_x509.c
-+++ b/crypto/x509/x_x509.c
-@@ -15,9 +15,73 @@
+Index: os-openssl/crypto/x509/x_x509.c
+===================================================================
+--- os-openssl.orig/crypto/x509/x_x509.c
++++ os-openssl/crypto/x509/x_x509.c
+@@ -14,10 +14,74 @@
+ #include <openssl/x509.h>
  #include <openssl/x509v3.h>
  #include "crypto/x509.h"
 +#include "crypto/asn1/asn1_local.h"
- 
++
 +DECLARE_ASN1_ITEM_attr(static, tolerant_ASN1_INTEGER);
 +
 +static int tolerant_ASN1_INTEGER_c2i(ASN1_VALUE **pval,
@@ -69,7 +70,7 @@ index 010578b1..e215ae62 100644
 +ASN1_ITEM_start(tolerant_ASN1_INTEGER)
 +        ASN1_ITYPE_PRIMITIVE, V_ASN1_INTEGER, NULL, 0, &tolerant_pf, 0, "ASN1_INTEGER"
 +ASN1_ITEM_end(tolerant_ASN1_INTEGER)
-+
+ 
  ASN1_SEQUENCE_enc(X509_CINF, enc, 0) = {
          ASN1_EXP_OPT(X509_CINF, version, ASN1_INTEGER, 0),
 -        ASN1_EMBED(X509_CINF, serialNumber, ASN1_INTEGER),
@@ -77,11 +78,11 @@ index 010578b1..e215ae62 100644
          ASN1_EMBED(X509_CINF, signature, X509_ALGOR),
          ASN1_SIMPLE(X509_CINF, issuer, X509_NAME),
          ASN1_EMBED(X509_CINF, validity, X509_VAL),
-diff --git a/test/recipes/25-test_x509.t b/test/recipes/25-test_x509.t
-index 95df179b..bcddb9de 100644
---- a/test/recipes/25-test_x509.t
-+++ b/test/recipes/25-test_x509.t
-@@ -16,7 +16,7 @@ use OpenSSL::Test qw/:DEFAULT srctop_file/;
+Index: os-openssl/test/recipes/25-test_x509.t
+===================================================================
+--- os-openssl.orig/test/recipes/25-test_x509.t
++++ os-openssl/test/recipes/25-test_x509.t
+@@ -16,7 +16,7 @@ use OpenSSL::Test qw/:DEFAULT srctop_fil
  
  setup("test_x509");
  
@@ -90,7 +91,7 @@ index 95df179b..bcddb9de 100644
  
  # Prevent MSys2 filename munging for arguments that look like file paths but
  # aren't
-@@ -201,3 +201,10 @@ ok(run(app(["openssl", "x509", "-req", "-text", "-CAcreateserial",
+@@ -209,3 +209,10 @@ ok(run(app(["openssl", "x509", "-req", "
              "-in", $b_csr, "-out", $b_cert])));
  # Verify issuer is CA
  ok(get_issuer($b_cert) =~ /CN = ca.example.com/);
@@ -101,11 +102,10 @@ index 95df179b..bcddb9de 100644
 +ok(run(app(["openssl", "x509", "-text",
 +           "-in", srctop_file("test/certs", "x509-bad-serial-negative.pem")])),
 +   "X.509 bad serial negative");
-diff --git a/test/certs/x509-bad-serial-negative.pem b/test/certs/x509-bad-serial-negative.pem
-new file mode 100644
-index 00000000..7b2046c5
+Index: os-openssl/test/certs/x509-bad-serial-negative.pem
+===================================================================
 --- /dev/null
-+++ b/test/certs/x509-bad-serial-negative.pem
++++ os-openssl/test/certs/x509-bad-serial-negative.pem
 @@ -0,0 +1,36 @@
 +-----BEGIN CERTIFICATE-----
 +MIIGMjCCBRqgAwIBAgIQ/9XVRT0yTpWLf8XQR3fbvjANBgkqhkiG9w0BAQUFADBc
@@ -143,11 +143,10 @@ index 00000000..7b2046c5
 +mY85PtCUkxsWO2I7+hbLpLzHQhlxZbwD1gM7UNhpY+weF+e0vrtoSUwxQVbv4QkM
 +z9Vk7OKe
 +-----END CERTIFICATE-----
-diff --git a/test/certs/x509-bad-serial-positive.pem b/test/certs/x509-bad-serial-positive.pem
-new file mode 100644
-index 00000000..96b136c5
+Index: os-openssl/test/certs/x509-bad-serial-positive.pem
+===================================================================
 --- /dev/null
-+++ b/test/certs/x509-bad-serial-positive.pem
++++ os-openssl/test/certs/x509-bad-serial-positive.pem
 @@ -0,0 +1,32 @@
 +-----BEGIN CERTIFICATE-----
 +MIIFcDCCA1igAwIBAgIIACA7Rwn+4n0wDQYJKoZIhvcNAQEMBQAwVjELMAkGA1UE

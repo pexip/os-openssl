@@ -25,11 +25,11 @@ Signed-off-by: Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
  Configurations/10-main.conf | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
-index fa357dbbcb75..2328c94b556f 100644
---- a/Configurations/10-main.conf
-+++ b/Configurations/10-main.conf
-@@ -688,7 +688,7 @@ my %targets = (
+Index: os-openssl/Configurations/10-main.conf
+===================================================================
+--- os-openssl.orig/Configurations/10-main.conf
++++ os-openssl/Configurations/10-main.conf
+@@ -693,7 +693,7 @@ my %targets = (
          cflags           => threads("-pthread"),
          cxxflags         => combine("-std=c++11", threads("-pthread")),
          lib_cppflags     => "-DOPENSSL_USE_NODELETE",

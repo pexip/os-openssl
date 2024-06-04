@@ -1,3 +1,20 @@
+openssl (3.0.14-0+pexip24u1) pexip; urgency=medium
+
+  * New upstream release.
+  * Fixes: CVE-2024-4741, CVE-2024-4603, CVE-2024-2511
+  * Refresh patches (offset changes only):
+    + man-section.patch,
+    + Set-systemwide-default-settings-for-libssl-users.patch
+    + Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch
+    + Configurations-Add-latomic-on-Linux.patch
+    + disable-ktls.patch
+    + x509-serial.patch
+    + ec-infinity.patch
+    + x509-tbs.patch
+    + default-seclevel.patch
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 04 Jun 2024 16:46:00 +0100
+
 openssl (3.0.13-0+pexip24u3) pexip-bookworm; urgency=medium
 
   * New versioning scheme

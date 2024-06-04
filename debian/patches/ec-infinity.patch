@@ -1,8 +1,8 @@
-diff --git a/crypto/ec/ec_key.c b/crypto/ec/ec_key.c
-index 729d338b..9faafd4b 100644
---- a/crypto/ec/ec_key.c
-+++ b/crypto/ec/ec_key.c
-@@ -891,7 +891,8 @@ int EC_KEY_oct2key(EC_KEY *key, const unsigned char *buf, size_t len,
+Index: os-openssl/crypto/ec/ec_key.c
+===================================================================
+--- os-openssl.orig/crypto/ec/ec_key.c
++++ os-openssl/crypto/ec/ec_key.c
+@@ -891,7 +891,8 @@ int EC_KEY_oct2key(EC_KEY *key, const un
       * EC_POINT_oct2point() has already performed sanity checking of
       * the buffer so we know it is valid.
       */
@@ -12,11 +12,11 @@ index 729d338b..9faafd4b 100644
          key->conv_form = (point_conversion_form_t)(buf[0] & ~0x01);
      return 1;
  }
-diff --git a/test/evp_extra_test.c b/test/evp_extra_test.c
-index 3747532f..56ec1c86 100644
---- a/test/evp_extra_test.c
-+++ b/test/evp_extra_test.c
-@@ -1811,6 +1811,40 @@ static int test_EC_keygen_with_enc(int idx)
+Index: os-openssl/test/evp_extra_test.c
+===================================================================
+--- os-openssl.orig/test/evp_extra_test.c
++++ os-openssl/test/evp_extra_test.c
+@@ -1937,6 +1937,40 @@ static int test_EC_keygen_with_enc(int i
      EVP_PKEY_CTX_free(pctx);
      return ret;
  }
@@ -57,7 +57,7 @@ index 3747532f..56ec1c86 100644
  #endif
  
  #if !defined(OPENSSL_NO_SM2)
-@@ -4758,6 +4792,7 @@ int setup_tests(void)
+@@ -5404,6 +5438,7 @@ int setup_tests(void)
  #endif
  #ifndef OPENSSL_NO_EC
      ADD_ALL_TESTS(test_EC_keygen_with_enc, OSSL_NELEM(ec_encodings));

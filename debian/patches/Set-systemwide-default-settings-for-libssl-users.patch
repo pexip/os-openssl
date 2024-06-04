@@ -13,11 +13,11 @@ Signed-off-by: Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
  apps/openssl.cnf | 13 +++++++++++++
  1 file changed, 13 insertions(+)
 
-diff --git a/apps/openssl.cnf b/apps/openssl.cnf
-index 97567a67be6d..38ff63d1d49b 100644
---- a/apps/openssl.cnf
-+++ b/apps/openssl.cnf
-@@ -53,6 +53,7 @@
+Index: os-openssl/apps/openssl.cnf
+===================================================================
+--- os-openssl.orig/apps/openssl.cnf
++++ os-openssl/apps/openssl.cnf
+@@ -52,6 +52,7 @@ tsa_policy3 = 1.2.3.4.5.7
  
  [openssl_init]
  providers = provider_sect
@@ -25,7 +25,7 @@ index 97567a67be6d..38ff63d1d49b 100644
  
  # List of providers to load
  [provider_sect]
-@@ -381,3 +382,10 @@ oldcert = $insta::certout # insta.cert.pem
+@@ -388,3 +389,10 @@ oldcert = $insta::certout # insta.cert.p
  # Certificate revocation
  cmd = rr
  oldcert = $insta::certout # insta.cert.pem

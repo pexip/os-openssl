@@ -1,8 +1,8 @@
-diff --git a/test/sslapitest.c b/test/sslapitest.c
-index 3d571011..e5ef7280 100644
---- a/test/sslapitest.c
-+++ b/test/sslapitest.c
-@@ -9586,7 +9586,7 @@ static int test_dh_auto(int idx)
+Index: os-openssl/test/sslapitest.c
+===================================================================
+--- os-openssl.orig/test/sslapitest.c
++++ os-openssl/test/sslapitest.c
+@@ -9773,7 +9773,7 @@ static int test_dh_auto(int idx)
      switch (idx) {
      case 0:
          /* The FIPS provider doesn't support this DH size - so we ignore it */
@@ -11,7 +11,7 @@ index 3d571011..e5ef7280 100644
              return 1;
          thiscert = cert1024;
          thiskey = privkey1024;
-@@ -9616,7 +9616,7 @@ static int test_dh_auto(int idx)
+@@ -9803,7 +9803,7 @@ static int test_dh_auto(int idx)
      /* No certificate cases */
      case 5:
          /* The FIPS provider doesn't support this DH size - so we ignore it */
@@ -20,11 +20,11 @@ index 3d571011..e5ef7280 100644
              return 1;
          ciphersuite = "ADH-AES128-SHA256:@SECLEVEL=0";
          expdhsize = 1024;
-diff --git a/test/ssl-tests/14-curves.cnf b/test/ssl-tests/14-curves.cnf
-index bafa4a65..0598fe0e 100644
---- a/test/ssl-tests/14-curves.cnf
-+++ b/test/ssl-tests/14-curves.cnf
-@@ -238,13 +238,13 @@ client = 5-curve-sect233k1-client
+Index: os-openssl/test/ssl-tests/14-curves.cnf
+===================================================================
+--- os-openssl.orig/test/ssl-tests/14-curves.cnf
++++ os-openssl/test/ssl-tests/14-curves.cnf
+@@ -398,13 +398,13 @@ client = 10-curve-sect233k1-client
  
  [10-curve-sect233k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -40,7 +40,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect233k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -267,13 +267,13 @@ client = 6-curve-sect233r1-client
+@@ -427,13 +427,13 @@ client = 11-curve-sect233r1-client
  
  [11-curve-sect233r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -56,7 +56,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect233r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -296,13 +296,13 @@ client = 7-curve-sect283k1-client
+@@ -456,13 +456,13 @@ client = 12-curve-sect283k1-client
  
  [12-curve-sect283k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -72,7 +72,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect283k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -325,13 +325,13 @@ client = 8-curve-sect283r1-client
+@@ -485,13 +485,13 @@ client = 13-curve-sect283r1-client
  
  [13-curve-sect283r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -88,7 +88,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect283r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -354,13 +354,13 @@ client = 9-curve-sect409k1-client
+@@ -514,13 +514,13 @@ client = 14-curve-sect409k1-client
  
  [14-curve-sect409k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -104,7 +104,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect409k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -383,13 +383,13 @@ client = 10-curve-sect409r1-client
+@@ -543,13 +543,13 @@ client = 15-curve-sect409r1-client
  
  [15-curve-sect409r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -120,7 +120,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect409r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -412,13 +412,13 @@ client = 11-curve-sect571k1-client
+@@ -572,13 +572,13 @@ client = 16-curve-sect571k1-client
  
  [16-curve-sect571k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -136,7 +136,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect571k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -441,13 +441,13 @@ client = 12-curve-sect571r1-client
+@@ -601,13 +601,13 @@ client = 17-curve-sect571r1-client
  
  [17-curve-sect571r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -152,7 +152,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect571r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -470,13 +470,13 @@ client = 13-curve-secp224r1-client
+@@ -630,13 +630,13 @@ client = 18-curve-secp224r1-client
  
  [18-curve-secp224r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -168,7 +168,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp224r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -499,13 +499,13 @@ client = 14-curve-sect163k1-client
+@@ -659,13 +659,13 @@ client = 19-curve-sect163k1-client
  
  [19-curve-sect163k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -184,7 +184,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect163k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -528,13 +528,13 @@ client = 15-curve-sect163r2-client
+@@ -688,13 +688,13 @@ client = 20-curve-sect163r2-client
  
  [20-curve-sect163r2-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -200,7 +200,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect163r2
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -557,13 +557,13 @@ client = 16-curve-prime192v1-client
+@@ -717,13 +717,13 @@ client = 21-curve-prime192v1-client
  
  [21-curve-prime192v1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -216,7 +216,7 @@ index bafa4a65..0598fe0e 100644
  Curves = prime192v1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -586,13 +586,13 @@ client = 17-curve-sect163r1-client
+@@ -746,13 +746,13 @@ client = 22-curve-sect163r1-client
  
  [22-curve-sect163r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -232,7 +232,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect163r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -615,13 +615,13 @@ client = 18-curve-sect193r1-client
+@@ -775,13 +775,13 @@ client = 23-curve-sect193r1-client
  
  [23-curve-sect193r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -248,7 +248,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect193r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -644,13 +644,13 @@ client = 19-curve-sect193r2-client
+@@ -804,13 +804,13 @@ client = 24-curve-sect193r2-client
  
  [24-curve-sect193r2-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -264,7 +264,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect193r2
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -673,13 +673,13 @@ client = 20-curve-sect239k1-client
+@@ -833,13 +833,13 @@ client = 25-curve-sect239k1-client
  
  [25-curve-sect239k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -280,7 +280,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect239k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -702,13 +702,13 @@ client = 21-curve-secp160k1-client
+@@ -862,13 +862,13 @@ client = 26-curve-secp160k1-client
  
  [26-curve-secp160k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -296,7 +296,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp160k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -731,13 +731,13 @@ client = 22-curve-secp160r1-client
+@@ -891,13 +891,13 @@ client = 27-curve-secp160r1-client
  
  [27-curve-secp160r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -312,7 +312,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp160r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -760,13 +760,13 @@ client = 23-curve-secp160r2-client
+@@ -920,13 +920,13 @@ client = 28-curve-secp160r2-client
  
  [28-curve-secp160r2-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -328,7 +328,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp160r2
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -789,13 +789,13 @@ client = 24-curve-secp192k1-client
+@@ -949,13 +949,13 @@ client = 29-curve-secp192k1-client
  
  [29-curve-secp192k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -344,7 +344,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp192k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -818,13 +818,13 @@ client = 25-curve-secp224k1-client
+@@ -978,13 +978,13 @@ client = 30-curve-secp224k1-client
  
  [30-curve-secp224k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -360,7 +360,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp224k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -847,13 +847,13 @@ client = 26-curve-secp256k1-client
+@@ -1007,13 +1007,13 @@ client = 31-curve-secp256k1-client
  
  [31-curve-secp256k1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -376,7 +376,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp256k1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -876,13 +876,13 @@ client = 27-curve-brainpoolP256r1-client
+@@ -1036,13 +1036,13 @@ client = 32-curve-brainpoolP256r1-client
  
  [32-curve-brainpoolP256r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -392,7 +392,7 @@ index bafa4a65..0598fe0e 100644
  Curves = brainpoolP256r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -905,13 +905,13 @@ client = 28-curve-brainpoolP384r1-client
+@@ -1065,13 +1065,13 @@ client = 33-curve-brainpoolP384r1-client
  
  [33-curve-brainpoolP384r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -408,7 +408,7 @@ index bafa4a65..0598fe0e 100644
  Curves = brainpoolP384r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -934,13 +934,13 @@ client = 29-curve-brainpoolP512r1-client
+@@ -1094,13 +1094,13 @@ client = 34-curve-brainpoolP512r1-client
  
  [34-curve-brainpoolP512r1-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -424,7 +424,7 @@ index bafa4a65..0598fe0e 100644
  Curves = brainpoolP512r1
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1713,13 +1713,13 @@ client = 55-curve-sect233k1-tls13-client
+@@ -1873,13 +1873,13 @@ client = 60-curve-sect233k1-tls13-client
  
  [60-curve-sect233k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -440,7 +440,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect233k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1740,13 +1740,13 @@ client = 56-curve-sect233r1-tls13-client
+@@ -1900,13 +1900,13 @@ client = 61-curve-sect233r1-tls13-client
  
  [61-curve-sect233r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -456,7 +456,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect233r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1767,13 +1767,13 @@ client = 57-curve-sect283k1-tls13-client
+@@ -1927,13 +1927,13 @@ client = 62-curve-sect283k1-tls13-client
  
  [62-curve-sect283k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -472,7 +472,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect283k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1794,13 +1794,13 @@ client = 58-curve-sect283r1-tls13-client
+@@ -1954,13 +1954,13 @@ client = 63-curve-sect283r1-tls13-client
  
  [63-curve-sect283r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -488,7 +488,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect283r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1821,13 +1821,13 @@ client = 59-curve-sect409k1-tls13-client
+@@ -1981,13 +1981,13 @@ client = 64-curve-sect409k1-tls13-client
  
  [64-curve-sect409k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -504,7 +504,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect409k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1848,13 +1848,13 @@ client = 60-curve-sect409r1-tls13-client
+@@ -2008,13 +2008,13 @@ client = 65-curve-sect409r1-tls13-client
  
  [65-curve-sect409r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -520,7 +520,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect409r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1875,13 +1875,13 @@ client = 61-curve-sect571k1-tls13-client
+@@ -2035,13 +2035,13 @@ client = 66-curve-sect571k1-tls13-client
  
  [66-curve-sect571k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -536,7 +536,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect571k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1902,13 +1902,13 @@ client = 62-curve-sect571r1-tls13-client
+@@ -2062,13 +2062,13 @@ client = 67-curve-sect571r1-tls13-client
  
  [67-curve-sect571r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -552,7 +552,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect571r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1929,13 +1929,13 @@ client = 63-curve-secp224r1-tls13-client
+@@ -2089,13 +2089,13 @@ client = 68-curve-secp224r1-tls13-client
  
  [68-curve-secp224r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -568,7 +568,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp224r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1956,13 +1956,13 @@ client = 64-curve-sect163k1-tls13-client
+@@ -2116,13 +2116,13 @@ client = 69-curve-sect163k1-tls13-client
  
  [69-curve-sect163k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -584,7 +584,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect163k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -1983,13 +1983,13 @@ client = 65-curve-sect163r2-tls13-client
+@@ -2143,13 +2143,13 @@ client = 70-curve-sect163r2-tls13-client
  
  [70-curve-sect163r2-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -600,7 +600,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect163r2
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2010,13 +2010,13 @@ client = 66-curve-prime192v1-tls13-client
+@@ -2170,13 +2170,13 @@ client = 71-curve-prime192v1-tls13-clien
  
  [71-curve-prime192v1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -616,7 +616,7 @@ index bafa4a65..0598fe0e 100644
  Curves = prime192v1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2037,13 +2037,13 @@ client = 67-curve-sect163r1-tls13-client
+@@ -2197,13 +2197,13 @@ client = 72-curve-sect163r1-tls13-client
  
  [72-curve-sect163r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -632,7 +632,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect163r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2064,13 +2064,13 @@ client = 68-curve-sect193r1-tls13-client
+@@ -2224,13 +2224,13 @@ client = 73-curve-sect193r1-tls13-client
  
  [73-curve-sect193r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -648,7 +648,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect193r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2091,13 +2091,13 @@ client = 69-curve-sect193r2-tls13-client
+@@ -2251,13 +2251,13 @@ client = 74-curve-sect193r2-tls13-client
  
  [74-curve-sect193r2-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -664,7 +664,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect193r2
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2118,13 +2118,13 @@ client = 70-curve-sect239k1-tls13-client
+@@ -2278,13 +2278,13 @@ client = 75-curve-sect239k1-tls13-client
  
  [75-curve-sect239k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -680,7 +680,7 @@ index bafa4a65..0598fe0e 100644
  Curves = sect239k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2145,13 +2145,13 @@ client = 71-curve-secp160k1-tls13-client
+@@ -2305,13 +2305,13 @@ client = 76-curve-secp160k1-tls13-client
  
  [76-curve-secp160k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -696,7 +696,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp160k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2172,13 +2172,13 @@ client = 72-curve-secp160r1-tls13-client
+@@ -2332,13 +2332,13 @@ client = 77-curve-secp160r1-tls13-client
  
  [77-curve-secp160r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -712,7 +712,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp160r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2199,13 +2199,13 @@ client = 73-curve-secp160r2-tls13-client
+@@ -2359,13 +2359,13 @@ client = 78-curve-secp160r2-tls13-client
  
  [78-curve-secp160r2-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -728,7 +728,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp160r2
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2226,13 +2226,13 @@ client = 74-curve-secp192k1-tls13-client
+@@ -2386,13 +2386,13 @@ client = 79-curve-secp192k1-tls13-client
  
  [79-curve-secp192k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -744,7 +744,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp192k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2253,13 +2253,13 @@ client = 75-curve-secp224k1-tls13-client
+@@ -2413,13 +2413,13 @@ client = 80-curve-secp224k1-tls13-client
  
  [80-curve-secp224k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -760,7 +760,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp224k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2280,13 +2280,13 @@ client = 76-curve-secp256k1-tls13-client
+@@ -2440,13 +2440,13 @@ client = 81-curve-secp256k1-tls13-client
  
  [81-curve-secp256k1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -776,7 +776,7 @@ index bafa4a65..0598fe0e 100644
  Curves = secp256k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2307,13 +2307,13 @@ client = 77-curve-brainpoolP256r1-tls13-client
+@@ -2467,13 +2467,13 @@ client = 82-curve-brainpoolP256r1-tls13-
  
  [82-curve-brainpoolP256r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -792,7 +792,7 @@ index bafa4a65..0598fe0e 100644
  Curves = brainpoolP256r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2334,13 +2334,13 @@ client = 78-curve-brainpoolP384r1-tls13-client
+@@ -2494,13 +2494,13 @@ client = 83-curve-brainpoolP384r1-tls13-
  
  [83-curve-brainpoolP384r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -808,7 +808,7 @@ index bafa4a65..0598fe0e 100644
  Curves = brainpoolP384r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2361,13 +2361,13 @@ client = 79-curve-brainpoolP512r1-tls13-client
+@@ -2521,13 +2521,13 @@ client = 84-curve-brainpoolP512r1-tls13-
  
  [84-curve-brainpoolP512r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -824,11 +824,11 @@ index bafa4a65..0598fe0e 100644
  Curves = brainpoolP512r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-diff --git a/test/ssl-tests/14-curves.cnf.in b/test/ssl-tests/14-curves.cnf.in
-index 5653e70b..8d5ab23e 100644
---- a/test/ssl-tests/14-curves.cnf.in
-+++ b/test/ssl-tests/14-curves.cnf.in
-@@ -55,11 +55,12 @@ sub generate_tests() {
+Index: os-openssl/test/ssl-tests/14-curves.cnf.in
+===================================================================
+--- os-openssl.orig/test/ssl-tests/14-curves.cnf.in
++++ os-openssl/test/ssl-tests/14-curves.cnf.in
+@@ -77,11 +77,12 @@ sub generate_tests() {
          push @tests, {
              name => "curve-${curve}",
              server => {
@@ -842,7 +842,7 @@ index 5653e70b..8d5ab23e 100644
                  "MaxProtocol" => "TLSv1.2",
                  "Curves" => $curve
              },
-@@ -99,11 +100,12 @@ sub generate_tests() {
+@@ -121,11 +122,12 @@ sub generate_tests() {
          push @tests, {
              name => "curve-${curve}-tls13",
              server => {
