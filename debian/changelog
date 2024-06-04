@@ -12,8 +12,9 @@ openssl (3.0.14-0+pexip24u1) pexip; urgency=medium
     + ec-infinity.patch
     + x509-tbs.patch
     + default-seclevel.patch
+  * Remove FAQ.md from debian/openssl.docs as upstream have removed it
 
- -- Mark Hymers <mark.hymers@pexip.com>  Tue, 04 Jun 2024 16:46:00 +0100
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 04 Jun 2024 17:18:52 +0100
 
 openssl (3.0.13-0+pexip24u3) pexip-bookworm; urgency=medium
 
