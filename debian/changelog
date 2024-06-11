@@ -1,3 +1,10 @@
+openssl (3.0.14-0+pexip24u2) pexip; urgency=medium
+
+  * Apply patch to fix evp_pkey_ctx_add1_octet_string when being used
+    with a FIPS module.
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 11 Jun 2024 16:31:52 +0100
+
 openssl (3.0.14-0+pexip24u1) pexip; urgency=medium
 
   * New upstream release.
