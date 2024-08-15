@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -16,6 +16,7 @@
 #include <openssl/rand.h>
 #include "record_local.h"
 #include "internal/packet.h"
+#include "internal/cryptlib.h"
 
 #if     defined(OPENSSL_SMALL_FOOTPRINT) || \
         !(      defined(AES_ASM) &&     ( \
@@ -80,6 +81,15 @@ int RECORD_LAYER_read_pending(const RECORD_LAYER *rl)
     return SSL3_BUFFER_get_left(&rl->rbuf) != 0;
 }
 
+int RECORD_LAYER_data_present(const RECORD_LAYER *rl)
+{
+    if (rl->rstate == SSL_ST_READ_BODY)
+        return 1;
+    if (RECORD_LAYER_processed_read_pending(rl))
+        return 1;
+    return 0;
+}
+
 /* Checks if we have decrypted unread record data pending */
 int RECORD_LAYER_processed_read_pending(const RECORD_LAYER *rl)
 {
@@ -115,10 +125,22 @@ size_t ssl3_pending(const SSL *s)
     if (s->rlayer.rstate == SSL_ST_READ_BODY)
         return 0;
 
+    /* Take into account DTLS buffered app data */
+    if (SSL_IS_DTLS(s)) {
+        DTLS1_RECORD_DATA *rdata;
+        pitem *item, *iter;
+
+        iter = pqueue_iterator(s->rlayer.d->buffered_app_data.q);
+        while ((item = pqueue_next(&iter)) != NULL) {
+            rdata = item->data;
+            num += rdata->rrec.length;
+        }
+    }
+
     for (i = 0; i < RECORD_LAYER_get_numrpipes(&s->rlayer); i++) {
         if (SSL3_RECORD_get_type(&s->rlayer.rrec[i])
             != SSL3_RT_APPLICATION_DATA)
-            return 0;
+            return num;
         num += SSL3_RECORD_get_length(&s->rlayer.rrec[i]);
     }
 
@@ -172,9 +194,9 @@ int ssl3_read_n(SSL *s, size_t n, size_t max, int extend, int clearold,
     /*
      * If extend == 0, obtain new n-byte packet; if extend == 1, increase
      * packet by another n bytes. The packet will be in the sub-array of
-     * s->s3.rbuf.buf specified by s->packet and s->packet_length. (If
-     * s->rlayer.read_ahead is set, 'max' bytes may be stored in rbuf [plus
-     * s->packet_length bytes if extend == 1].)
+     * s->rlayer.rbuf.buf specified by s->rlayer.packet and
+     * s->rlayer.packet_length. (If s->rlayer.read_ahead is set, 'max' bytes may
+     * be stored in rbuf [plus s->rlayer.packet_length bytes if extend == 1].)
      * if clearold == 1, move the packet to the start of the buffer; if
      * clearold == 0 then leave any old packets where they were
      */
@@ -202,28 +224,16 @@ int ssl3_read_n(SSL *s, size_t n, size_t max, int extend, int clearold,
         /* start with empty packet ... */
         if (left == 0)
             rb->offset = align;
-        else if (align != 0 && left >= SSL3_RT_HEADER_LENGTH) {
-            /*
-             * check if next packet length is large enough to justify payload
-             * alignment...
-             */
-            pkt = rb->buf + rb->offset;
-            if (pkt[0] == SSL3_RT_APPLICATION_DATA
-                && (pkt[3] << 8 | pkt[4]) >= 128) {
-                /*
-                 * Note that even if packet is corrupted and its length field
-                 * is insane, we can only be led to wrong decision about
-                 * whether memmove will occur or not. Header values has no
-                 * effect on memmove arguments and therefore no buffer
-                 * overrun can be triggered.
-                 */
-                memmove(rb->buf + align, pkt, left);
-                rb->offset = align;
-            }
-        }
+
         s->rlayer.packet = rb->buf + rb->offset;
         s->rlayer.packet_length = 0;
         /* ... now we can act as if 'extend' was set */
+    }
+
+    if (!ossl_assert(s->rlayer.packet != NULL)) {
+        /* does not happen */
+        SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+        return -1;
     }
 
     len = s->rlayer.packet_length;
@@ -295,7 +305,6 @@ int ssl3_read_n(SSL *s, size_t n, size_t max, int extend, int clearold,
         clear_sys_error();
         if (s->rbio != NULL) {
             s->rwstate = SSL_READING;
-            /* TODO(size_t): Convert this function */
             ret = BIO_read(s->rbio, pkt + len + left, max - left);
             if (ret >= 0)
                 bioread = ret;
@@ -306,6 +315,10 @@ int ssl3_read_n(SSL *s, size_t n, size_t max, int extend, int clearold,
                     SSL_set_shutdown(s, SSL_RECEIVED_SHUTDOWN);
                     s->s3.warn_alert = SSL_AD_CLOSE_NOTIFY;
                 } else {
+                    /*
+                     * This reason code is part of the API and may be used by
+                     * applications for control flow decisions.
+                     */
                     SSLfatal(s, SSL_AD_DECODE_ERROR,
                              SSL_R_UNEXPECTED_EOF_WHILE_READING);
                 }
@@ -432,13 +445,15 @@ int ssl3_write_bytes(SSL *s, int type, const void *buf_, size_t len,
      * jumbo buffer to accommodate up to 8 records, but the
      * compromise is considered worthy.
      */
-    if (type == SSL3_RT_APPLICATION_DATA &&
-        len >= 4 * (max_send_fragment = ssl_get_max_send_fragment(s)) &&
-        s->compress == NULL && s->msg_callback == NULL &&
-        !SSL_WRITE_ETM(s) && SSL_USE_EXPLICIT_IV(s) &&
-        (BIO_get_ktls_send(s->wbio) == 0) &&
-        EVP_CIPHER_flags(EVP_CIPHER_CTX_cipher(s->enc_write_ctx)) &
-        EVP_CIPH_FLAG_TLS1_1_MULTIBLOCK) {
+    if (type == SSL3_RT_APPLICATION_DATA
+            && len >= 4 * (max_send_fragment = ssl_get_max_send_fragment(s))
+            && s->compress == NULL
+            && s->msg_callback == NULL
+            && !SSL_WRITE_ETM(s)
+            && SSL_USE_EXPLICIT_IV(s)
+            && BIO_get_ktls_send(s->wbio) == 0
+            && (EVP_CIPHER_get_flags(EVP_CIPHER_CTX_get0_cipher(s->enc_write_ctx))
+                & EVP_CIPH_FLAG_TLS1_1_MULTIBLOCK) != 0) {
         unsigned char aad[13];
         EVP_CTRL_TLS1_1_MULTIBLOCK_PARAM mb_param;
         size_t packlen;
@@ -586,12 +601,13 @@ int ssl3_write_bytes(SSL *s, int type, const void *buf_, size_t len,
     }
     if (maxpipes == 0
         || s->enc_write_ctx == NULL
-        || !(EVP_CIPHER_flags(EVP_CIPHER_CTX_cipher(s->enc_write_ctx))
-             & EVP_CIPH_FLAG_PIPELINE)
+        || (EVP_CIPHER_get_flags(EVP_CIPHER_CTX_get0_cipher(s->enc_write_ctx))
+            & EVP_CIPH_FLAG_PIPELINE) == 0
         || !SSL_USE_EXPLICIT_IV(s))
         maxpipes = 1;
-    if (max_send_fragment == 0 || split_send_fragment == 0
-        || split_send_fragment > max_send_fragment) {
+    if (max_send_fragment == 0
+            || split_send_fragment == 0
+            || split_send_fragment > max_send_fragment) {
         /*
          * We should have prevented this when we set/get the split and max send
          * fragments so we shouldn't get here
@@ -611,14 +627,13 @@ int ssl3_write_bytes(SSL *s, int type, const void *buf_, size_t len,
         if (numpipes > maxpipes)
             numpipes = maxpipes;
 
-        if (n / numpipes >= max_send_fragment) {
+        if (n / numpipes >= split_send_fragment) {
             /*
              * We have enough data to completely fill all available
              * pipelines
              */
-            for (j = 0; j < numpipes; j++) {
-                pipelens[j] = max_send_fragment;
-            }
+            for (j = 0; j < numpipes; j++)
+                pipelens[j] = split_send_fragment;
         } else {
             /* We can partially fill all available pipelines */
             tmppipelen = n / numpipes;
@@ -713,13 +728,13 @@ int do_ssl3_write(SSL *s, int type, const unsigned char *buf,
 
     sess = s->session;
 
-    if ((sess == NULL) ||
-        (s->enc_write_ctx == NULL) || (EVP_MD_CTX_md(s->write_hash) == NULL)) {
+    if ((sess == NULL)
+            || (s->enc_write_ctx == NULL)
+            || (EVP_MD_CTX_get0_md(s->write_hash) == NULL)) {
         clear = s->enc_write_ctx ? 0 : 1; /* must be AEAD cipher */
         mac_size = 0;
     } else {
-        /* TODO(siz_t): Convert me */
-        mac_size = EVP_MD_CTX_size(s->write_hash);
+        mac_size = EVP_MD_CTX_get_size(s->write_hash);
         if (mac_size < 0) {
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
             goto err;
@@ -827,10 +842,13 @@ int do_ssl3_write(SSL *s, int type, const unsigned char *buf,
 
     /* Explicit IV length, block ciphers appropriate version flag */
     if (s->enc_write_ctx && SSL_USE_EXPLICIT_IV(s) && !SSL_TREAT_AS_TLS13(s)) {
-        int mode = EVP_CIPHER_CTX_mode(s->enc_write_ctx);
+        int mode = EVP_CIPHER_CTX_get_mode(s->enc_write_ctx);
         if (mode == EVP_CIPH_CBC_MODE) {
-            /* TODO(size_t): Convert me */
-            eivlen = EVP_CIPHER_CTX_iv_length(s->enc_write_ctx);
+            eivlen = EVP_CIPHER_CTX_get_iv_length(s->enc_write_ctx);
+            if (eivlen < 0) {
+                SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_R_LIBRARY_BUG);
+                goto err;
+	    }
             if (eivlen <= 1)
                 eivlen = 0;
         } else if (mode == EVP_CIPH_GCM_MODE) {
@@ -998,14 +1016,15 @@ int do_ssl3_write(SSL *s, int type, const unsigned char *buf,
         }
 
         /*
-         * Reserve some bytes for any growth that may occur during encryption.
-         * This will be at most one cipher block or the tag length if using
-         * AEAD. SSL_RT_MAX_CIPHER_BLOCK_SIZE covers either case.
-         */
+        * Reserve some bytes for any growth that may occur during encryption. If
+        * we are adding the MAC independently of the cipher algorithm, then the
+        * max encrypted overhead does not need to include an allocation for that
+        * MAC
+        */
         if (!BIO_get_ktls_send(s->wbio)) {
             if (!WPACKET_reserve_bytes(thispkt,
-                                        SSL_RT_MAX_CIPHER_BLOCK_SIZE,
-                                        NULL)
+                                       SSL3_RT_SEND_MAX_ENCRYPTED_OVERHEAD
+                                       - mac_size, NULL)
                 /*
                  * We also need next the amount of bytes written to this
                  * sub-packet
@@ -1057,6 +1076,9 @@ int do_ssl3_write(SSL *s, int type, const unsigned char *buf,
 
         /* Allocate bytes for the encryption overhead */
         if (!WPACKET_get_length(thispkt, &origlen)
+                   /* Check we allowed enough room for the encryption growth */
+                || !ossl_assert(origlen + SSL3_RT_SEND_MAX_ENCRYPTED_OVERHEAD
+                                - mac_size >= thiswr->length)
                    /* Encryption should never shrink the data! */
                 || origlen > thiswr->length
                 || (thiswr->length > origlen
@@ -1191,7 +1213,6 @@ int ssl3_write_pending(SSL *s, int type, const unsigned char *buf, size_t len,
                     return i;
                 BIO_set_ktls_ctrl_msg(s->wbio, type);
             }
-            /* TODO(size_t): Convert this call */
             i = BIO_write(s->wbio, (char *)
                           &(SSL3_BUFFER_get_buf(&wb[currbuf])
                             [SSL3_BUFFER_get_offset(&wb[currbuf])]),
@@ -1203,13 +1224,13 @@ int ssl3_write_pending(SSL *s, int type, const unsigned char *buf, size_t len,
             i = -1;
         }
 
-	/*
-	 * When an empty fragment is sent on a connection using KTLS,
-	 * it is sent as a write of zero bytes.  If this zero byte
-	 * write succeeds, i will be 0 rather than a non-zero value.
-	 * Treat i == 0 as success rather than an error for zero byte
-	 * writes to permit this case.
-	 */
+        /*
+         * When an empty fragment is sent on a connection using KTLS,
+         * it is sent as a write of zero bytes.  If this zero byte
+         * write succeeds, i will be 0 rather than a non-zero value.
+         * Treat i == 0 as success rather than an error for zero byte
+         * writes to permit this case.
+         */
         if (i >= 0 && tmpwrit == SSL3_BUFFER_get_left(&wb[currbuf])) {
             SSL3_BUFFER_set_left(&wb[currbuf], 0);
             SSL3_BUFFER_add_offset(&wb[currbuf], tmpwrit);
@@ -1246,7 +1267,7 @@ int ssl3_write_pending(SSL *s, int type, const unsigned char *buf, size_t len,
  *
  * This function must handle any surprises the peer may have for us, such as
  * Alert records (e.g. close_notify) or renegotiation requests. ChangeCipherSpec
- * messages are treated as if they were handshake messages *if* the |recd_type|
+ * messages are treated as if they were handshake messages *if* the |recvd_type|
  * argument is non NULL.
  * Also if record payloads contain fragments too small to process, we store
  * them until there is enough for the respective protocol (the record protocol

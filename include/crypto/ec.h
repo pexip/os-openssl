@@ -16,7 +16,6 @@
 # include <openssl/opensslconf.h>
 # include <openssl/evp.h>
 
-const char *ossl_ec_curve_nid2name(int nid);
 int ossl_ec_curve_name2nid(const char *name);
 const char *ossl_ec_curve_nid2nist_int(int nid);
 int ossl_ec_curve_nist2nid_int(const char *name);
@@ -78,6 +77,15 @@ int ossl_ec_group_set_params(EC_GROUP *group, const OSSL_PARAM params[]);
 int ossl_ec_key_fromdata(EC_KEY *ecx, const OSSL_PARAM params[],
                          int include_private);
 int ossl_ec_key_otherparams_fromdata(EC_KEY *ec, const OSSL_PARAM params[]);
+int ossl_ec_key_is_foreign(const EC_KEY *ec);
+EC_KEY *ossl_ec_key_dup(const EC_KEY *key, int selection);
+int ossl_x509_algor_is_sm2(const X509_ALGOR *palg);
+EC_KEY *ossl_ec_key_param_from_x509_algor(const X509_ALGOR *palg,
+                                          OSSL_LIB_CTX *libctx,
+                                          const char *propq);
+EC_KEY *ossl_ec_key_from_pkcs8(const PKCS8_PRIV_KEY_INFO *p8inf,
+                               OSSL_LIB_CTX *libctx, const char *propq);
+
 int ossl_ec_set_ecdh_cofactor_mode(EC_KEY *ec, int mode);
 int ossl_ec_encoding_name2id(const char *name);
 int ossl_ec_encoding_param2id(const OSSL_PARAM *p, int *id);

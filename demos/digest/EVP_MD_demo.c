@@ -1,5 +1,5 @@
 /*-
- * Copyright 2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2021-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -83,7 +83,7 @@ int demonstrate_digest(void)
     const char *option_properties = NULL;
     EVP_MD *message_digest = NULL;
     EVP_MD_CTX *digest_context = NULL;
-    unsigned int digest_length;
+    int digest_length;
     unsigned char *digest_value = NULL;
     int j;
 
@@ -105,9 +105,9 @@ int demonstrate_digest(void)
         goto cleanup;
     }
     /* Determine the length of the fetched digest type */
-    digest_length = EVP_MD_size(message_digest);
+    digest_length = EVP_MD_get_size(message_digest);
     if (digest_length <= 0) {
-        fprintf(stderr, "EVP_MD_size returned invalid size.\n");
+        fprintf(stderr, "EVP_MD_get_size returned invalid size.\n");
         goto cleanup;
     }
 

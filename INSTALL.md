@@ -2,8 +2,8 @@ Build and Install
 =================
 
 This document describes installation on all supported operating
-systems (the Unix/Linux family, including macOS), OpenVMS,
-and Windows).
+systems: the Unix/Linux family (including macOS), OpenVMS,
+and Windows.
 
 Table of Contents
 =================
@@ -41,6 +41,7 @@ Table of Contents
    - [Notes on multi-threading](#notes-on-multi-threading)
    - [Notes on shared libraries](#notes-on-shared-libraries)
    - [Notes on random number generation](#notes-on-random-number-generation)
+   - [Notes on assembler modules compilation](#notes-on-assembler-modules-compilation)
 
 Prerequisites
 =============
@@ -243,9 +244,8 @@ and issue the following command.
 
     $ nmake install
 
-The easiest way to elevate the Command Prompt is to press and hold down
-the both the `<CTRL>` and `<SHIFT>` key while clicking the menu item in the
-task menu.
+The easiest way to elevate the Command Prompt is to press and hold down both
+the `<CTRL>` and `<SHIFT>` keys while clicking the menu item in the task menu.
 
 The default installation location is
 
@@ -295,7 +295,7 @@ API Level
 Build the OpenSSL libraries to support the API for the specified version.
 If [no-deprecated](#no-deprecated) is also given, don't build with support
 for deprecated APIs in or below the specified version number.  For example,
-addding
+adding
 
     --api=1.1.0 no-deprecated
 
@@ -349,9 +349,13 @@ Directories
 
 The name of the directory under the top of the installation directory tree
 (see the `--prefix` option) where libraries will be installed.  By default
-this is `lib/`. Note that on Windows only static libraries (`*.lib`) will
+this is `lib`. Note that on Windows only static libraries (`*.lib`) will
 be stored in this location. Shared libraries (`*.dll`) will always be
-installed to the `bin/` directory.
+installed to the `bin` directory.
+
+Some build targets have a multilib postfix set in the build configuration.
+For these targets the default libdir is `lib<multilib-postfix>`. Please use
+`--libdir=lib` to override the libdir if adding the postfix is undesirable.
 
 ### openssldir
 
@@ -476,7 +480,7 @@ Setting the FIPS HMAC key
 
 As part of its self-test validation, the FIPS module must verify itself
 by performing a SHA-256 HMAC computation on itself. The default key is
-the SHA256 value of "the holy handgrenade of antioch" and is sufficient
+the SHA256 value of "holy hand grenade of antioch" and is sufficient
 for meeting the FIPS requirements.
 
 To change the key to a different value, use this flag. The value should
@@ -520,9 +524,9 @@ never be used in production environments.  It will only work when used with
 gcc or clang and should be used in conjunction with the [no-shared](#no-shared)
 option.
 
-### no-acvp_tests
+### enable-acvp-tests
 
-Do not build support for Automated Cryptographic Validation Protocol (ACVP)
+Build support for Automated Cryptographic Validation Protocol (ACVP)
 tests.
 
 This is required for FIPS validation purposes. Certain ACVP tests require
@@ -541,6 +545,13 @@ be used even with this option.
 ### no-async
 
 Do not build support for async operations.
+
+### no-atexit
+
+Do not use `atexit()` in libcrypto builds.
+
+`atexit()` has varied semantics between platforms and can cause SIGSEGV in some
+circumstances. This option disables the atexit registration of OPENSSL_cleanup.
 
 ### no-autoalginit
 
@@ -576,6 +587,18 @@ Enabling this option demands extra care.  For any compiler flag given directly
 as configuration option, you must ensure that it's valid for both the C and
 the C++ compiler.  If not, the C++ build test will most likely break.  As an
 alternative, you can use the language specific variables, `CFLAGS` and `CXXFLAGS`.
+
+### --banner=text
+
+Use the specified text instead of the default banner at the end of
+configuration.
+
+### --w
+
+On platforms where the choice of 32-bit or 64-bit architecture
+is not explicitly specified, `Configure` will print a warning
+message and wait for a few seconds to let you interrupt the
+configuration. Using this flag skips the wait.
 
 ### no-bulk
 
@@ -692,7 +715,7 @@ Enable building of integration with external test suites.
 This is a developer option and may not work on all platforms.  The following
 external test suites are currently supported:
 
- - BoringSSL test suite
+ - GOST engine test suite
  - Python PYCA/Cryptography test suite
  - krb5 test suite
 
@@ -704,9 +727,9 @@ for further details.
 Don't compile in filename and line number information (e.g.  for errors and
 memory allocation).
 
-### no-fips
+### enable-fips
 
-Don't compile the FIPS provider
+Build (and install) the FIPS provider
 
 ### no-fips-securitychecks
 
@@ -780,14 +803,22 @@ By default OpenSSL will attempt to stay in memory until the process exits.
 This is so that libcrypto and libssl can be properly cleaned up automatically
 via an `atexit()` handler.  The handler is registered by libcrypto and cleans
 up both libraries.  On some platforms the `atexit()` handler will run on unload of
-libcrypto (if it has been dynamically loaded) rather than at process exit.  This
-option can be used to stop OpenSSL from attempting to stay in memory until the
+libcrypto (if it has been dynamically loaded) rather than at process exit.
+
+This option can be used to stop OpenSSL from attempting to stay in memory until the
 process exits.  This could lead to crashes if either libcrypto or libssl have
 already been unloaded at the point that the atexit handler is invoked, e.g.  on a
 platform which calls `atexit()` on unload of the library, and libssl is unloaded
-before libcrypto then a crash is likely to happen.  Applications can suppress
-running of the `atexit()` handler at run time by using the
-`OPENSSL_INIT_NO_ATEXIT` option to `OPENSSL_init_crypto()`.
+before libcrypto then a crash is likely to happen.
+
+Note that shared library pinning is not automatically disabled for static builds,
+i.e., `no-shared` does not imply `no-pinshared`. This may come as a surprise when
+linking libcrypto statically into a shared third-party library, because in this
+case the shared library will be pinned. To prevent this behaviour, you need to
+configure the static build using `no-shared` and `no-pinshared` together.
+
+Applications can suppress running of the `atexit()` handler at run time by
+using the `OPENSSL_INIT_NO_ATEXIT` option to `OPENSSL_init_crypto()`.
 See the man page for it for further details.
 
 ### no-posix-io
@@ -844,11 +875,14 @@ disengage SSE2 code paths upon application start-up, but if you aim for wider
 "audience" running such kernel, consider `no-sse2`.  Both the `386` and `no-asm`
 options imply `no-sse2`.
 
-### enable-ssl-trace
+### no-ssl-trace
 
-Build with the SSL Trace capabilities.
+Don't build with SSL Trace capabilities.
 
-This adds the `-trace` option to `s_client` and `s_server`.
+This removes the `-trace` option from `s_client` and `s_server`, and omits the
+`SSL_trace()` function from libssl.
+
+Disabling `ssl-trace` may provide a small reduction in libssl binary size.
 
 ### no-static-engine
 
@@ -954,7 +988,7 @@ the individual protocol versions.
 
 ### no-{protocol}-method
 
-    no-{ssl|ssl3|tls|tls1|tls1_1|tls1_2|tls1_3|dtls|dtls1|dtls1_2}-method
+    no-{ssl3|tls1|tls1_1|tls1_2|dtls1|dtls1_2}-method
 
 Analogous to `no-{protocol}` but in addition do not build the methods for
 applications to explicitly select individual protocol versions.  Note that there
@@ -1129,11 +1163,9 @@ Configure OpenSSL
 
 ### Automatic Configuration
 
-On some platform a `config` script is available which attempts to guess
-your operating system (and compiler, if necessary) and calls the `Configure`
-Perl script with appropriate target based on its guess.  Further options can
-be supplied to the `config` script, which will be passed on to the `Configure`
-script.
+In previous version, the `config` script determined the platform type and
+compiler and then called `Configure`. Starting with this release, they are
+the same.
 
 #### Unix / Linux / macOS
 
@@ -1185,6 +1217,14 @@ Unix-like systems.
 and `descrip.mms` on OpenVMS) from a suitable template in `Configurations/`,
 and defines various macros in `include/openssl/configuration.h` (generated
 from `include/openssl/configuration.h.in`.
+
+If none of the generated build files suit your purpose, it's possible to
+write your own build file template and give its name through the environment
+variable `BUILDFILE`.  For example, Ninja build files could be supported by
+writing `Configurations/build.ninja.tmpl` and then configure with `BUILDFILE`
+set like this (Unix syntax shown, you'll have to adapt for other platforms):
+
+    $ BUILDFILE=build.ninja perl Configure [options...]
 
 ### Out of Tree Builds
 
@@ -1398,6 +1438,18 @@ over the build process.  Typically these should be defined prior to running
                    "--cross-compile-prefix" Configure flag described above. If both
                    are set then the Configure flag takes precedence.
 
+    HASHBANGPERL
+                   The command string for the Perl executable to insert in the
+                   #! line of perl scripts that will be publicly installed.
+                   Default: /usr/bin/env perl
+                   Note: the value of this variable is added to the same scripts
+                   on all platforms, but it's only relevant on Unix-like platforms.
+
+    KERNEL_BITS
+                   This can be the value `32` or `64` to specify the architecture
+                   when it is not "obvious" to the configuration. It should generally
+                   not be necessary to specify this environment variable.
+
     NM
                    The name of the nm executable to use.
 
@@ -1422,12 +1474,8 @@ over the build process.  Typically these should be defined prior to running
                    Only needed if builing should use a different Perl executable
                    than what is used to run the Configure script.
 
-    HASHBANGPERL
-                   The command string for the Perl executable to insert in the
-                   #! line of perl scripts that will be publicly installed.
-                   Default: /usr/bin/env perl
-                   Note: the value of this variable is added to the same scripts
-                   on all platforms, but it's only relevant on Unix-like platforms.
+    RANLIB
+                   The name of the ranlib executable to use.
 
     RC
                    The name of the rc executable to use. The default will be as
@@ -1435,9 +1483,6 @@ over the build process.  Typically these should be defined prior to running
                    defined then "windres" will be used. The WINDRES environment
                    variable is synonymous to this. If both are defined then RC
                    takes precedence.
-
-    RANLIB
-                   The name of the ranlib executable to use.
 
     WINDRES
                    See RC.
@@ -1610,8 +1655,8 @@ build.  Use this command:
     $ mms clean                                      ! (or mmk) OpenVMS
     $ nmake clean                                    # Windows
 
-Assembler error messages can sometimes be sidestepped by using the
-`no-asm` configuration option.
+Assembler error messages can sometimes be sidestepped by using the `no-asm`
+configuration option. See also [notes](#notes-on-assembler-modules-compilation).
 
 Compiling parts of OpenSSL with gcc and others with the system compiler will
 result in unresolved symbols on some systems.
@@ -1665,6 +1710,13 @@ OpenSSL provides built-in support for two threading models: pthreads (found on
 most UNIX/Linux systems), and Windows threads.  No other threading models are
 supported.  If your platform does not provide pthreads or Windows threads then
 you should use `Configure` with the `no-threads` option.
+
+For pthreads, all locks are non-recursive. In addition, in a debug build,
+the mutex attribute `PTHREAD_MUTEX_ERRORCHECK` is used. If this is not
+available on your platform, you might have to add
+`-DOPENSSL_NO_MUTEX_ERRORCHECK` to your `Configure` invocation.
+(On Linux `PTHREAD_MUTEX_ERRORCHECK` is an enum value, so a built-in
+ifdef test cannot be used.)
 
 Notes on shared libraries
 -------------------------
@@ -1726,6 +1778,41 @@ and reseeding is disabled (`--with-rand-seed=none`) and it may be necessary
 to install additional support software to obtain a random seed and reseed
 the CSPRNG manually.  Please check out the manual pages for `RAND_add()`,
 `RAND_bytes()`, `RAND_egd()`, and the FAQ for more information.
+
+Notes on assembler modules compilation
+--------------------------------------
+
+Compilation of some code paths in assembler modules might depend on whether the
+current assembler version supports certain ISA extensions or not. Code paths
+that use the AES-NI, PCLMULQDQ, SSSE3, and SHA extensions are always assembled.
+Apart from that, the minimum requirements for the assembler versions are shown
+in the table below:
+
+| ISA extension | GNU as | nasm   | llvm    |
+|---------------|--------|--------|---------|
+| AVX           | 2.19   | 2.09   | 3.0     |
+| AVX2          | 2.22   | 2.10   | 3.1     |
+| ADCX/ADOX     | 2.23   | 2.10   | 3.3     |
+| AVX512        | 2.25   | 2.11.8 | 3.6 (*) |
+| AVX512IFMA    | 2.26   | 2.11.8 | 6.0 (*) |
+| VAES          | 2.30   | 2.13.3 | 6.0 (*) |
+
+---
+
+(*) Even though AVX512 support was implemented in llvm 3.6, prior to version 7.0
+an explicit -march flag was apparently required to compile assembly modules. But
+then the compiler generates processor-specific code, which in turn contradicts
+the idea of performing dispatch at run-time, which is facilitated by the special
+variable `OPENSSL_ia32cap`. For versions older than 7.0, it is possible to work
+around the problem by forcing the build procedure to use the following script:
+
+    #!/bin/sh
+    exec clang -no-integrated-as "$@"
+
+instead of the real clang. In which case it doesn't matter what clang version
+is used, as it is the version of the GNU assembler that will be checked.
+
+---
 
 <!-- Links  -->
 

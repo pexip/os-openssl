@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1999-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -36,7 +36,7 @@ static int rsa_validate_keypair_multiprime(const RSA *key, BN_GENCB *cb)
     if (key->version == RSA_ASN1_VERSION_MULTI) {
         ex_primes = sk_RSA_PRIME_INFO_num(key->prime_infos);
         if (ex_primes <= 0
-                || (ex_primes + 2) > rsa_multip_cap(BN_num_bits(key->n))) {
+                || (ex_primes + 2) > ossl_rsa_multip_cap(BN_num_bits(key->n))) {
             ERR_raise(ERR_LIB_RSA, RSA_R_INVALID_MULTI_PRIME_KEY);
             return 0;
         }
@@ -47,7 +47,7 @@ static int rsa_validate_keypair_multiprime(const RSA *key, BN_GENCB *cb)
     k = BN_new();
     l = BN_new();
     m = BN_new();
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(key->libctx);
     if (i == NULL || j == NULL || k == NULL || l == NULL
             || m == NULL || ctx == NULL) {
         ret = -1;
@@ -65,13 +65,13 @@ static int rsa_validate_keypair_multiprime(const RSA *key, BN_GENCB *cb)
     }
 
     /* p prime? */
-    if (BN_check_prime(key->p, NULL, cb) != 1) {
+    if (BN_check_prime(key->p, ctx, cb) != 1) {
         ret = 0;
         ERR_raise(ERR_LIB_RSA, RSA_R_P_NOT_PRIME);
     }
 
     /* q prime? */
-    if (BN_check_prime(key->q, NULL, cb) != 1) {
+    if (BN_check_prime(key->q, ctx, cb) != 1) {
         ret = 0;
         ERR_raise(ERR_LIB_RSA, RSA_R_Q_NOT_PRIME);
     }
@@ -79,7 +79,7 @@ static int rsa_validate_keypair_multiprime(const RSA *key, BN_GENCB *cb)
     /* r_i prime? */
     for (idx = 0; idx < ex_primes; idx++) {
         pinfo = sk_RSA_PRIME_INFO_value(key->prime_infos, idx);
-        if (BN_check_prime(pinfo->r, NULL, cb) != 1) {
+        if (BN_check_prime(pinfo->r, ctx, cb) != 1) {
             ret = 0;
             ERR_raise(ERR_LIB_RSA, RSA_R_MP_R_NOT_PRIME);
         }
@@ -124,13 +124,17 @@ static int rsa_validate_keypair_multiprime(const RSA *key, BN_GENCB *cb)
         ret = -1;
         goto err;
     }
+    if (!BN_div(m, NULL, l, m, ctx)) { /* remainder is 0 */
+        ret = -1;
+        goto err;
+    }
     for (idx = 0; idx < ex_primes; idx++) {
         pinfo = sk_RSA_PRIME_INFO_value(key->prime_infos, idx);
         if (!BN_sub(k, pinfo->r, BN_value_one())) {
             ret = -1;
             goto err;
         }
-        if (!BN_mul(l, l, k, ctx)) {
+        if (!BN_mul(l, m, k, ctx)) {
             ret = -1;
             goto err;
         }
@@ -138,12 +142,12 @@ static int rsa_validate_keypair_multiprime(const RSA *key, BN_GENCB *cb)
             ret = -1;
             goto err;
         }
+        if (!BN_div(m, NULL, l, m, ctx)) { /* remainder is 0 */
+            ret = -1;
+            goto err;
+        }
     }
-    if (!BN_div(k, NULL, l, m, ctx)) { /* remainder is 0 */
-        ret = -1;
-        goto err;
-    }
-    if (!BN_mod_mul(i, key->d, key->e, k, ctx)) {
+    if (!BN_mod_mul(i, key->d, key->e, m, ctx)) {
         ret = -1;
         goto err;
     }
@@ -245,7 +249,7 @@ int ossl_rsa_validate_pairwise(const RSA *key)
 #ifdef FIPS_MODULE
     return ossl_rsa_sp800_56b_check_keypair(key, NULL, -1, RSA_bits(key));
 #else
-    return rsa_validate_keypair_multiprime(key, NULL);
+    return rsa_validate_keypair_multiprime(key, NULL) > 0;
 #endif
 }
 

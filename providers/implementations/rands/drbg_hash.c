@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2011-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -410,7 +410,8 @@ static int drbg_hash_new(PROV_DRBG *ctx)
 static void *drbg_hash_new_wrapper(void *provctx, void *parent,
                                    const OSSL_DISPATCH *parent_dispatch)
 {
-    return ossl_rand_drbg_new(provctx, parent, parent_dispatch, &drbg_hash_new,
+    return ossl_rand_drbg_new(provctx, parent, parent_dispatch,
+                              &drbg_hash_new, &drbg_hash_free,
                               &drbg_hash_instantiate, &drbg_hash_uninstantiate,
                               &drbg_hash_reseed, &drbg_hash_generate);
 }
@@ -438,7 +439,7 @@ static int drbg_hash_get_ctx_params(void *vdrbg, OSSL_PARAM params[])
     p = OSSL_PARAM_locate(params, OSSL_DRBG_PARAM_DIGEST);
     if (p != NULL) {
         md = ossl_prov_digest_md(&hash->digest);
-        if (md == NULL || !OSSL_PARAM_set_utf8_string(p, EVP_MD_name(md)))
+        if (md == NULL || !OSSL_PARAM_set_utf8_string(p, EVP_MD_get0_name(md)))
             return 0;
     }
 
@@ -468,13 +469,13 @@ static int drbg_hash_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 
     md = ossl_prov_digest_md(&hash->digest);
     if (md != NULL) {
-        if ((EVP_MD_flags(md) & EVP_MD_FLAG_XOF) != 0) {
+        if ((EVP_MD_get_flags(md) & EVP_MD_FLAG_XOF) != 0) {
             ERR_raise(ERR_LIB_PROV, PROV_R_XOF_DIGESTS_NOT_ALLOWED);
             return 0;
         }
 
         /* These are taken from SP 800-90 10.1 Table 2 */
-        hash->blocklen = EVP_MD_size(md);
+        hash->blocklen = EVP_MD_get_size(md);
         /* See SP800-57 Part1 Rev4 5.6.1 Table 3 */
         ctx->strength = 64 * (hash->blocklen >> 3);
         if (ctx->strength > 256)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2001-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -127,7 +127,7 @@
 #  define TTY_set(tty,data)      ioctl(tty,TIOCSETP,data)
 # endif
 
-# if !defined(_LIBC) && !defined(OPENSSL_SYS_MSDOS) && !defined(OPENSSL_SYS_VMS)
+# if !defined(_LIBC) && !defined(OPENSSL_SYS_MSDOS) && !defined(OPENSSL_SYS_VMS) && ! (defined(OPENSSL_SYS_TANDEM) && defined(_SPT_MODEL_))
 #  include <sys/ioctl.h>
 # endif
 
@@ -372,7 +372,8 @@ static int read_string_inner(UI *ui, UI_STRING *uis, int echo, int strip_nl)
 /* Internal functions to open, handle and close a channel to the console.  */
 static int open_console(UI *ui)
 {
-    CRYPTO_THREAD_write_lock(ui->lock);
+    if (!CRYPTO_THREAD_write_lock(ui->lock))
+        return 0;
     is_a_tty = 1;
 
 # if defined(OPENSSL_SYS_VXWORKS)
@@ -550,6 +551,8 @@ static int echo_console(UI *ui)
 
 static int close_console(UI *ui)
 {
+    int ret = 1;
+
     if (tty_in != stdin)
         fclose(tty_in);
     if (tty_out != stderr)
@@ -559,12 +562,12 @@ static int close_console(UI *ui)
     if (status != SS$_NORMAL) {
         ERR_raise_data(ERR_LIB_UI, UI_R_SYSDASSGN_ERROR,
                        "status=%%X%08X", status);
-        return 0;
+        ret = 0;
     }
 # endif
     CRYPTO_THREAD_unlock(ui->lock);
 
-    return 1;
+    return ret;
 }
 
 # if !defined(OPENSSL_SYS_WINCE)

@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -103,13 +103,17 @@ static int crl_set_issuers(X509_CRL *crl)
 
         if (gtmp) {
             gens = gtmp;
-            if (!crl->issuers) {
+            if (crl->issuers == NULL) {
                 crl->issuers = sk_GENERAL_NAMES_new_null();
-                if (!crl->issuers)
+                if (crl->issuers == NULL) {
+                    GENERAL_NAMES_free(gtmp);
                     return 0;
+                }
             }
-            if (!sk_GENERAL_NAMES_push(crl->issuers, gtmp))
+            if (!sk_GENERAL_NAMES_push(crl->issuers, gtmp)) {
+                GENERAL_NAMES_free(gtmp);
                 return 0;
+            }
         }
         rev->issuer = gens;
 
@@ -255,7 +259,7 @@ static int crl_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
         break;
 
     case ASN1_OP_FREE_POST:
-        if (crl->meth->crl_free) {
+        if (crl->meth != NULL && crl->meth->crl_free != NULL) {
             if (!crl->meth->crl_free(crl))
                 return 0;
         }
@@ -270,7 +274,7 @@ static int crl_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
         {
             X509_CRL *old = exarg;
 
-            if (!x509_crl_set0_libctx(crl, old->libctx, old->propq))
+            if (!ossl_x509_crl_set0_libctx(crl, old->libctx, old->propq))
                 return 0;
         }
         break;
@@ -340,6 +344,18 @@ static int X509_REVOKED_cmp(const X509_REVOKED *const *a,
                             (ASN1_STRING *)&(*b)->serialNumber));
 }
 
+X509_CRL *X509_CRL_new_ex(OSSL_LIB_CTX *libctx, const char *propq)
+{
+    X509_CRL *crl = NULL;
+
+    crl = (X509_CRL *)ASN1_item_new((X509_CRL_it()));
+    if (!ossl_x509_crl_set0_libctx(crl, libctx, propq)) {
+        X509_CRL_free(crl);
+        crl = NULL;
+    }
+    return crl;
+}
+
 int X509_CRL_add0_revoked(X509_CRL *crl, X509_REVOKED *rev)
 {
     X509_CRL_INFO *inf;
@@ -381,8 +397,9 @@ int X509_CRL_get0_by_cert(X509_CRL *crl, X509_REVOKED **ret, X509 *x)
 
 static int def_crl_verify(X509_CRL *crl, EVP_PKEY *r)
 {
-    return (ASN1_item_verify(ASN1_ITEM_rptr(X509_CRL_INFO),
-                             &crl->sig_alg, &crl->signature, &crl->crl, r));
+    return ASN1_item_verify_ex(ASN1_ITEM_rptr(X509_CRL_INFO),
+                               &crl->sig_alg, &crl->signature, &crl->crl, NULL,
+                               r, crl->libctx, crl->propq);
 }
 
 static int crl_revoked_issuer_match(X509_CRL *crl, const X509_NAME *nm,
@@ -427,7 +444,8 @@ static int def_crl_lookup(X509_CRL *crl,
      * under a lock to avoid race condition.
      */
     if (!sk_X509_REVOKED_is_sorted(crl->crl.revoked)) {
-        CRYPTO_THREAD_write_lock(crl->lock);
+        if (!CRYPTO_THREAD_write_lock(crl->lock))
+            return 0;
         sk_X509_REVOKED_sort(crl->crl.revoked);
         CRYPTO_THREAD_unlock(crl->lock);
     }
@@ -499,7 +517,8 @@ void *X509_CRL_get_meth_data(X509_CRL *crl)
     return crl->meth_data;
 }
 
-int x509_crl_set0_libctx(X509_CRL *x, OSSL_LIB_CTX *libctx, const char *propq)
+int ossl_x509_crl_set0_libctx(X509_CRL *x, OSSL_LIB_CTX *libctx,
+                              const char *propq)
 {
     if (x != NULL) {
         x->libctx = libctx;

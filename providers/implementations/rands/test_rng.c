@@ -52,9 +52,6 @@ static void *test_rng_new(void *provctx, void *parent,
 {
     PROV_TEST_RNG *t;
 
-    if (parent != NULL)
-        return NULL;
-
     t = OPENSSL_zalloc(sizeof(*t));
     if (t == NULL)
         return NULL;
@@ -107,16 +104,11 @@ static int test_rng_generate(void *vtest, unsigned char *out, size_t outlen,
                              const unsigned char *adin, size_t adin_len)
 {
     PROV_TEST_RNG *t = (PROV_TEST_RNG *)vtest;
-    size_t i;
 
-    if (strength > t->strength)
+    if (strength > t->strength || t->entropy_len - t->entropy_pos < outlen)
         return 0;
-
-    for (i = 0; i < outlen; i++) {
-        out[i] = t->entropy[t->entropy_pos++];
-        if (t->entropy_pos >= t->entropy_len)
-            break;
-    }
+    memcpy(out, t->entropy + t->entropy_pos, outlen);
+    t->entropy_pos += outlen;
     return 1;
 }
 
@@ -182,6 +174,9 @@ static int test_rng_set_ctx_params(void *vtest, const OSSL_PARAM params[])
     const OSSL_PARAM *p;
     void *ptr = NULL;
     size_t size = 0;
+
+    if (params == NULL)
+        return 1;
 
     p = OSSL_PARAM_locate_const(params, OSSL_RAND_PARAM_STRENGTH);
     if (p != NULL && !OSSL_PARAM_get_uint(p, &t->strength))

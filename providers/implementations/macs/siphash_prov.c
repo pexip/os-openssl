@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2018-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -16,12 +16,6 @@
 #include <openssl/proverr.h>
 
 #include "crypto/siphash.h"
-/*
- * TODO(3.0) when siphash has moved entirely to our providers, this
- * header should be moved to the provider include directory.  For the
- * moment, crypto/siphash/siphash_ameth.c has us stuck.
- */
-#include "../../../crypto/siphash/siphash_local.h"
 
 #include "prov/implementations.h"
 #include "prov/providercommon.h"
@@ -45,6 +39,7 @@ static OSSL_FUNC_mac_final_fn siphash_final;
 struct siphash_data_st {
     void *provctx;
     SIPHASH siphash;             /* Siphash data */
+    SIPHASH sipcopy;             /* Siphash data copy for reinitialization */
     unsigned int crounds, drounds;
 };
 
@@ -82,11 +77,11 @@ static void *siphash_dup(void *vsrc)
 
     if (!ossl_prov_is_running())
         return NULL;
-    sdst = siphash_new(ssrc->provctx);
+    sdst = OPENSSL_malloc(sizeof(*sdst));
     if (sdst == NULL)
         return NULL;
 
-    sdst->siphash = ssrc->siphash;
+    *sdst = *ssrc;
     return sdst;
 }
 
@@ -100,9 +95,14 @@ static size_t siphash_size(void *vmacctx)
 static int siphash_setkey(struct siphash_data_st *ctx,
                           const unsigned char *key, size_t keylen)
 {
+    int ret;
+
     if (keylen != SIPHASH_KEY_SIZE)
         return 0;
-    return SipHash_Init(&ctx->siphash, key, crounds(ctx), drounds(ctx));
+    ret = SipHash_Init(&ctx->siphash, key, crounds(ctx), drounds(ctx));
+    if (ret)
+        ctx->sipcopy = ctx->siphash;
+    return ret;
 }
 
 static int siphash_init(void *vmacctx, const unsigned char *key, size_t keylen,
@@ -112,11 +112,14 @@ static int siphash_init(void *vmacctx, const unsigned char *key, size_t keylen,
 
     if (!ossl_prov_is_running() || !siphash_set_params(ctx, params))
         return 0;
-    /* Without a key, there is not much to do here,
+    /*
+     * Without a key, there is not much to do here,
      * The actual initialization happens through controls.
      */
-    if (key == NULL)
+    if (key == NULL) {
+        ctx->siphash = ctx->sipcopy;
         return 1;
+    }
     return siphash_setkey(ctx, key, keylen);
 }
 
@@ -195,9 +198,13 @@ static int siphash_set_params(void *vmacctx, const OSSL_PARAM *params)
     const OSSL_PARAM *p = NULL;
     size_t size;
 
+    if (params == NULL)
+        return 1;
+
     if ((p = OSSL_PARAM_locate_const(params, OSSL_MAC_PARAM_SIZE)) != NULL) {
         if (!OSSL_PARAM_get_size_t(p, &size)
-            || !SipHash_set_hash_size(&ctx->siphash, size))
+            || !SipHash_set_hash_size(&ctx->siphash, size)
+            || !SipHash_set_hash_size(&ctx->sipcopy, size))
             return 0;
     }
     if ((p = OSSL_PARAM_locate_const(params, OSSL_MAC_PARAM_C_ROUNDS)) != NULL

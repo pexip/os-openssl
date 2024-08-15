@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2019-2023 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2019, Oracle and/or its affiliates.  All rights reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
@@ -62,6 +62,7 @@ typedef struct {
     unsigned char *salt;
     size_t salt_len;
     size_t out_len; /* optional KMAC parameter */
+    int is_kmac;
 } KDF_SSKDF;
 
 #define SSKDF_MAX_INLEN (1<<30)
@@ -108,7 +109,7 @@ static int SSKDF_hash_kdm(const EVP_MD *kdf_md,
             || derived_key_len == 0)
         return 0;
 
-    hlen = EVP_MD_size(kdf_md);
+    hlen = EVP_MD_get_size(kdf_md);
     if (hlen <= 0)
         return 0;
     out_len = (size_t)hlen;
@@ -239,7 +240,7 @@ static int SSKDF_mac_kdm(EVP_MAC_CTX *ctx_init,
         goto end;
 
     out_len = EVP_MAC_CTX_get_mac_size(ctx_init); /* output size */
-    if (out_len <= 0)
+    if (out_len <= 0 || (mac == mac_buf && out_len > sizeof(mac_buf)))
         goto end;
     len = derived_key_len;
 
@@ -263,7 +264,7 @@ static int SSKDF_mac_kdm(EVP_MAC_CTX *ctx_init,
             if (len == 0)
                 break;
         } else {
-            if (!EVP_MAC_final(ctx, mac, NULL, len))
+            if (!EVP_MAC_final(ctx, mac, NULL, out_len))
                 goto end;
             memcpy(out, mac, len);
             break;
@@ -332,13 +333,17 @@ static int sskdf_set_buffer(unsigned char **out, size_t *out_len,
 static size_t sskdf_size(KDF_SSKDF *ctx)
 {
     int len;
-    const EVP_MD *md = ossl_prov_digest_md(&ctx->digest);
+    const EVP_MD *md = NULL;
 
+    if (ctx->is_kmac)
+        return SIZE_MAX;
+
+    md = ossl_prov_digest_md(&ctx->digest);
     if (md == NULL) {
         ERR_raise(ERR_LIB_PROV, PROV_R_MISSING_MESSAGE_DIGEST);
         return 0;
     }
-    len = EVP_MD_size(md);
+    len = EVP_MD_get_size(md);
     return (len <= 0) ? 0 : (size_t)len;
 }
 
@@ -362,7 +367,7 @@ static int sskdf_derive(void *vctx, unsigned char *key, size_t keylen,
         const unsigned char *custom = NULL;
         size_t custom_len = 0;
         int default_salt_len;
-        EVP_MAC *mac = EVP_MAC_CTX_mac(ctx->macctx);
+        EVP_MAC *mac = EVP_MAC_CTX_get0_mac(ctx->macctx);
 
         if (EVP_MAC_is_a(mac, OSSL_MAC_NAME_HMAC)) {
             /* H(x) = HMAC(x, salt, hash) */
@@ -370,11 +375,10 @@ static int sskdf_derive(void *vctx, unsigned char *key, size_t keylen,
                 ERR_raise(ERR_LIB_PROV, PROV_R_MISSING_MESSAGE_DIGEST);
                 return 0;
             }
-            default_salt_len = EVP_MD_size(md);
+            default_salt_len = EVP_MD_get_size(md);
             if (default_salt_len <= 0)
                 return 0;
-        } else if (EVP_MAC_is_a(mac, OSSL_MAC_NAME_KMAC128)
-                   || EVP_MAC_is_a(mac, OSSL_MAC_NAME_KMAC256)) {
+        } else if (ctx->is_kmac) {
             /* H(x) = KMACzzz(x, salt, custom) */
             custom = kmac_custom_str;
             custom_len = sizeof(kmac_custom_str);
@@ -449,12 +453,23 @@ static int sskdf_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     OSSL_LIB_CTX *libctx = PROV_LIBCTX_OF(ctx->provctx);
     size_t sz;
 
-    if (!ossl_prov_digest_load_from_params(&ctx->digest, params, libctx))
-        return 0;
+    if (params == NULL)
+        return 1;
 
     if (!ossl_prov_macctx_load_from_params(&ctx->macctx, params,
                                            NULL, NULL, NULL, libctx))
         return 0;
+   if (ctx->macctx != NULL) {
+        if (EVP_MAC_is_a(EVP_MAC_CTX_get0_mac(ctx->macctx),
+                         OSSL_MAC_NAME_KMAC128)
+            || EVP_MAC_is_a(EVP_MAC_CTX_get0_mac(ctx->macctx),
+                            OSSL_MAC_NAME_KMAC256)) {
+            ctx->is_kmac = 1;
+        }
+   }
+
+   if (!ossl_prov_digest_load_from_params(&ctx->digest, params, libctx))
+       return 0;
 
     if ((p = OSSL_PARAM_locate_const(params, OSSL_KDF_PARAM_SECRET)) != NULL
         || (p = OSSL_PARAM_locate_const(params, OSSL_KDF_PARAM_KEY)) != NULL)

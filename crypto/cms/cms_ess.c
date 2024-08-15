@@ -16,7 +16,6 @@
 #include <openssl/cms.h>
 #include <openssl/ess.h>
 #include "crypto/ess.h"
-#include "crypto/cms.h"
 #include "crypto/x509.h"
 #include "cms_local.h"
 
@@ -47,66 +46,67 @@ int CMS_get1_ReceiptRequest(CMS_SignerInfo *si, CMS_ReceiptRequest **prr)
 }
 
 /*
-    First, get the ESS_SIGNING_CERT(V2) signed attribute from |si|.
-    Then check matching of each cert of trust |chain| with one of 
-    the |cert_ids|(Hash+IssuerID) list from this ESS_SIGNING_CERT.
-    Derived from ts_check_signing_certs()
-*/
-int ossl_ess_check_signing_certs(CMS_SignerInfo *si, STACK_OF(X509) *chain)
+ * Returns 0 if attribute is not found, 1 if found,
+ * or -1 on attribute parsing failure.
+ */
+static int ossl_cms_signerinfo_get_signing_cert(const CMS_SignerInfo *si,
+                                                ESS_SIGNING_CERT **psc)
+{
+    ASN1_STRING *str;
+    ESS_SIGNING_CERT *sc;
+    ASN1_OBJECT *obj = OBJ_nid2obj(NID_id_smime_aa_signingCertificate);
+
+    if (psc != NULL)
+        *psc = NULL;
+    str = CMS_signed_get0_data_by_OBJ(si, obj, -3, V_ASN1_SEQUENCE);
+    if (str == NULL)
+        return 0;
+
+    sc = ASN1_item_unpack(str, ASN1_ITEM_rptr(ESS_SIGNING_CERT));
+    if (sc == NULL)
+        return -1;
+    if (psc != NULL)
+        *psc = sc;
+    else
+        ESS_SIGNING_CERT_free(sc);
+    return 1;
+}
+
+/*
+ * Returns 0 if attribute is not found, 1 if found,
+ * or -1 on attribute parsing failure.
+ */
+static int ossl_cms_signerinfo_get_signing_cert_v2(const CMS_SignerInfo *si,
+                                                   ESS_SIGNING_CERT_V2 **psc)
+{
+    ASN1_STRING *str;
+    ESS_SIGNING_CERT_V2 *sc;
+    ASN1_OBJECT *obj = OBJ_nid2obj(NID_id_smime_aa_signingCertificateV2);
+
+    if (psc != NULL)
+        *psc = NULL;
+    str = CMS_signed_get0_data_by_OBJ(si, obj, -3, V_ASN1_SEQUENCE);
+    if (str == NULL)
+        return 0;
+
+    sc = ASN1_item_unpack(str, ASN1_ITEM_rptr(ESS_SIGNING_CERT_V2));
+    if (sc == NULL)
+        return -1;
+    if (psc != NULL)
+        *psc = sc;
+    else
+        ESS_SIGNING_CERT_V2_free(sc);
+    return 1;
+}
+
+int ossl_cms_check_signing_certs(const CMS_SignerInfo *si,
+                                 const STACK_OF(X509) *chain)
 {
     ESS_SIGNING_CERT *ss = NULL;
     ESS_SIGNING_CERT_V2 *ssv2 = NULL;
-    X509 *cert;
-    int i = 0, ret = 0;
-
-    if (ossl_cms_signerinfo_get_signing_cert(si, &ss) > 0
-            && ss->cert_ids != NULL) {
-        STACK_OF(ESS_CERT_ID) *cert_ids = ss->cert_ids;
-
-        cert = sk_X509_value(chain, 0);
-        if (ossl_ess_find_cert(cert_ids, cert) != 0)
-            goto err;
-
-        /*
-         * Check the other certificates of the chain.
-         * Fail if no signing certificate ids found for each certificate.
-         */
-        if (sk_ESS_CERT_ID_num(cert_ids) > 1) {
-            /* for each chain cert, try to find its cert id */
-            for (i = 1; i < sk_X509_num(chain); ++i) {
-                cert = sk_X509_value(chain, i);
-                if (ossl_ess_find_cert(cert_ids, cert) < 0)
-                    goto err;
-            }
-        }
-    } else if (ossl_cms_signerinfo_get_signing_cert_v2(si, &ssv2) > 0
-                   && ssv2->cert_ids!= NULL) {
-        STACK_OF(ESS_CERT_ID_V2) *cert_ids_v2 = ssv2->cert_ids;
-
-        cert = sk_X509_value(chain, 0);
-        if (ossl_ess_find_cert_v2(cert_ids_v2, cert) != 0)
-            goto err;
-
-        /*
-         * Check the other certificates of the chain.
-         * Fail if no signing certificate ids found for each certificate.
-         */
-        if (sk_ESS_CERT_ID_V2_num(cert_ids_v2) > 1) {
-            /* for each chain cert, try to find its cert id */
-            for (i = 1; i < sk_X509_num(chain); ++i) {
-                cert = sk_X509_value(chain, i);
-                if (ossl_ess_find_cert_v2(cert_ids_v2, cert) < 0)
-                    goto err;
-            }
-        }
-    } else {
-        ERR_raise(ERR_LIB_CMS, CMS_R_ESS_NO_SIGNING_CERTID_ATTRIBUTE);
-        return 0;
-    }
-    ret = 1;
- err:
-    if (!ret)
-        ERR_raise(ERR_LIB_CMS, CMS_R_ESS_SIGNING_CERTID_MISMATCH_ERROR);
+    int ret = ossl_cms_signerinfo_get_signing_cert(si, &ss) >= 0
+        && ossl_cms_signerinfo_get_signing_cert_v2(si, &ssv2) >= 0
+        && OSSL_ESS_check_signing_certs(ss, ssv2, chain, 1) > 0;
 
     ESS_SIGNING_CERT_free(ss);
     ESS_SIGNING_CERT_V2_free(ssv2);
@@ -116,7 +116,7 @@ int ossl_ess_check_signing_certs(CMS_SignerInfo *si, STACK_OF(X509) *chain)
 CMS_ReceiptRequest *CMS_ReceiptRequest_create0_ex(
     unsigned char *id, int idlen, int allorfirst,
     STACK_OF(GENERAL_NAMES) *receiptList, STACK_OF(GENERAL_NAMES) *receiptsTo,
-    OSSL_LIB_CTX *libctx, const char *propq)
+    OSSL_LIB_CTX *libctx)
 {
     CMS_ReceiptRequest *rr;
 
@@ -128,7 +128,8 @@ CMS_ReceiptRequest *CMS_ReceiptRequest_create0_ex(
     else {
         if (!ASN1_STRING_set(rr->signedContentIdentifier, NULL, 32))
             goto merr;
-        if (RAND_bytes_ex(libctx, rr->signedContentIdentifier->data, 32) <= 0)
+        if (RAND_bytes_ex(libctx, rr->signedContentIdentifier->data, 32,
+                          0) <= 0)
             goto err;
     }
 
@@ -159,7 +160,7 @@ CMS_ReceiptRequest *CMS_ReceiptRequest_create0(
     STACK_OF(GENERAL_NAMES) *receiptList, STACK_OF(GENERAL_NAMES) *receiptsTo)
 {
     return CMS_ReceiptRequest_create0_ex(id, idlen, allorfirst, receiptList,
-                                         receiptsTo, NULL, NULL);
+                                         receiptsTo, NULL);
 }
 
 int CMS_add1_ReceiptRequest(CMS_SignerInfo *si, CMS_ReceiptRequest *rr)
@@ -219,10 +220,10 @@ static int cms_msgSigDigest(CMS_SignerInfo *si,
 
     if (md == NULL)
         return 0;
-    if (!asn1_item_digest_ex(ASN1_ITEM_rptr(CMS_Attributes_Verify), md,
-                             si->signedAttrs, dig, diglen,
-                             ossl_cms_ctx_get0_libctx(si->cms_ctx),
-                             ossl_cms_ctx_get0_propq(si->cms_ctx)))
+    if (!ossl_asn1_item_digest_ex(ASN1_ITEM_rptr(CMS_Attributes_Verify), md,
+                                  si->signedAttrs, dig, diglen,
+                                  ossl_cms_ctx_get0_libctx(si->cms_ctx),
+                                  ossl_cms_ctx_get0_propq(si->cms_ctx)))
         return 0;
     return 1;
 }
@@ -413,68 +414,4 @@ ASN1_OCTET_STRING *ossl_cms_encode_Receipt(CMS_SignerInfo *si)
  err:
     CMS_ReceiptRequest_free(rr);
     return os;
-}
-
-/*
- * Add signer certificate's V2 digest |sc| to a SignerInfo structure |si|
- */
-
-int ossl_cms_add1_signing_cert_v2(CMS_SignerInfo *si, ESS_SIGNING_CERT_V2 *sc)
-{
-    ASN1_STRING *seq = NULL;
-    unsigned char *p, *pp = NULL;
-    int len;
-
-    /* Add SigningCertificateV2 signed attribute to the signer info. */
-    len = i2d_ESS_SIGNING_CERT_V2(sc, NULL);
-    if (len <= 0 || (pp = OPENSSL_malloc(len)) == NULL)
-        goto err;
-    p = pp;
-    i2d_ESS_SIGNING_CERT_V2(sc, &p);
-    if (!(seq = ASN1_STRING_new()) || !ASN1_STRING_set(seq, pp, len))
-        goto err;
-    OPENSSL_free(pp);
-    pp = NULL;
-    if (!CMS_signed_add1_attr_by_NID(si, NID_id_smime_aa_signingCertificateV2,
-                                     V_ASN1_SEQUENCE, seq, -1))
-        goto err;
-    ASN1_STRING_free(seq);
-    return 1;
- err:
-    ERR_raise(ERR_LIB_CMS, ERR_R_MALLOC_FAILURE);
-    ASN1_STRING_free(seq);
-    OPENSSL_free(pp);
-    return 0;
-}
-
-/*
- * Add signer certificate's digest |sc| to a SignerInfo structure |si|
- */
-
-int ossl_cms_add1_signing_cert(CMS_SignerInfo *si, ESS_SIGNING_CERT *sc)
-{
-    ASN1_STRING *seq = NULL;
-    unsigned char *p, *pp = NULL;
-    int len;
-
-    /* Add SigningCertificate signed attribute to the signer info. */
-    len = i2d_ESS_SIGNING_CERT(sc, NULL);
-    if (len <= 0 || (pp = OPENSSL_malloc(len)) == NULL)
-        goto err;
-    p = pp;
-    i2d_ESS_SIGNING_CERT(sc, &p);
-    if (!(seq = ASN1_STRING_new()) || !ASN1_STRING_set(seq, pp, len))
-        goto err;
-    OPENSSL_free(pp);
-    pp = NULL;
-    if (!CMS_signed_add1_attr_by_NID(si, NID_id_smime_aa_signingCertificate,
-                                     V_ASN1_SEQUENCE, seq, -1))
-        goto err;
-    ASN1_STRING_free(seq);
-    return 1;
- err:
-    ERR_raise(ERR_LIB_CMS, ERR_R_MALLOC_FAILURE);
-    ASN1_STRING_free(seq);
-    OPENSSL_free(pp);
-    return 0;
 }

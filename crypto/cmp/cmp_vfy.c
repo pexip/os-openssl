@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2007-2023 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright Nokia 2007-2020
  * Copyright Siemens AG 2015-2020
  *
@@ -27,11 +27,13 @@ static int verify_signature(const OSSL_CMP_CTX *cmp_ctx,
 {
     OSSL_CMP_PROTECTEDPART prot_part;
     EVP_PKEY *pubkey = NULL;
-    BIO *bio = BIO_new(BIO_s_mem()); /* may be NULL */
+    BIO *bio;
     int res = 0;
 
     if (!ossl_assert(cmp_ctx != NULL && msg != NULL && cert != NULL))
         return 0;
+
+    bio = BIO_new(BIO_s_mem()); /* may be NULL */
 
     /* verify that keyUsage, if present, contains digitalSignature */
     if (!cmp_ctx->ignore_keyusage
@@ -58,7 +60,7 @@ static int verify_signature(const OSSL_CMP_CTX *cmp_ctx,
     }
 
  sig_err:
-    res = x509_print_ex_brief(bio, cert, X509_FLAG_NO_EXTENSIONS);
+    res = ossl_x509_print_ex_brief(bio, cert, X509_FLAG_NO_EXTENSIONS);
     ERR_raise(ERR_LIB_CMP, CMP_R_ERROR_VALIDATING_SIGNATURE);
     if (res)
         ERR_add_error_mem_bio("\n", bio);
@@ -266,7 +268,7 @@ static int cert_acceptable(const OSSL_CMP_CTX *ctx,
     if (!check_kid(ctx, X509_get0_subject_key_id(cert), msg->header->senderKID))
         return 0;
     /* prevent misleading error later in case x509v3_cache_extensions() fails */
-    if (!x509v3_cache_extensions(cert)) {
+    if (!ossl_x509v3_cache_extensions(cert)) {
         ossl_cmp_warn(ctx, "cert appears to be invalid");
         return 0;
     }
@@ -321,11 +323,11 @@ static int check_cert_path_3gpp(const OSSL_CMP_CTX *ctx,
          * verify that the newly enrolled certificate (which assumed rid ==
          * OSSL_CMP_CERTREQID) can also be validated with the same trusted store
          */
-        EVP_PKEY *pkey = OSSL_CMP_CTX_get0_newPkey(ctx, 1);
         OSSL_CMP_CERTRESPONSE *crep =
             ossl_cmp_certrepmessage_get0_certresponse(msg->body->value.ip,
                                                       OSSL_CMP_CERTREQID);
-        X509 *newcrt = ossl_cmp_certresponse_get1_cert(crep, ctx, pkey);
+        X509 *newcrt = ossl_cmp_certresponse_get1_cert(ctx, crep);
+
         /*
          * maybe better use get_cert_status() from cmp_client.c, which catches
          * errors
@@ -406,7 +408,7 @@ static int check_msg_all_certs(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
 
     if (mode_3gpp
             && ((!ctx->permitTAInExtraCertsForIR
-                     || ossl_cmp_msg_get_bodytype(msg) != OSSL_CMP_PKIBODY_IP)))
+                     || OSSL_CMP_MSG_get_bodytype(msg) != OSSL_CMP_PKIBODY_IP)))
         return 0;
 
     ossl_cmp_info(ctx,
@@ -566,8 +568,9 @@ int OSSL_CMP_validate_msg(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg)
         /* 5.1.3.1.  Shared Secret Information */
     case NID_id_PasswordBasedMAC:
         if (ctx->secretValue == NULL) {
-            ossl_cmp_warn(ctx, "no secret available for verifying PBM-based CMP message protection");
-            return 1;
+            ossl_cmp_info(ctx, "no secret available for verifying PBM-based CMP message protection");
+            ERR_raise(ERR_LIB_CMP, CMP_R_MISSING_SECRET);
+            return 0;
         }
         if (verify_PBMAC(ctx, msg)) {
             /*
@@ -576,7 +579,7 @@ int OSSL_CMP_validate_msg(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg)
              * the caPubs field may be directly trusted as a root CA
              * certificate by the initiator.'
              */
-            switch (ossl_cmp_msg_get_bodytype(msg)) {
+            switch (OSSL_CMP_MSG_get_bodytype(msg)) {
             case -1:
                 return 0;
             case OSSL_CMP_PKIBODY_IP:
@@ -617,8 +620,9 @@ int OSSL_CMP_validate_msg(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg)
         scrt = ctx->srvCert;
         if (scrt == NULL) {
             if (ctx->trusted == NULL) {
-                ossl_cmp_warn(ctx, "no trust store nor pinned server cert available for verifying signature-based CMP message protection");
-                return 1;
+                ossl_cmp_info(ctx, "no trust store nor pinned server cert available for verifying signature-based CMP message protection");
+                ERR_raise(ERR_LIB_CMP, CMP_R_MISSING_TRUST_ANCHOR);
+                return 0;
             }
             if (check_msg_find_cert(ctx, msg))
                 return 1;
@@ -637,7 +641,6 @@ int OSSL_CMP_validate_msg(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg)
     }
     return 0;
 }
-
 
 /*-
  * Check received message (i.e., response by server or request from client)
@@ -672,7 +675,7 @@ int ossl_cmp_msg_check_update(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
     /* validate sender name of received msg */
     if (hdr->sender->type != GEN_DIRNAME) {
         ERR_raise(ERR_LIB_CMP, CMP_R_SENDER_GENERALNAME_TYPE_NOT_SUPPORTED);
-        return 0; /* TODO FR#42: support for more than X509_NAME */
+        return 0;
     }
     /*
      * Compare actual sender name of response with expected sender name.
@@ -732,7 +735,7 @@ int ossl_cmp_msg_check_update(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
 #endif
     }
 
-    if (ossl_cmp_msg_get_bodytype(msg) < 0) {
+    if (OSSL_CMP_MSG_get_bodytype(msg) < 0) {
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
         ERR_raise(ERR_LIB_CMP, CMP_R_PKIBODY_ERROR);
         return 0;
@@ -761,6 +764,11 @@ int ossl_cmp_msg_check_update(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
 #endif
     }
 
+    /* if not yet present, learn transactionID */
+    if (ctx->transactionID == NULL
+        && !OSSL_CMP_CTX_set1_transactionID(ctx, hdr->transactionID))
+        return 0;
+
     /*
      * RFC 4210 section 5.1.1 states: the recipNonce is copied from
      * the senderNonce of the previous message in the transaction.
@@ -768,11 +776,6 @@ int ossl_cmp_msg_check_update(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
      */
     if (!ossl_cmp_ctx_set1_recipNonce(ctx, hdr->senderNonce))
         return 0;
-
-    /* if not yet present, learn transactionID */
-    if (ctx->transactionID == NULL
-        && !OSSL_CMP_CTX_set1_transactionID(ctx, hdr->transactionID))
-        return -1;
 
     /*
      * Store any provided extraCerts in ctx for future use,
@@ -784,7 +787,7 @@ int ossl_cmp_msg_check_update(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
                         /* this allows self-signed certs */
                         X509_ADD_FLAG_UP_REF | X509_ADD_FLAG_NO_DUP
                         | X509_ADD_FLAG_PREPEND))
-        return -1;
+        return 0;
 
     if (ossl_cmp_hdr_get_protection_nid(hdr) == NID_id_PasswordBasedMAC) {
         /*
@@ -793,7 +796,7 @@ int ossl_cmp_msg_check_update(OSSL_CMP_CTX *ctx, const OSSL_CMP_MSG *msg,
          * the caPubs field may be directly trusted as a root CA
          * certificate by the initiator.'
          */
-        switch (ossl_cmp_msg_get_bodytype(msg)) {
+        switch (OSSL_CMP_MSG_get_bodytype(msg)) {
         case OSSL_CMP_PKIBODY_IP:
         case OSSL_CMP_PKIBODY_CP:
         case OSSL_CMP_PKIBODY_KUP:

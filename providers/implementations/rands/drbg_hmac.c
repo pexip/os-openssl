@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2011-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -296,7 +296,8 @@ static int drbg_hmac_new(PROV_DRBG *drbg)
 static void *drbg_hmac_new_wrapper(void *provctx, void *parent,
                                    const OSSL_DISPATCH *parent_dispatch)
 {
-    return ossl_rand_drbg_new(provctx, parent, parent_dispatch, &drbg_hmac_new,
+    return ossl_rand_drbg_new(provctx, parent, parent_dispatch,
+                              &drbg_hmac_new, &drbg_hmac_free,
                               &drbg_hmac_instantiate, &drbg_hmac_uninstantiate,
                               &drbg_hmac_reseed, &drbg_hmac_generate);
 }
@@ -326,7 +327,7 @@ static int drbg_hmac_get_ctx_params(void *vdrbg, OSSL_PARAM params[])
     if (p != NULL) {
         if (hmac->ctx == NULL)
             return 0;
-        name = EVP_MAC_name(EVP_MAC_CTX_mac(hmac->ctx));
+        name = EVP_MAC_get0_name(EVP_MAC_CTX_get0_mac(hmac->ctx));
         if (!OSSL_PARAM_set_utf8_string(p, name))
             return 0;
     }
@@ -334,7 +335,7 @@ static int drbg_hmac_get_ctx_params(void *vdrbg, OSSL_PARAM params[])
     p = OSSL_PARAM_locate(params, OSSL_DRBG_PARAM_DIGEST);
     if (p != NULL) {
         md = ossl_prov_digest_md(&hmac->digest);
-        if (md == NULL || !OSSL_PARAM_set_utf8_string(p, EVP_MD_name(md)))
+        if (md == NULL || !OSSL_PARAM_set_utf8_string(p, EVP_MD_get0_name(md)))
             return 0;
     }
 
@@ -369,7 +370,7 @@ static int drbg_hmac_set_ctx_params(void *vctx, const OSSL_PARAM params[])
      * digests.
      */
     md = ossl_prov_digest_md(&hmac->digest);
-    if (md != NULL && (EVP_MD_flags(md) & EVP_MD_FLAG_XOF) != 0) {
+    if (md != NULL && (EVP_MD_get_flags(md) & EVP_MD_FLAG_XOF) != 0) {
         ERR_raise(ERR_LIB_PROV, PROV_R_XOF_DIGESTS_NOT_ALLOWED);
         return 0;
     }
@@ -380,7 +381,7 @@ static int drbg_hmac_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 
     if (hmac->ctx != NULL) {
         /* These are taken from SP 800-90 10.1 Table 2 */
-        hmac->blocklen = EVP_MD_size(md);
+        hmac->blocklen = EVP_MD_get_size(md);
         /* See SP800-57 Part1 Rev4 5.6.1 Table 3 */
         ctx->strength = 64 * (int)(hmac->blocklen >> 3);
         if (ctx->strength > 256)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2019-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -24,6 +24,8 @@
 
 #define siv_stream_update siv_cipher
 #define SIV_FLAGS AEAD_FLAGS
+
+static OSSL_FUNC_cipher_set_ctx_params_fn aes_siv_set_ctx_params;
 
 static void *aes_siv_newctx(void *provctx, size_t keybits, unsigned int mode,
                             uint64_t flags)
@@ -75,7 +77,8 @@ static void *siv_dupctx(void *vctx)
 }
 
 static int siv_init(void *vctx, const unsigned char *key, size_t keylen,
-                    const unsigned char *iv, size_t ivlen, int enc)
+                    const unsigned char *iv, size_t ivlen,
+                    const OSSL_PARAM params[], int enc)
 {
     PROV_AES_SIV_CTX *ctx = (PROV_AES_SIV_CTX *)vctx;
 
@@ -89,21 +92,24 @@ static int siv_init(void *vctx, const unsigned char *key, size_t keylen,
             ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_KEY_LENGTH);
             return 0;
         }
-        return ctx->hw->initkey(ctx, key, ctx->keylen);
+        if (!ctx->hw->initkey(ctx, key, ctx->keylen))
+            return 0;
     }
-    return 1;
+    return aes_siv_set_ctx_params(ctx, params);
 }
 
 static int siv_einit(void *vctx, const unsigned char *key, size_t keylen,
-                     const unsigned char *iv, size_t ivlen)
+                     const unsigned char *iv, size_t ivlen,
+                     const OSSL_PARAM params[])
 {
-    return siv_init(vctx, key, keylen, iv, ivlen, 1);
+    return siv_init(vctx, key, keylen, iv, ivlen, params, 1);
 }
 
 static int siv_dinit(void *vctx, const unsigned char *key, size_t keylen,
-                     const unsigned char *iv, size_t ivlen)
+                     const unsigned char *iv, size_t ivlen,
+                     const OSSL_PARAM params[])
 {
-    return siv_init(vctx, key, keylen, iv, ivlen, 0);
+    return siv_init(vctx, key, keylen, iv, ivlen, params, 0);
 }
 
 static int siv_cipher(void *vctx, unsigned char *out, size_t *outl,
@@ -114,14 +120,18 @@ static int siv_cipher(void *vctx, unsigned char *out, size_t *outl,
     if (!ossl_prov_is_running())
         return 0;
 
-    if (inl == 0) {
-        *outl = 0;
-        return 1;
-    }
+    /* Ignore just empty encryption/decryption call and not AAD. */
+    if (out != NULL) {
+        if (inl == 0) {
+            if (outl != NULL)
+                *outl = 0;
+            return 1;
+        }
 
-    if (outsize < inl) {
-        ERR_raise(ERR_LIB_PROV, PROV_R_OUTPUT_BUFFER_TOO_SMALL);
-        return 0;
+        if (outsize < inl) {
+            ERR_raise(ERR_LIB_PROV, PROV_R_OUTPUT_BUFFER_TOO_SMALL);
+            return 0;
+        }
     }
 
     if (ctx->hw->cipher(ctx, out, in, inl) <= 0)
@@ -179,7 +189,6 @@ static int aes_siv_get_ctx_params(void *vctx, OSSL_PARAM params[])
 static const OSSL_PARAM aes_siv_known_gettable_ctx_params[] = {
     OSSL_PARAM_size_t(OSSL_CIPHER_PARAM_KEYLEN, NULL),
     OSSL_PARAM_size_t(OSSL_CIPHER_PARAM_AEAD_TAGLEN, NULL),
-    OSSL_PARAM_uint(OSSL_CIPHER_PARAM_SPEED, NULL),
     OSSL_PARAM_octet_string(OSSL_CIPHER_PARAM_AEAD_TAG, NULL, 0),
     OSSL_PARAM_END
 };
@@ -194,6 +203,9 @@ static int aes_siv_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     PROV_AES_SIV_CTX *ctx = (PROV_AES_SIV_CTX *)vctx;
     const OSSL_PARAM *p;
     unsigned int speed = 0;
+
+    if (params == NULL)
+        return 1;
 
     p = OSSL_PARAM_locate_const(params, OSSL_CIPHER_PARAM_AEAD_TAG);
     if (p != NULL) {

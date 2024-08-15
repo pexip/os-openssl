@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -163,7 +163,8 @@ static BN_BLINDING *rsa_get_blinding(RSA *rsa, int *local, BN_CTX *ctx)
 {
     BN_BLINDING *ret;
 
-    CRYPTO_THREAD_write_lock(rsa->lock);
+    if (!CRYPTO_THREAD_write_lock(rsa->lock))
+        return NULL;
 
     if (rsa->blinding == NULL) {
         rsa->blinding = RSA_setup_blinding(rsa, ctx);
@@ -212,7 +213,9 @@ static int rsa_blinding_convert(BN_BLINDING *b, BIGNUM *f, BIGNUM *unblind,
          */
         int ret;
 
-        BN_BLINDING_lock(b);
+        if (!BN_BLINDING_lock(b))
+            return 0;
+
         ret = BN_BLINDING_convert_ex(f, unblind, b, ctx);
         BN_BLINDING_unlock(b);
 
@@ -231,6 +234,7 @@ static int rsa_blinding_invert(BN_BLINDING *b, BIGNUM *f, BIGNUM *unblind,
      * will only read the modulus from BN_BLINDING. In both cases it's safe
      * to access the blinding without a lock.
      */
+    BN_set_flags(f, BN_FLG_CONSTTIME);
     return BN_BLINDING_invert_ex(f, unblind, b, ctx);
 }
 
@@ -413,6 +417,11 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
         goto err;
     }
 
+    if (rsa->flags & RSA_FLAG_CACHE_PUBLIC)
+        if (!BN_MONT_CTX_set_locked(&rsa->_method_mod_n, rsa->lock,
+                                    rsa->n, ctx))
+            goto err;
+
     if (!(rsa->flags & RSA_FLAG_NO_BLINDING)) {
         blinding = rsa_get_blinding(rsa, &local_blinding, ctx);
         if (blinding == NULL) {
@@ -450,13 +459,6 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
             goto err;
         }
         BN_with_flags(d, rsa->d, BN_FLG_CONSTTIME);
-
-        if (rsa->flags & RSA_FLAG_CACHE_PUBLIC)
-            if (!BN_MONT_CTX_set_locked(&rsa->_method_mod_n, rsa->lock,
-                                        rsa->n, ctx)) {
-                BN_free(d);
-                goto err;
-            }
         if (!rsa->meth->bn_mod_exp(ret, f, d, rsa->n, ctx,
                                    rsa->_method_mod_n)) {
             BN_free(d);
@@ -687,15 +689,20 @@ static int rsa_ossl_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx)
         if (/* m1 = I moq q */
             !bn_from_mont_fixed_top(m1, I, rsa->_method_mod_q, ctx)
             || !bn_to_mont_fixed_top(m1, m1, rsa->_method_mod_q, ctx)
-            /* m1 = m1^dmq1 mod q */
-            || !BN_mod_exp_mont_consttime(m1, m1, rsa->dmq1, rsa->q, ctx,
-                                          rsa->_method_mod_q)
             /* r1 = I mod p */
             || !bn_from_mont_fixed_top(r1, I, rsa->_method_mod_p, ctx)
             || !bn_to_mont_fixed_top(r1, r1, rsa->_method_mod_p, ctx)
-            /* r1 = r1^dmp1 mod p */
-            || !BN_mod_exp_mont_consttime(r1, r1, rsa->dmp1, rsa->p, ctx,
-                                          rsa->_method_mod_p)
+            /*
+             * Use parallel exponentiations optimization if possible,
+             * otherwise fallback to two sequential exponentiations:
+             *    m1 = m1^dmq1 mod q
+             *    r1 = r1^dmp1 mod p
+             */
+            || !BN_mod_exp_mont_consttime_x2(m1, m1, rsa->dmq1, rsa->q,
+                                             rsa->_method_mod_q,
+                                             r1, r1, rsa->dmp1, rsa->p,
+                                             rsa->_method_mod_p,
+                                             ctx)
             /* r1 = (r1 - m1) mod p */
             /*
              * bn_mod_sub_fixed_top is not regular modular subtraction,
@@ -774,16 +781,6 @@ static int rsa_ossl_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx)
     }
 
 #ifndef FIPS_MODULE
-    /*
-     * calculate m_i in multi-prime case
-     *
-     * TODO:
-     * 1. squash the following two loops and calculate |m_i| there.
-     * 2. remove cc and reuse |c|.
-     * 3. remove |dmq1| and |dmp1| in previous block and use |di|.
-     *
-     * If these things are done, the code will be more readable.
-     */
     if (ex_primes > 0) {
         BIGNUM *di = BN_new(), *cc = BN_new();
 

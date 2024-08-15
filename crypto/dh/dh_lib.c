@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -15,7 +15,9 @@
 
 #include <stdio.h>
 #include <openssl/bn.h>
-#include <openssl/engine.h>
+#ifndef FIPS_MODULE
+# include <openssl/engine.h>
+#endif
 #include <openssl/obj_mac.h>
 #include <openssl/core_names.h>
 #include "internal/cryptlib.h"
@@ -114,6 +116,8 @@ static DH *dh_new_intern(ENGINE *engine, OSSL_LIB_CTX *libctx)
         goto err;
 #endif /* FIPS_MODULE */
 
+    ossl_ffc_params_init(&ret->params);
+
     if ((ret->meth->init != NULL) && !ret->meth->init(ret)) {
         ERR_raise(ERR_LIB_DH, ERR_R_INIT_FAIL);
         goto err;
@@ -202,6 +206,7 @@ int DH_size(const DH *dh)
 int DH_security_bits(const DH *dh)
 {
     int N;
+
     if (dh->params.q != NULL)
         N = BN_num_bits(dh->params.q);
     else if (dh->length)

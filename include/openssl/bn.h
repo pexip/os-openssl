@@ -214,13 +214,17 @@ void BN_CTX_free(BN_CTX *c);
 void BN_CTX_start(BN_CTX *ctx);
 BIGNUM *BN_CTX_get(BN_CTX *ctx);
 void BN_CTX_end(BN_CTX *ctx);
-int BN_rand_ex(BIGNUM *rnd, int bits, int top, int bottom, BN_CTX *ctx);
+int BN_rand_ex(BIGNUM *rnd, int bits, int top, int bottom,
+               unsigned int strength, BN_CTX *ctx);
 int BN_rand(BIGNUM *rnd, int bits, int top, int bottom);
-int BN_priv_rand_ex(BIGNUM *rnd, int bits, int top, int bottom, BN_CTX *ctx);
+int BN_priv_rand_ex(BIGNUM *rnd, int bits, int top, int bottom,
+                    unsigned int strength, BN_CTX *ctx);
 int BN_priv_rand(BIGNUM *rnd, int bits, int top, int bottom);
-int BN_rand_range_ex(BIGNUM *r, const BIGNUM *range, BN_CTX *ctx);
+int BN_rand_range_ex(BIGNUM *r, const BIGNUM *range, unsigned int strength,
+                     BN_CTX *ctx);
 int BN_rand_range(BIGNUM *rnd, const BIGNUM *range);
-int BN_priv_rand_range_ex(BIGNUM *r, const BIGNUM *range, BN_CTX *ctx);
+int BN_priv_rand_range_ex(BIGNUM *r, const BIGNUM *range,
+                          unsigned int strength, BN_CTX *ctx);
 int BN_priv_rand_range(BIGNUM *rnd, const BIGNUM *range);
 # ifndef OPENSSL_NO_DEPRECATED_3_0
 OSSL_DEPRECATEDIN_3_0
@@ -312,6 +316,11 @@ int BN_mod_exp2_mont(BIGNUM *r, const BIGNUM *a1, const BIGNUM *p1,
                      BN_CTX *ctx, BN_MONT_CTX *m_ctx);
 int BN_mod_exp_simple(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                       const BIGNUM *m, BN_CTX *ctx);
+int BN_mod_exp_mont_consttime_x2(BIGNUM *rr1, const BIGNUM *a1, const BIGNUM *p1,
+                                 const BIGNUM *m1, BN_MONT_CTX *in_mont1,
+                                 BIGNUM *rr2, const BIGNUM *a2, const BIGNUM *p2,
+                                 const BIGNUM *m2, BN_MONT_CTX *in_mont2,
+                                 BN_CTX *ctx);
 
 int BN_mask_bits(BIGNUM *a, int n);
 # ifndef OPENSSL_NO_STDIO

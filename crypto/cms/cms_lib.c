@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2008-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -15,6 +15,7 @@
 #include <openssl/asn1.h>
 #include <openssl/cms.h>
 #include <openssl/cms.h>
+#include "internal/sizes.h"
 #include "crypto/x509.h"
 #include "cms_local.h"
 
@@ -27,11 +28,17 @@ CMS_ContentInfo *d2i_CMS_ContentInfo(CMS_ContentInfo **a,
                                      const unsigned char **in, long len)
 {
     CMS_ContentInfo *ci;
+    const CMS_CTX *ctx = ossl_cms_get0_cmsctx(a == NULL ? NULL : *a);
 
-    ci = (CMS_ContentInfo *)ASN1_item_d2i((ASN1_VALUE **)a, in, len,
-                                          (CMS_ContentInfo_it()));
-    if (ci != NULL)
+    ci = (CMS_ContentInfo *)ASN1_item_d2i_ex((ASN1_VALUE **)a, in, len,
+                                          (CMS_ContentInfo_it()),
+                                          ossl_cms_ctx_get0_libctx(ctx),
+                                          ossl_cms_ctx_get0_propq(ctx));
+    if (ci != NULL) {
+        ERR_set_mark();
         ossl_cms_resolve_libctx(ci);
+        ERR_pop_to_mark();
+    }
     return ci;
 }
 
@@ -44,7 +51,8 @@ CMS_ContentInfo *CMS_ContentInfo_new_ex(OSSL_LIB_CTX *libctx, const char *propq)
 {
     CMS_ContentInfo *ci;
 
-    ci = (CMS_ContentInfo *)ASN1_item_new(ASN1_ITEM_rptr(CMS_ContentInfo));
+    ci = (CMS_ContentInfo *)ASN1_item_new_ex(ASN1_ITEM_rptr(CMS_ContentInfo),
+                                             libctx, propq);
     if (ci != NULL) {
         ci->ctx.libctx = libctx;
         ci->ctx.propq = NULL;
@@ -68,6 +76,7 @@ CMS_ContentInfo *CMS_ContentInfo_new(void)
 void CMS_ContentInfo_free(CMS_ContentInfo *cms)
 {
     if (cms != NULL) {
+        ossl_cms_env_enc_content_free(cms);
         OPENSSL_free(cms->ctx.propq);
         ASN1_item_free((ASN1_VALUE *)cms, ASN1_ITEM_rptr(CMS_ContentInfo));
     }
@@ -105,7 +114,7 @@ void ossl_cms_resolve_libctx(CMS_ContentInfo *ci)
         for (i = 0; i < sk_CMS_CertificateChoices_num(*pcerts); i++) {
             cch = sk_CMS_CertificateChoices_value(*pcerts, i);
             if (cch->type == CMS_CERTCHOICE_CERT)
-                x509_set0_libctx(cch->d.certificate, libctx, propq);
+                ossl_x509_set0_libctx(cch->d.certificate, libctx, propq);
         }
     }
 }
@@ -403,10 +412,10 @@ BIO *ossl_cms_DigestAlgorithm_init_bio(X509_ALGOR *digestAlgorithm,
     const ASN1_OBJECT *digestoid;
     const EVP_MD *digest = NULL;
     EVP_MD *fetched_digest = NULL;
-    const char *alg;
+    char alg[OSSL_MAX_NAME_SIZE];
 
     X509_ALGOR_get0(&digestoid, NULL, NULL, digestAlgorithm);
-    alg = OBJ_nid2sn(OBJ_obj2nid(digestoid));
+    OBJ_obj2txt(alg, sizeof(alg), digestoid, 0);
 
     (void)ERR_set_mark();
     fetched_digest = EVP_MD_fetch(ossl_cms_ctx_get0_libctx(ctx), alg,
@@ -424,7 +433,7 @@ BIO *ossl_cms_DigestAlgorithm_init_bio(X509_ALGOR *digestAlgorithm,
     (void)ERR_pop_to_mark();
 
     mdbio = BIO_new(BIO_f_md());
-    if (mdbio == NULL || !BIO_set_md(mdbio, digest)) {
+    if (mdbio == NULL || BIO_set_md(mdbio, digest) <= 0) {
         ERR_raise(ERR_LIB_CMS, CMS_R_MD_BIO_INIT_ERROR);
         goto err;
     }
@@ -454,12 +463,12 @@ int ossl_cms_DigestAlgorithm_find_ctx(EVP_MD_CTX *mctx, BIO *chain,
             return 0;
         }
         BIO_get_md_ctx(chain, &mtmp);
-        if (EVP_MD_CTX_type(mtmp) == nid
+        if (EVP_MD_CTX_get_type(mtmp) == nid
             /*
              * Workaround for broken implementations that use signature
              * algorithm OID instead of digest.
              */
-            || EVP_MD_pkey_type(EVP_MD_CTX_md(mtmp)) == nid)
+            || EVP_MD_get_pkey_type(EVP_MD_CTX_get0_md(mtmp)) == nid)
             return EVP_MD_CTX_copy_ex(mctx, mtmp);
         chain = BIO_next(chain);
     }
@@ -607,11 +616,12 @@ int CMS_add0_crl(CMS_ContentInfo *cms, X509_CRL *crl)
 
 int CMS_add1_crl(CMS_ContentInfo *cms, X509_CRL *crl)
 {
-    int r;
-    r = CMS_add0_crl(cms, crl);
-    if (r > 0)
-        X509_CRL_up_ref(crl);
-    return r;
+    if (!X509_CRL_up_ref(crl))
+        return 0;
+    if (CMS_add0_crl(cms, crl))
+        return 1;
+    X509_CRL_free(crl);
+    return 0;
 }
 
 STACK_OF(X509) *CMS_get1_certs(CMS_ContentInfo *cms)

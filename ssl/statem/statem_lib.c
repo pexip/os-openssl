@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
@@ -47,7 +47,7 @@ int ssl3_do_write(SSL *s, int type)
 
     ret = ssl3_write_bytes(s, type, &s->init_buf->data[s->init_off],
                            s->init_num, &written);
-    if (ret < 0)
+    if (ret <= 0)
         return -1;
     if (type == SSL3_RT_HANDSHAKE)
         /*
@@ -175,18 +175,19 @@ int tls_setup_handshake(SSL *s)
         }
         if (SSL_IS_FIRST_HANDSHAKE(s)) {
             /* N.B. s->session_ctx == s->ctx here */
-            tsan_counter(&s->session_ctx->stats.sess_accept);
+            ssl_tsan_counter(s->session_ctx, &s->session_ctx->stats.sess_accept);
         } else {
             /* N.B. s->ctx may not equal s->session_ctx */
-            tsan_counter(&s->ctx->stats.sess_accept_renegotiate);
+            ssl_tsan_counter(s->ctx, &s->ctx->stats.sess_accept_renegotiate);
 
             s->s3.tmp.cert_request = 0;
         }
     } else {
         if (SSL_IS_FIRST_HANDSHAKE(s))
-            tsan_counter(&s->session_ctx->stats.sess_connect);
+            ssl_tsan_counter(s->session_ctx, &s->session_ctx->stats.sess_connect);
         else
-            tsan_counter(&s->session_ctx->stats.sess_connect_renegotiate);
+            ssl_tsan_counter(s->session_ctx,
+                         &s->session_ctx->stats.sess_connect_renegotiate);
 
         /* mark client_random uninitialized */
         memset(s->s3.client_random, 0, sizeof(s->s3.client_random));
@@ -309,8 +310,10 @@ int tls_construct_cert_verify(SSL *s, WPACKET *pkt)
         goto err;
     }
 
-    if (EVP_DigestSignInit_ex(mctx, &pctx, md == NULL ? NULL : EVP_MD_name(md),
-                              s->ctx->libctx, s->ctx->propq, pkey) <= 0) {
+    if (EVP_DigestSignInit_ex(mctx, &pctx,
+                              md == NULL ? NULL : EVP_MD_get0_name(md),
+                              s->ctx->libctx, s->ctx->propq, pkey,
+                              NULL) <= 0) {
         SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_EVP_LIB);
         goto err;
     }
@@ -439,7 +442,8 @@ MSG_PROCESS_RETURN tls_process_cert_verify(SSL *s, PACKET *pkt)
             goto err;
         }
     } else if (!tls1_set_peer_legacy_sigalg(s, pkey)) {
-            SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+            SSLfatal(s, SSL_AD_INTERNAL_ERROR,
+                     SSL_R_LEGACY_SIGALG_DISALLOWED_OR_UNSUPPORTED);
             goto err;
     }
 
@@ -450,7 +454,7 @@ MSG_PROCESS_RETURN tls_process_cert_verify(SSL *s, PACKET *pkt)
 
     if (SSL_USE_SIGALGS(s))
         OSSL_TRACE1(TLS, "USING TLSv1.2 HASH %s\n",
-                    md == NULL ? "n/a" : EVP_MD_name(md));
+                    md == NULL ? "n/a" : EVP_MD_get0_name(md));
 
     /* Check for broken implementations of GOST ciphersuites */
     /*
@@ -460,10 +464,10 @@ MSG_PROCESS_RETURN tls_process_cert_verify(SSL *s, PACKET *pkt)
 #ifndef OPENSSL_NO_GOST
     if (!SSL_USE_SIGALGS(s)
         && ((PACKET_remaining(pkt) == 64
-             && (EVP_PKEY_id(pkey) == NID_id_GostR3410_2001
-                 || EVP_PKEY_id(pkey) == NID_id_GostR3410_2012_256))
+             && (EVP_PKEY_get_id(pkey) == NID_id_GostR3410_2001
+                 || EVP_PKEY_get_id(pkey) == NID_id_GostR3410_2012_256))
             || (PACKET_remaining(pkt) == 128
-                && EVP_PKEY_id(pkey) == NID_id_GostR3410_2012_512))) {
+                && EVP_PKEY_get_id(pkey) == NID_id_GostR3410_2012_512))) {
         len = PACKET_remaining(pkt);
     } else
 #endif
@@ -483,17 +487,18 @@ MSG_PROCESS_RETURN tls_process_cert_verify(SSL *s, PACKET *pkt)
     }
 
     OSSL_TRACE1(TLS, "Using client verify alg %s\n",
-                md == NULL ? "n/a" : EVP_MD_name(md));
+                md == NULL ? "n/a" : EVP_MD_get0_name(md));
 
     if (EVP_DigestVerifyInit_ex(mctx, &pctx,
-                                md == NULL ? NULL : EVP_MD_name(md),
-                                s->ctx->libctx, s->ctx->propq, pkey) <= 0) {
+                                md == NULL ? NULL : EVP_MD_get0_name(md),
+                                s->ctx->libctx, s->ctx->propq, pkey,
+                                NULL) <= 0) {
         SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_EVP_LIB);
         goto err;
     }
 #ifndef OPENSSL_NO_GOST
     {
-        int pktype = EVP_PKEY_id(pkey);
+        int pktype = EVP_PKEY_get_id(pkey);
         if (pktype == NID_id_GostR3410_2001
             || pktype == NID_id_GostR3410_2012_256
             || pktype == NID_id_GostR3410_2012_512) {
@@ -1093,7 +1098,7 @@ WORK_STATE tls_finish_handshake(SSL *s, ossl_unused WORK_STATE wst,
                 ssl_update_cache(s, SSL_SESS_CACHE_SERVER);
 
             /* N.B. s->ctx may not equal s->session_ctx */
-            tsan_counter(&s->ctx->stats.sess_accept_good);
+            ssl_tsan_counter(s->ctx, &s->ctx->stats.sess_accept_good);
             s->handshake_func = ossl_statem_accept;
         } else {
             if (SSL_IS_TLS13(s)) {
@@ -1112,10 +1117,12 @@ WORK_STATE tls_finish_handshake(SSL *s, ossl_unused WORK_STATE wst,
                 ssl_update_cache(s, SSL_SESS_CACHE_CLIENT);
             }
             if (s->hit)
-                tsan_counter(&s->session_ctx->stats.sess_hit);
+                ssl_tsan_counter(s->session_ctx,
+                                 &s->session_ctx->stats.sess_hit);
 
             s->handshake_func = ossl_statem_connect;
-            tsan_counter(&s->session_ctx->stats.sess_connect_good);
+            ssl_tsan_counter(s->session_ctx,
+                             &s->session_ctx->stats.sess_connect_good);
         }
 
         if (SSL_IS_DTLS(s)) {
@@ -2378,6 +2385,8 @@ int tls13_save_handshake_digest_for_pha(SSL *s)
         if (!EVP_MD_CTX_copy_ex(s->pha_dgst,
                                 s->s3.handshake_dgst)) {
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+            EVP_MD_CTX_free(s->pha_dgst);
+            s->pha_dgst = NULL;
             return 0;
         }
     }

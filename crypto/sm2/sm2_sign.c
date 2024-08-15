@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2017-2024 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright 2017 Ribose Inc. All Rights Reserved.
  * Ported from Ribose contributions from Botan.
  *
@@ -29,6 +29,7 @@ int ossl_sm2_compute_z_digest(uint8_t *out,
 {
     int rc = 0;
     const EC_GROUP *group = EC_KEY_get0_group(key);
+    const EC_POINT *pubkey = EC_KEY_get0_public_key(key);
     BN_CTX *ctx = NULL;
     EVP_MD_CTX *hash = NULL;
     BIGNUM *p = NULL;
@@ -42,6 +43,12 @@ int ossl_sm2_compute_z_digest(uint8_t *out,
     uint8_t *buf = NULL;
     uint16_t entl = 0;
     uint8_t e_byte = 0;
+
+    /* SM2 Signatures require a public key, check for it */
+    if (pubkey == NULL) {
+        ERR_raise(ERR_LIB_SM2, ERR_R_PASSED_NULL_PARAMETER);
+        goto done;
+    }
 
     hash = EVP_MD_CTX_new();
     ctx = BN_CTX_new_ex(ossl_ec_key_get_libctx(key));
@@ -118,7 +125,7 @@ int ossl_sm2_compute_z_digest(uint8_t *out,
             || BN_bn2binpad(yG, buf, p_bytes) < 0
             || !EVP_DigestUpdate(hash, buf, p_bytes)
             || !EC_POINT_get_affine_coordinates(group,
-                                                EC_KEY_get0_public_key(key),
+                                                pubkey,
                                                 xA, yA, ctx)
             || BN_bn2binpad(xA, buf, p_bytes) < 0
             || !EVP_DigestUpdate(hash, buf, p_bytes)
@@ -145,7 +152,7 @@ static BIGNUM *sm2_compute_msg_hash(const EVP_MD *digest,
                                     const uint8_t *msg, size_t msg_len)
 {
     EVP_MD_CTX *hash = EVP_MD_CTX_new();
-    const int md_size = EVP_MD_size(digest);
+    const int md_size = EVP_MD_get_size(digest);
     uint8_t *z = NULL;
     BIGNUM *e = NULL;
     EVP_MD *fetched_digest = NULL;
@@ -163,7 +170,7 @@ static BIGNUM *sm2_compute_msg_hash(const EVP_MD *digest,
         goto done;
     }
 
-    fetched_digest = EVP_MD_fetch(libctx, EVP_MD_name(digest), propq);
+    fetched_digest = EVP_MD_fetch(libctx, EVP_MD_get0_name(digest), propq);
     if (fetched_digest == NULL) {
         ERR_raise(ERR_LIB_SM2, ERR_R_INTERNAL_ERROR);
         goto done;
@@ -239,8 +246,17 @@ static ECDSA_SIG *sm2_sig_gen(const EC_KEY *key, const BIGNUM *e)
         goto done;
     }
 
+    /*
+     * A3: Generate a random number k in [1,n-1] using random number generators;
+     * A4: Compute (x1,y1)=[k]G, and convert the type of data x1 to be integer
+     *     as specified in clause 4.2.8 of GM/T 0003.1-2012;
+     * A5: Compute r=(e+x1) mod n. If r=0 or r+k=n, then go to A3;
+     * A6: Compute s=(1/(1+dA)*(k-r*dA)) mod n. If s=0, then go to A3;
+     * A7: Convert the type of data (r,s) to be bit strings according to the details
+     *     in clause 4.2.2 of GM/T 0003.1-2012. Then the signature of message M is (r,s).
+     */
     for (;;) {
-        if (!BN_priv_rand_range_ex(k, order, ctx)) {
+        if (!BN_priv_rand_range_ex(k, order, 0, ctx)) {
             ERR_raise(ERR_LIB_SM2, ERR_R_INTERNAL_ERROR);
             goto done;
         }
@@ -273,6 +289,10 @@ static ECDSA_SIG *sm2_sig_gen(const EC_KEY *key, const BIGNUM *e)
             ERR_raise(ERR_LIB_SM2, ERR_R_BN_LIB);
             goto done;
         }
+
+        /* try again if s == 0 */
+        if (BN_is_zero(s))
+            continue;
 
         sig = ECDSA_SIG_new();
         if (sig == NULL) {
@@ -428,6 +448,11 @@ int ossl_sm2_internal_sign(const unsigned char *dgst, int dgstlen,
     ECDSA_SIG *s = NULL;
     int sigleni;
     int ret = -1;
+
+    if (sig == NULL) {
+        ERR_raise(ERR_LIB_SM2, ERR_R_PASSED_NULL_PARAMETER);
+        goto done;
+    }
 
     e = BN_bin2bn(dgst, dgstlen, NULL);
     if (e == NULL) {

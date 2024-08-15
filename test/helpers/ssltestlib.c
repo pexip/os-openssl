@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -7,13 +7,21 @@
  * https://www.openssl.org/source/license.html
  */
 
+/*
+ * We need access to the deprecated low level ENGINE APIs for legacy purposes
+ * when the deprecated calls are not hidden
+ */
+#ifndef OPENSSL_NO_DEPRECATED_3_0
+# define OPENSSL_SUPPRESS_DEPRECATED
+#endif
+
 #include <string.h>
 
+#include <openssl/engine.h>
 #include "internal/nelem.h"
-#include "internal/cryptlib.h" /* for ossl_sleep() */
 #include "ssltestlib.h"
 #include "../testutil.h"
-#include "e_os.h"
+#include "e_os.h" /* for ossl_sleep() etc. */
 
 #ifdef OPENSSL_SYS_UNIX
 # include <unistd.h>
@@ -43,6 +51,7 @@ static int tls_dump_puts(BIO *bp, const char *str);
 static BIO_METHOD *method_tls_dump = NULL;
 static BIO_METHOD *meth_mem = NULL;
 static BIO_METHOD *meth_always_retry = NULL;
+static int retry_err = -1;
 
 /* Note: Not thread safe! */
 const BIO_METHOD *bio_f_tls_dump_filter(void)
@@ -351,8 +360,8 @@ static int mempacket_test_read(BIO *bio, char *out, int outl)
     unsigned int seq, offset, len, epoch;
 
     BIO_clear_retry_flags(bio);
-    thispkt = sk_MEMPACKET_value(ctx->pkts, 0);
-    if (thispkt == NULL || thispkt->num != ctx->currpkt) {
+    if ((thispkt = sk_MEMPACKET_value(ctx->pkts, 0)) == NULL
+        || thispkt->num != ctx->currpkt) {
         /* Probably run out of data */
         BIO_set_retry_read(bio);
         return -1;
@@ -409,6 +418,125 @@ static int mempacket_test_read(BIO *bio, char *out, int outl)
     memcpy(out, thispkt->data, outl);
     mempacket_free(thispkt);
     return outl;
+}
+
+/*
+ * Look for records from different epochs in the last datagram and swap them
+ * around
+ */
+int mempacket_swap_epoch(BIO *bio)
+{
+    MEMPACKET_TEST_CTX *ctx = BIO_get_data(bio);
+    MEMPACKET *thispkt;
+    int rem, len, prevlen = 0, pktnum;
+    unsigned char *rec, *prevrec = NULL, *tmp;
+    unsigned int epoch;
+    int numpkts = sk_MEMPACKET_num(ctx->pkts);
+
+    if (numpkts <= 0)
+        return 0;
+
+    /*
+     * If there are multiple packets we only look in the last one. This should
+     * always be the one where any epoch change occurs.
+     */
+    thispkt = sk_MEMPACKET_value(ctx->pkts, numpkts - 1);
+    if (thispkt == NULL)
+        return 0;
+
+    for (rem = thispkt->len, rec = thispkt->data; rem > 0; rem -= len, rec += len) {
+        if (rem < DTLS1_RT_HEADER_LENGTH)
+            return 0;
+        epoch = (rec[EPOCH_HI] << 8) | rec[EPOCH_LO];
+        len = ((rec[RECORD_LEN_HI] << 8) | rec[RECORD_LEN_LO])
+                + DTLS1_RT_HEADER_LENGTH;
+        if (rem < len)
+            return 0;
+
+        /* Assumes the epoch change does not happen on the first record */
+        if (epoch != ctx->epoch) {
+            if (prevrec == NULL)
+                return 0;
+
+            /*
+             * We found 2 records with different epochs. Take a copy of the
+             * earlier record
+             */
+            tmp = OPENSSL_malloc(prevlen);
+            if (tmp == NULL)
+                return 0;
+
+            memcpy(tmp, prevrec, prevlen);
+            /*
+             * Move everything from this record onwards, including any trailing
+             * records, and overwrite the earlier record
+             */
+            memmove(prevrec, rec, rem);
+            thispkt->len -= prevlen;
+            pktnum = thispkt->num;
+
+            /*
+             * Create a new packet for the earlier record that we took out and
+             * add it to the end of the packet list.
+             */
+            thispkt = OPENSSL_malloc(sizeof(*thispkt));
+            if (thispkt == NULL) {
+                OPENSSL_free(tmp);
+                return 0;
+            }
+            thispkt->type = INJECT_PACKET;
+            thispkt->data = tmp;
+            thispkt->len = prevlen;
+            thispkt->num = pktnum + 1;
+            if (sk_MEMPACKET_insert(ctx->pkts, thispkt, numpkts) <= 0) {
+                OPENSSL_free(tmp);
+                OPENSSL_free(thispkt);
+                return 0;
+            }
+
+            return 1;
+        }
+        prevrec = rec;
+        prevlen = len;
+    }
+
+    return 0;
+}
+
+/* Move packet from position s to position d in the list (d < s) */
+int mempacket_move_packet(BIO *bio, int d, int s)
+{
+    MEMPACKET_TEST_CTX *ctx = BIO_get_data(bio);
+    MEMPACKET *thispkt;
+    int numpkts = sk_MEMPACKET_num(ctx->pkts);
+    int i;
+
+    if (d >= s)
+        return 0;
+
+    /* We need at least s + 1 packets to be able to swap them */
+    if (numpkts <= s)
+        return 0;
+
+    /* Get the packet at position s */
+    thispkt = sk_MEMPACKET_value(ctx->pkts, s);
+    if (thispkt == NULL)
+        return 0;
+
+    /* Remove and re-add it */
+    if (sk_MEMPACKET_delete(ctx->pkts, s) != thispkt)
+        return 0;
+
+    thispkt->num -= (s - d);
+    if (sk_MEMPACKET_insert(ctx->pkts, thispkt, d) <= 0)
+        return 0;
+
+    /* Increment the packet numbers for moved packets */
+    for (i = d + 1; i <= s; i++) {
+        thispkt = sk_MEMPACKET_value(ctx->pkts, i);
+        thispkt->num++;
+    }
+    return 1;
 }
 
 int mempacket_test_inject(BIO *bio, const char *in, int inl, int pktnum,
@@ -470,7 +598,9 @@ int mempacket_test_inject(BIO *bio, const char *in, int inl, int pktnum,
         thispkt->type = type;
     }
 
-    for(i = 0; (looppkt = sk_MEMPACKET_value(ctx->pkts, i)) != NULL; i++) {
+    for (i = 0; i < sk_MEMPACKET_num(ctx->pkts); i++) {
+        if (!TEST_ptr(looppkt = sk_MEMPACKET_value(ctx->pkts, i)))
+            goto err;
         /* Check if we found the right place to insert this packet */
         if (looppkt->num > thispkt->num) {
             if (sk_MEMPACKET_insert(ctx->pkts, thispkt, i) == 0)
@@ -640,16 +770,21 @@ static int always_retry_free(BIO *bio)
     return 1;
 }
 
+void set_always_retry_err_val(int err)
+{
+    retry_err = err;
+}
+
 static int always_retry_read(BIO *bio, char *out, int outl)
 {
     BIO_set_retry_read(bio);
-    return -1;
+    return retry_err;
 }
 
 static int always_retry_write(BIO *bio, const char *in, int inl)
 {
     BIO_set_retry_write(bio);
-    return -1;
+    return retry_err;
 }
 
 static long always_retry_ctrl(BIO *bio, int cmd, long num, void *ptr)
@@ -675,13 +810,13 @@ static long always_retry_ctrl(BIO *bio, int cmd, long num, void *ptr)
 static int always_retry_gets(BIO *bio, char *buf, int size)
 {
     BIO_set_retry_read(bio);
-    return -1;
+    return retry_err;
 }
 
 static int always_retry_puts(BIO *bio, const char *str)
 {
     BIO_set_retry_write(bio);
-    return -1;
+    return retry_err;
 }
 
 int create_ssl_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
@@ -695,7 +830,9 @@ int create_ssl_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
     if (sctx != NULL) {
         if (*sctx != NULL)
             serverctx = *sctx;
-        else if (!TEST_ptr(serverctx = SSL_CTX_new_ex(libctx, NULL, sm)))
+        else if (!TEST_ptr(serverctx = SSL_CTX_new_ex(libctx, NULL, sm))
+            || !TEST_true(SSL_CTX_set_options(serverctx,
+                                              SSL_OP_ALLOW_CLIENT_RENEGOTIATION)))
             goto err;
     }
 
@@ -773,16 +910,13 @@ static int set_nb(int fd)
     return flags;
 }
 
-int create_test_sockets(int *cfd, int *sfd)
+int create_test_sockets(int *cfdp, int *sfdp)
 {
     struct sockaddr_in sin;
     const char *host = "127.0.0.1";
     int cfd_connected = 0, ret = 0;
     socklen_t slen = sizeof(sin);
-    int afd = -1;
-
-    *cfd = -1;
-    *sfd = -1;
+    int afd = -1, cfd = -1, sfd = -1;
 
     memset ((char *) &sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
@@ -801,37 +935,39 @@ int create_test_sockets(int *cfd, int *sfd)
     if (listen(afd, 1) < 0)
         goto out;
 
-    *cfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (*cfd < 0)
+    cfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (cfd < 0)
         goto out;
 
     if (set_nb(afd) == -1)
         goto out;
 
-    while (*sfd == -1 || !cfd_connected ) {
-        *sfd = accept(afd, NULL, 0);
-        if (*sfd == -1 && errno != EAGAIN)
+    while (sfd == -1 || !cfd_connected ) {
+        sfd = accept(afd, NULL, 0);
+        if (sfd == -1 && errno != EAGAIN)
             goto out;
 
-        if (!cfd_connected && connect(*cfd, (struct sockaddr*)&sin, sizeof(sin)) < 0)
+        if (!cfd_connected && connect(cfd, (struct sockaddr*)&sin, sizeof(sin)) < 0)
             goto out;
         else
             cfd_connected = 1;
     }
 
-    if (set_nb(*cfd) == -1 || set_nb(*sfd) == -1)
+    if (set_nb(cfd) == -1 || set_nb(sfd) == -1)
         goto out;
     ret = 1;
+    *cfdp = cfd;
+    *sfdp = sfd;
     goto success;
 
 out:
-        if (*cfd != -1)
-            close(*cfd);
-        if (*sfd != -1)
-            close(*sfd);
+    if (cfd != -1)
+        close(cfd);
+    if (sfd != -1)
+        close(sfd);
 success:
-        if (afd != -1)
-            close(afd);
+    if (afd != -1)
+        close(afd);
     return ret;
 }
 
@@ -1054,4 +1190,28 @@ void shutdown_ssl_connection(SSL *serverssl, SSL *clientssl)
     SSL_shutdown(serverssl);
     SSL_free(serverssl);
     SSL_free(clientssl);
+}
+
+ENGINE *load_dasync(void)
+{
+#if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DYNAMIC_ENGINE)
+    ENGINE *e;
+
+    if (!TEST_ptr(e = ENGINE_by_id("dasync")))
+        return NULL;
+
+    if (!TEST_true(ENGINE_init(e))) {
+        ENGINE_free(e);
+        return NULL;
+    }
+
+    if (!TEST_true(ENGINE_register_ciphers(e))) {
+        ENGINE_free(e);
+        return NULL;
+    }
+
+    return e;
+#else
+    return NULL;
+#endif
 }

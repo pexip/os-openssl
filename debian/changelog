@@ -1,3 +1,286 @@
+openssl (3.0.14-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.14
+    - CVE-2024-2511 (Unbounded memory growth with session handling in TLSv1.3)
+      (Closes: #1068658).
+    - CVE-2024-4603 (Excessive time spent checking DSA keys and parameters)
+      (Closes: #1071972).
+    - CVE-2024-4741 (Use After Free with SSL_free_buffers)
+      (Closes: #1072113).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Thu, 15 Aug 2024 23:51:02 +0200
+
+openssl (3.0.13-1~deb12u2) bookworm; urgency=medium
+
+  * Revert "Improved detection of engine-provided private "classic"
+    keys" (Closes: #1074764).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 05 Jul 2024 23:04:47 +0200
+
+openssl (3.0.13-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.13
+   - CVE-2023-5678 (Fix excessive time spent in DH check / generation with
+     large Q parameter value) (Closes: #1055473).
+   - CVE-2023-6129 (POLY1305 MAC implementation corrupts vector registers on
+     PowerPC) (Closes: #1060347).
+   - CVE-2023-6237 (Excessive time spent checking invalid RSA public keys)
+     (Closes: #1060858)
+   - CVE-2024-0727 (PKCS12 Decoding crashes) (Closes: #1061582).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 03 Mar 2024 10:47:43 +0100
+
+openssl (3.0.11-1~deb12u2) bookworm-security; urgency=medium
+
+  * CVE-2023-5363 (Incorrect cipher key and IV length processing).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Mon, 23 Oct 2023 19:52:22 +0200
+
+openssl (3.0.11-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.11
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 26 Sep 2023 21:08:42 +0200
+
+openssl (3.0.10-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.10
+   - CVE-2023-2975 (AES-SIV implementation ignores empty associated data
+     entries) (Closes: #1041818).
+   - CVE-2023-3446 (Excessive time spent checking DH keys and parameters).
+     (Closes: #1041817).
+   - CVE-2023-3817 (Excessive time spent checking DH q parameter value).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 26 Aug 2023 11:29:40 +0200
+
+openssl (3.0.9-1) unstable; urgency=medium
+
+  * Import 3.0.9
+   - CVE-2023-0464 (Excessive Resource Usage Verifying X.509 Policy
+     Constraints) (Closes: #1034720).
+   - CVE-2023-0465 (Invalid certificate policies in leaf certificates are
+     silently ignored).
+   - CVE-2023-0466 (Certificate policy check not enabled).
+   - Alternative fix for CVE-2022-4304 (Timing Oracle in RSA Decryption).
+   - CVE-2023-2650 (Possible DoS translating ASN.1 object identifiers).
+   - CVE-2023-1255 (Input buffer over-read in AES-XTS implementation on 64 bit ARM).
+   - Add new symbol.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 30 May 2023 18:12:36 +0200
+
+openssl (3.0.8-1) unstable; urgency=medium
+
+  * Import 3.0.8
+    - CVE-2023-0401 (NULL dereference during PKCS7 data verification).
+    - CVE-2023-0286 (X.400 address type confusion in X.509 GeneralName).
+    - CVE-2023-0217 (NULL dereference validating DSA public key).
+    - CVE-2023-0216 (Invalid pointer dereference in d2i_PKCS7 functions).
+    - CVE-2023-0215 (Use-after-free following BIO_new_NDEF).
+    - CVE-2022-4450 (Double free after calling PEM_read_bio_ex).
+    - CVE-2022-4304 (Timing Oracle in RSA Decryption).
+    - CVE-2022-4203 (X.509 Name Constraints Read Buffer Overflow).
+    - Padlock: fix byte swapping assembly for AES-192 and 256
+      (Closes: #1029259).
+    - Add new symbol.
+  * Make loongarch64 little endian (Closes: #1029281).
+  * Drop conflict against libssl1.0-dev.
+  * Update Standards-Version to 4.6.1. No changes required.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 07 Feb 2023 21:42:42 +0100
+
+openssl (3.0.7-2) unstable; urgency=medium
+
+  [ Sebastian Andrzej Siewior ]
+  * CVE-2022-3996 (X.509 Policy Constraints Double Locking) (Closes: #1027102).
+  * Add loongarch64 target (Closes: #1024414).
+  * Avoid SIGSEGV with engines, reported by ValdikSS (Closes: #1028898).
+  * Set digestname from argv[0] if it is a builtin hash name
+   (Closes:# 1025461).
+
+  [ Helmut Grohne ]
+  * Support the noudeb build profile (Closes: #1024929).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Thu, 19 Jan 2023 21:31:42 +0100
+
+openssl (3.0.7-1) unstable; urgency=medium
+
+  * Import 3.0.7
+    - Using a Custom Cipher with NID_undef may lead to NULL encryption
+      (CVE-2022-3358) (Closes: #1021620).
+    - X.509 Email Address 4-byte Buffer Overflow (CVE-2022-3602).
+    - X.509 Email Address Variable Length Buffer Overflow (CVE-2022-3786).
+  * Disable rdrand engine (the opcode on x86).
+  * Remove config bits for MIPS R6, the generic MIPS config can be used.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 01 Nov 2022 21:39:01 +0100
+
+openssl (3.0.5-4) unstable; urgency=medium
+
+  * Add ssl_conf() serialisation (Closes: #1020308).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Mon, 19 Sep 2022 21:59:19 +0200
+
+openssl (3.0.5-3) unstable; urgency=medium
+
+  * Add cert.pem symlink pointing to ca-certificates' ca-certificates.crt
+   (Closes: #805646).
+  * Compile with OPENSSL_TLS_SECURITY_LEVEL=2 (Closes: #918727).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 18 Sep 2022 21:48:05 +0200
+
+openssl (3.0.5-2) unstable; urgency=medium
+
+  * Update to commit ce3951fc30c7b ("VC++ 2008 or earlier x86 compilers…")
+    (Closes: #1016290).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 14 Aug 2022 21:57:05 +0200
+
+openssl (3.0.5-1) unstable; urgency=medium
+
+  * Import 3.0.5
+    - Possible module_list_lock crash (Closes: #1013309).
+    - CVE-2022-2097 (AES OCB fails to encrypt some bytes).
+  * Update to 55461bf22a57a ("Don't try to make configuration leaner")
+  * Use -latomic on arc,nios2 and sparc (Closes: #1015792).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 24 Jul 2022 16:30:30 +0200
+
+openssl (3.0.4-2) unstable; urgency=medium
+
+  * Address a AVX2 related memory corruption (Closes: #1013441)
+    (CVE-2022-2274).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 24 Jun 2022 19:27:02 +0200
+
+openssl (3.0.4-1) unstable; urgency=medium
+
+  * Import 3.0.4
+    - CVE-2022-2068 (The c_rehash script allows command injection)
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Wed, 22 Jun 2022 08:04:00 +0200
+
+openssl (3.0.3-8) unstable; urgency=medium
+
+  * Update to openssl-3.0 head.
+  * Avoid reusing the init_lock for a different purpose (Closes: #1011339).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Mon, 13 Jun 2022 22:16:39 +0200
+
+openssl (3.0.3-7) unstable; urgency=medium
+
+  * Remove the provider section from the provided openssl.cnf
+   (Closes: #1011051).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Wed, 08 Jun 2022 23:10:14 +0200
+
+openssl (3.0.3-6) unstable; urgency=medium
+
+  * Update to openssl-3.0 head which fixes the expired certs in the testsuite.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 04 Jun 2022 15:25:53 +0200
+
+openssl (3.0.3-5) unstable; urgency=medium
+
+  * Don't generate endbr32 opcodes on i386. Thanks to Wolfgang Walter
+    (Closes: #1011127).
+  * Backport more compare fixes from upstream.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 20 May 2022 22:01:29 +0200
+
+openssl (3.0.3-4) unstable; urgency=medium
+
+  * Add an init to EVP_PKEY_Q_keygen(). GH#18247, reference 1010958.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Mon, 16 May 2022 23:20:27 +0200
+
+openssl (3.0.3-3) unstable; urgency=medium
+
+  * Revert "Use .s extension for ia64 assembler" and don't zero used
+    registers. Thanks to John Paul Adrian Glaubitz for debugging
+    (Closes: #1010975).
+  * Don't build ev4/ev5 optimized libraries on alpha.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 14 May 2022 21:50:31 +0200
+
+openssl (3.0.3-2) unstable; urgency=medium
+
+  * Update standards to 4.6.1. No changes were needed.
+  * Upload to unstable.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 13 May 2022 23:25:01 +0200
+
+openssl (3.0.3-1) experimental; urgency=medium
+
+  * Import 3.0.3
+    - CVE-2022-1292 (The c_rehash script allows command injection).
+    - CVE-2022-1343 (OCSP_basic_verify may incorrectly verify the response
+      signing certificate).
+    - CVE-2022-1434 (Incorrect MAC key used in the RC4-MD5 ciphersuite).
+    - CVE-2022-1473 (Resource leakage when decoding certificates and keys).
+    - Add new symbols.
+  * Correct the openssl.cnf to provide proper default configuration. Thanks to
+    Matthias Blümel (Closes: #1010360).
+  * Use a separator in the CipherString in openssl.cnf (Closes: #948800).
+  * Remove the postinst script which was used to restart daemons after a
+    library upgrade. It is not updated and essentially dead code. Users are
+    advised to switch to checkrestart/ needrestart or a similar service.
+    Thanks to Helmut Grohne (Closes: #983722).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 06 May 2022 22:21:52 +0200
+
+openssl (3.0.2-1) experimental; urgency=medium
+
+  * Import 3.0.2
+    - CVE-2022-0778 (Infinite loop in BN_mod_sqrt() reachable when parsing
+      certificates).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 15 Mar 2022 20:54:57 +0100
+
+openssl (3.0.1-1) experimental; urgency=medium
+
+  * Import 3.0.1
+    - CVE-2021-4044 (Fixed invalid handling of X509_verify_cert() internal
+      errors in libssl).
+    - CVE-2021-4160 (Carry propagation bug in the MIPS32 and MIPS64 squaring
+      procedure.)
+  * Zero used registers at function exit.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Mon, 27 Dec 2021 11:44:50 +0100
+
+openssl (3.0.0-1) experimental; urgency=medium
+
+  * Import 3.0.0.
+  * Add ARC, patch by Vineet Gupta (Closes: #989442).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 11 Sep 2021 10:41:54 +0200
+
+openssl (3.0.0~~beta2-1) experimental; urgency=medium
+
+  * Import 3.0.0-beta2.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 30 Jul 2021 07:51:18 +0200
+
+openssl (3.0.0~~beta1-1) experimental; urgency=medium
+
+  * Import 3.0.0-beta1.
+  * Use HARNESS_VERBOSE again (otherwise the test suite might killed since no
+    progress is visible).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Wed, 23 Jun 2021 19:32:27 +0200
+
+openssl (3.0.0~~alpha16-1) experimental; urgency=medium
+
+  * Import 3.0.0-alpha16.
+  * Use VERBOSE_FAILURE to log only failures in the build log.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Thu, 06 May 2021 21:54:38 +0200
+
+openssl (3.0.0~~alpha15-1) experimental; urgency=medium
+
+  * Import 3.0.0-alpha15.
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Wed, 28 Apr 2021 23:26:47 +0200
+
 openssl (3.0.0~~alpha13-2) experimental; urgency=medium
 
   * Add a proposed patch from upstream to skip negativ errno number in the

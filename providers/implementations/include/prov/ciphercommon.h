@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2019-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -14,8 +14,8 @@
 #include "internal/cryptlib.h"
 #include "crypto/modes.h"
 
-#define MAXCHUNK    ((size_t)1 << (sizeof(long) * 8 - 2))
-#define MAXBITCHUNK ((size_t)1 << (sizeof(size_t) * 8 - 4))
+# define MAXCHUNK    ((size_t)1 << 30)
+# define MAXBITCHUNK ((size_t)1 << (sizeof(size_t) * 8 - 4))
 
 #define GENERIC_BLOCK_SIZE 16
 #define IV_STATE_UNINITIALISED 0  /* initial state is not initialized */
@@ -36,11 +36,19 @@ typedef int (PROV_CIPHER_HW_FN)(PROV_CIPHER_CTX *dat, unsigned char *out,
 #define PROV_CIPHER_FLAG_CUSTOM_IV        0x0002
 #define PROV_CIPHER_FLAG_CTS              0x0004
 #define PROV_CIPHER_FLAG_TLS1_MULTIBLOCK  0x0008
+#define PROV_CIPHER_FLAG_RAND_KEY         0x0010
 /* Internal flags that are only used within the provider */
-#define PROV_CIPHER_FLAG_VARIABLE_LENGTH  0x0010
-#define PROV_CIPHER_FLAG_INVERSE_CIPHER   0x0020
+#define PROV_CIPHER_FLAG_VARIABLE_LENGTH  0x0100
+#define PROV_CIPHER_FLAG_INVERSE_CIPHER   0x0200
 
 struct prov_cipher_ctx_st {
+    /* place buffer at the beginning for memory alignment */
+    /* The original value of the iv */
+    unsigned char oiv[GENERIC_BLOCK_SIZE];
+    /* Buffer of partial blocks processed via update calls */
+    unsigned char buf[GENERIC_BLOCK_SIZE];
+    unsigned char iv[GENERIC_BLOCK_SIZE];
+
     block128_f block;
     union {
         cbc128_f cbc;
@@ -57,6 +65,7 @@ struct prov_cipher_ctx_st {
     unsigned int pad : 1;    /* Whether padding should be used or not */
     unsigned int enc : 1;    /* Set to 1 for encrypt, or 0 otherwise */
     unsigned int iv_set : 1; /* Set when the iv is copied to the iv/oiv buffers */
+    unsigned int key_set : 1; /* Set when key is set on the context */
     unsigned int updated : 1; /* Set to 1 during update for one shot ciphers */
     unsigned int variable_keylength : 1;
     unsigned int inverse_cipher : 1; /* set to 1 to use inverse cipher */
@@ -81,12 +90,6 @@ struct prov_cipher_ctx_st {
      * manage partial blocks themselves.
      */
     unsigned int num;
-
-    /* The original value of the iv */
-    unsigned char oiv[GENERIC_BLOCK_SIZE];
-    /* Buffer of partial blocks processed via update calls */
-    unsigned char buf[GENERIC_BLOCK_SIZE];
-    unsigned char iv[GENERIC_BLOCK_SIZE];
     const PROV_CIPHER_HW *hw; /* hardware specific functions */
     const void *ks; /* Pointer to algorithm specific key data */
     OSSL_LIB_CTX *libctx;

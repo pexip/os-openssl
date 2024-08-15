@@ -20,7 +20,7 @@
 #include "prov/implementations.h"
 #include "prov/providercommon.h"
 
-#define DES_FLAGS 0
+#define DES_FLAGS PROV_CIPHER_FLAG_RAND_KEY
 
 static OSSL_FUNC_cipher_freectx_fn des_freectx;
 static OSSL_FUNC_cipher_encrypt_init_fn des_einit;
@@ -71,7 +71,8 @@ static void des_freectx(void *vctx)
 }
 
 static int des_init(void *vctx, const unsigned char *key, size_t keylen,
-                    const unsigned char *iv, size_t ivlen, int enc)
+                    const unsigned char *iv, size_t ivlen,
+                    const OSSL_PARAM params[], int enc)
 {
     PROV_CIPHER_CTX *ctx = (PROV_CIPHER_CTX *)vctx;
 
@@ -85,6 +86,9 @@ static int des_init(void *vctx, const unsigned char *key, size_t keylen,
     if (iv != NULL) {
         if (!ossl_cipher_generic_initiv(ctx, iv, ivlen))
             return 0;
+    } else if (ctx->iv_set) {
+        /* reset IV to keep compatibility with 1.1.1 */
+        memcpy(ctx->iv, ctx->oiv, ctx->ivlen);
     }
 
     if (key != NULL) {
@@ -92,21 +96,25 @@ static int des_init(void *vctx, const unsigned char *key, size_t keylen,
             ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_KEY_LENGTH);
             return 0;
         }
-        return ctx->hw->init(ctx, key, keylen);
+        if (!ctx->hw->init(ctx, key, keylen))
+            return 0;
+        ctx->key_set = 1;
     }
-    return 1;
+    return ossl_cipher_generic_set_ctx_params(ctx, params);
 }
 
 static int des_einit(void *vctx, const unsigned char *key, size_t keylen,
-                     const unsigned char *iv, size_t ivlen)
+                     const unsigned char *iv, size_t ivlen,
+                     const OSSL_PARAM params[])
 {
-    return des_init(vctx, key, keylen, iv, ivlen, 1);
+    return des_init(vctx, key, keylen, iv, ivlen, params, 1);
 }
 
 static int des_dinit(void *vctx, const unsigned char *key, size_t keylen,
-                     const unsigned char *iv, size_t ivlen)
+                     const unsigned char *iv, size_t ivlen,
+                     const OSSL_PARAM params[])
 {
-    return des_init(vctx, key, keylen, iv, ivlen, 0);
+    return des_init(vctx, key, keylen, iv, ivlen, params, 0);
 }
 
 static int des_generatekey(PROV_CIPHER_CTX *ctx, void *ptr)
@@ -115,7 +123,7 @@ static int des_generatekey(PROV_CIPHER_CTX *ctx, void *ptr)
     DES_cblock *deskey = ptr;
     size_t kl = ctx->keylen;
 
-    if (kl == 0 || RAND_priv_bytes_ex(ctx->libctx, ptr, kl) <= 0)
+    if (kl == 0 || RAND_priv_bytes_ex(ctx->libctx, ptr, kl, 0) <= 0)
         return 0;
     DES_set_odd_parity(deskey);
     return 1;

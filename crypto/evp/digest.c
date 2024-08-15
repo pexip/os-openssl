@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -14,21 +14,38 @@
 #include <openssl/objects.h>
 #include <openssl/evp.h>
 #include <openssl/ec.h>
-#include <openssl/engine.h>
+#ifndef FIPS_MODULE
+# include <openssl/engine.h>
+#endif
 #include <openssl/params.h>
 #include <openssl/core_names.h>
 #include "internal/cryptlib.h"
-#include "crypto/evp.h"
 #include "internal/provider.h"
+#include "internal/core.h"
+#include "crypto/evp.h"
 #include "evp_local.h"
 
-
-void evp_md_ctx_clear_digest(EVP_MD_CTX *ctx, int force)
+static void cleanup_old_md_data(EVP_MD_CTX *ctx, int force)
 {
-    if (ctx->provctx != NULL) {
+    if (ctx->digest != NULL) {
+        if (ctx->digest->cleanup != NULL
+                && !EVP_MD_CTX_test_flags(ctx, EVP_MD_CTX_FLAG_CLEANED))
+            ctx->digest->cleanup(ctx);
+        if (ctx->md_data != NULL && ctx->digest->ctx_size > 0
+                && (!EVP_MD_CTX_test_flags(ctx, EVP_MD_CTX_FLAG_REUSE)
+                    || force)) {
+            OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
+            ctx->md_data = NULL;
+        }
+    }
+}
+
+void evp_md_ctx_clear_digest(EVP_MD_CTX *ctx, int force, int keep_fetched)
+{
+    if (ctx->algctx != NULL) {
         if (ctx->digest != NULL && ctx->digest->freectx != NULL)
-            ctx->digest->freectx(ctx->provctx);
-        ctx->provctx = NULL;
+            ctx->digest->freectx(ctx->algctx);
+        ctx->algctx = NULL;
         EVP_MD_CTX_set_flags(ctx, EVP_MD_CTX_FLAG_CLEANED);
     }
 
@@ -38,12 +55,7 @@ void evp_md_ctx_clear_digest(EVP_MD_CTX *ctx, int force)
      * Don't assume ctx->md_data was cleaned in EVP_Digest_Final, because
      * sometimes only copies of the context are ever finalised.
      */
-    if (ctx->digest && ctx->digest->cleanup
-        && !EVP_MD_CTX_test_flags(ctx, EVP_MD_CTX_FLAG_CLEANED))
-        ctx->digest->cleanup(ctx);
-    if (ctx->digest && ctx->digest->ctx_size && ctx->md_data
-            && (!EVP_MD_CTX_test_flags(ctx, EVP_MD_CTX_FLAG_REUSE) || force))
-        OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
+    cleanup_old_md_data(ctx, force);
     if (force)
         ctx->digest = NULL;
 
@@ -53,19 +65,19 @@ void evp_md_ctx_clear_digest(EVP_MD_CTX *ctx, int force)
 #endif
 
     /* Non legacy code, this has to be later than the ctx->digest cleaning */
-    EVP_MD_free(ctx->fetched_digest);
-    ctx->fetched_digest = NULL;
-    ctx->reqdigest = NULL;
+    if (!keep_fetched) {
+        EVP_MD_free(ctx->fetched_digest);
+        ctx->fetched_digest = NULL;
+        ctx->reqdigest = NULL;
+    }
 }
 
-/* This call frees resources associated with the context */
-int EVP_MD_CTX_reset(EVP_MD_CTX *ctx)
+static int evp_md_ctx_reset_ex(EVP_MD_CTX *ctx, int keep_fetched)
 {
     if (ctx == NULL)
         return 1;
 
 #ifndef FIPS_MODULE
-    /* TODO(3.0): Temporarily no support for EVP_DigestSign* in FIPS module */
     /*
      * pctx should be freed by the user of EVP_MD_CTX
      * if EVP_MD_CTX_FLAG_KEEP_PKEY_CTX is set
@@ -76,10 +88,17 @@ int EVP_MD_CTX_reset(EVP_MD_CTX *ctx)
     }
 #endif
 
-    evp_md_ctx_clear_digest(ctx, 0);
-    OPENSSL_cleanse(ctx, sizeof(*ctx));
+    evp_md_ctx_clear_digest(ctx, 0, keep_fetched);
+    if (!keep_fetched)
+        OPENSSL_cleanse(ctx, sizeof(*ctx));
 
     return 1;
+}
+
+/* This call frees resources associated with the context */
+int EVP_MD_CTX_reset(EVP_MD_CTX *ctx)
+{
+    return evp_md_ctx_reset_ex(ctx, 0);
 }
 
 #ifndef FIPS_MODULE
@@ -119,18 +138,11 @@ void EVP_MD_CTX_free(EVP_MD_CTX *ctx)
         return;
 
     EVP_MD_CTX_reset(ctx);
-
     OPENSSL_free(ctx);
-    return;
 }
 
-int EVP_DigestInit(EVP_MD_CTX *ctx, const EVP_MD *type)
-{
-    EVP_MD_CTX_reset(ctx);
-    return EVP_DigestInit_ex(ctx, type, NULL);
-}
-
-int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
+static int evp_md_init_internal(EVP_MD_CTX *ctx, const EVP_MD *type,
+                                const OSSL_PARAM params[], ENGINE *impl)
 {
 #if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODULE)
     ENGINE *tmpimpl = NULL;
@@ -139,7 +151,7 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
 #if !defined(FIPS_MODULE)
     if (ctx->pctx != NULL
             && EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx->pctx)
-            && ctx->pctx->op.sig.sigprovctx != NULL) {
+            && ctx->pctx->op.sig.algctx != NULL) {
         /*
          * Prior to OpenSSL 3.0 calling EVP_DigestInit_ex() on an mdctx
          * previously initialised with EVP_DigestSignInit() would retain
@@ -157,14 +169,14 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
 
     EVP_MD_CTX_clear_flags(ctx, EVP_MD_CTX_FLAG_CLEANED);
 
-    if (ctx->provctx != NULL) {
+    if (ctx->algctx != NULL) {
         if (!ossl_assert(ctx->digest != NULL)) {
             ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
             return 0;
         }
         if (ctx->digest->freectx != NULL)
-            ctx->digest->freectx(ctx->provctx);
-        ctx->provctx = NULL;
+            ctx->digest->freectx(ctx->algctx);
+        ctx->algctx = NULL;
     }
 
     if (type != NULL) {
@@ -212,7 +224,10 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
 #if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODULE)
             || tmpimpl != NULL
 #endif
-            || (ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) != 0) {
+            || (ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) != 0
+            || (type != NULL && type->origin == EVP_ORIG_METH)
+            || (type == NULL && ctx->digest != NULL
+                             && ctx->digest->origin == EVP_ORIG_METH)) {
         if (ctx->digest == ctx->fetched_digest)
             ctx->digest = NULL;
         EVP_MD_free(ctx->fetched_digest);
@@ -220,10 +235,7 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         goto legacy;
     }
 
-    if (ctx->digest != NULL && ctx->digest->ctx_size > 0) {
-        OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
-        ctx->md_data = NULL;
-    }
+    cleanup_old_md_data(ctx, 1);
 
     /* Start of non-legacy code below */
 
@@ -233,7 +245,10 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
         return 0;
 #else
-        EVP_MD *provmd = EVP_MD_fetch(NULL, OBJ_nid2sn(type->type), "");
+        /* The NULL digest is a special case */
+        EVP_MD *provmd = EVP_MD_fetch(NULL,
+                                      type->type != NID_undef ? OBJ_nid2sn(type->type)
+                                                              : "NULL", "");
 
         if (provmd == NULL) {
             ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
@@ -245,10 +260,10 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
 #endif
     }
 
-    if (ctx->provctx != NULL && ctx->digest != NULL && ctx->digest != type) {
+    if (ctx->algctx != NULL && ctx->digest != NULL && ctx->digest != type) {
         if (ctx->digest->freectx != NULL)
-            ctx->digest->freectx(ctx->provctx);
-        ctx->provctx = NULL;
+            ctx->digest->freectx(ctx->algctx);
+        ctx->algctx = NULL;
     }
     if (type->prov != NULL && ctx->fetched_digest != type) {
         if (!EVP_MD_up_ref((EVP_MD *)type)) {
@@ -259,9 +274,9 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         ctx->fetched_digest = (EVP_MD *)type;
     }
     ctx->digest = type;
-    if (ctx->provctx == NULL) {
-        ctx->provctx = ctx->digest->newctx(ossl_provider_ctx(type->prov));
-        if (ctx->provctx == NULL) {
+    if (ctx->algctx == NULL) {
+        ctx->algctx = ctx->digest->newctx(ossl_provider_ctx(type->prov));
+        if (ctx->algctx == NULL) {
             ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
             return 0;
         }
@@ -272,7 +287,7 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         return 0;
     }
 
-    return ctx->digest->dinit(ctx->provctx);
+    return ctx->digest->dinit(ctx->algctx, params);
 
     /* Code below to be removed when legacy support is dropped. */
  legacy:
@@ -309,10 +324,8 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
     }
 #endif
     if (ctx->digest != type) {
-        if (ctx->digest && ctx->digest->ctx_size) {
-            OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
-            ctx->md_data = NULL;
-        }
+        cleanup_old_md_data(ctx, 1);
+
         ctx->digest = type;
         if (!(ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) && type->ctx_size) {
             ctx->update = type->update;
@@ -327,10 +340,6 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
  skip_to_init:
 #endif
 #ifndef FIPS_MODULE
-    /*
-     * TODO(3.0): Temporarily no support for EVP_DigestSign* inside FIPS module
-     * or when using providers.
-     */
     if (ctx->pctx != NULL
             && (!EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx->pctx)
                  || ctx->pctx->op.sig.signature == NULL)) {
@@ -346,6 +355,23 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
     return ctx->digest->init(ctx);
 }
 
+int EVP_DigestInit_ex2(EVP_MD_CTX *ctx, const EVP_MD *type,
+                       const OSSL_PARAM params[])
+{
+    return evp_md_init_internal(ctx, type, params, NULL);
+}
+
+int EVP_DigestInit(EVP_MD_CTX *ctx, const EVP_MD *type)
+{
+    EVP_MD_CTX_reset(ctx);
+    return evp_md_init_internal(ctx, type, NULL, NULL);
+}
+
+int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
+{
+    return evp_md_init_internal(ctx, type, NULL, impl);
+}
+
 int EVP_DigestUpdate(EVP_MD_CTX *ctx, const void *data, size_t count)
 {
     if (count == 0)
@@ -353,7 +379,7 @@ int EVP_DigestUpdate(EVP_MD_CTX *ctx, const void *data, size_t count)
 
     if (ctx->pctx != NULL
             && EVP_PKEY_CTX_IS_SIGNATURE_OP(ctx->pctx)
-            && ctx->pctx->op.sig.sigprovctx != NULL) {
+            && ctx->pctx->op.sig.algctx != NULL) {
         /*
          * Prior to OpenSSL 3.0 EVP_DigestSignUpdate() and
          * EVP_DigestVerifyUpdate() were just macros for EVP_DigestUpdate().
@@ -379,7 +405,7 @@ int EVP_DigestUpdate(EVP_MD_CTX *ctx, const void *data, size_t count)
         ERR_raise(ERR_LIB_EVP, EVP_R_UPDATE_ERROR);
         return 0;
     }
-    return ctx->digest->dupdate(ctx->provctx, data, count);
+    return ctx->digest->dupdate(ctx->algctx, data, count);
 
     /* Code below to be removed when legacy support is dropped. */
  legacy:
@@ -405,7 +431,7 @@ int EVP_DigestFinal_ex(EVP_MD_CTX *ctx, unsigned char *md, unsigned int *isize)
     if (ctx->digest == NULL)
         return 0;
 
-    sz = EVP_MD_size(ctx->digest);
+    sz = EVP_MD_get_size(ctx->digest);
     if (sz < 0)
         return 0;
     mdsize = sz;
@@ -417,11 +443,11 @@ int EVP_DigestFinal_ex(EVP_MD_CTX *ctx, unsigned char *md, unsigned int *isize)
         return 0;
     }
 
-    ret = ctx->digest->dfinal(ctx->provctx, md, &size, mdsize);
+    ret = ctx->digest->dfinal(ctx->algctx, md, &size, mdsize);
 
     if (isize != NULL) {
         if (size <= UINT_MAX) {
-            *isize = (int)size;
+            *isize = (unsigned int)size;
         } else {
             ERR_raise(ERR_LIB_EVP, EVP_R_FINAL_ERROR);
             ret = 0;
@@ -450,7 +476,12 @@ int EVP_DigestFinalXOF(EVP_MD_CTX *ctx, unsigned char *md, size_t size)
     OSSL_PARAM params[2];
     size_t i = 0;
 
-    if (ctx->digest == NULL || ctx->digest->prov == NULL)
+    if (ctx->digest == NULL) {
+        ERR_raise(ERR_LIB_EVP, EVP_R_INVALID_NULL_ALGORITHM);
+        return 0;
+    }
+
+    if (ctx->digest->prov == NULL)
         goto legacy;
 
     if (ctx->digest->dfinal == NULL) {
@@ -462,7 +493,7 @@ int EVP_DigestFinalXOF(EVP_MD_CTX *ctx, unsigned char *md, size_t size)
     params[i++] = OSSL_PARAM_construct_end();
 
     if (EVP_MD_CTX_set_params(ctx, params) > 0)
-        ret = ctx->digest->dfinal(ctx->provctx, md, &size, size);
+        ret = ctx->digest->dfinal(ctx->algctx, md, &size, size);
 
     return ret;
 
@@ -491,11 +522,21 @@ int EVP_MD_CTX_copy(EVP_MD_CTX *out, const EVP_MD_CTX *in)
 
 int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in)
 {
+    int digest_change = 0;
     unsigned char *tmp_buf;
 
-    if (in == NULL || in->digest == NULL) {
-        ERR_raise(ERR_LIB_EVP, EVP_R_INPUT_NOT_INITIALIZED);
+    if (in == NULL) {
+        ERR_raise(ERR_LIB_EVP, ERR_R_PASSED_NULL_PARAMETER);
         return 0;
+    }
+
+    if (in->digest == NULL) {
+        /* copying uninitialized digest context */
+        EVP_MD_CTX_reset(out);
+        if (out->fetched_digest != NULL)
+            EVP_MD_free(out->fetched_digest);
+        *out = *in;
+        goto clone_pkey;
     }
 
     if (in->digest->prov == NULL
@@ -507,29 +548,30 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in)
         return 0;
     }
 
-    EVP_MD_CTX_reset(out);
-    if (out->fetched_digest != NULL)
+    evp_md_ctx_reset_ex(out, 1);
+    digest_change = (out->fetched_digest != in->fetched_digest);
+    if (digest_change && out->fetched_digest != NULL)
         EVP_MD_free(out->fetched_digest);
     *out = *in;
     /* NULL out pointers in case of error */
     out->pctx = NULL;
-    out->provctx = NULL;
+    out->algctx = NULL;
 
-    if (in->fetched_digest != NULL)
+    if (digest_change && in->fetched_digest != NULL)
         EVP_MD_up_ref(in->fetched_digest);
 
-    if (in->provctx != NULL) {
-        out->provctx = in->digest->dupctx(in->provctx);
-        if (out->provctx == NULL) {
+    if (in->algctx != NULL) {
+        out->algctx = in->digest->dupctx(in->algctx);
+        if (out->algctx == NULL) {
             ERR_raise(ERR_LIB_EVP, EVP_R_NOT_ABLE_TO_COPY_CTX);
             return 0;
         }
     }
 
+ clone_pkey:
     /* copied EVP_MD_CTX should free the copied EVP_PKEY_CTX */
     EVP_MD_CTX_clear_flags(out, EVP_MD_CTX_FLAG_KEEP_PKEY_CTX);
 #ifndef FIPS_MODULE
-    /* TODO(3.0): Temporarily no support for EVP_DigestSign* in FIPS module */
     if (in->pctx != NULL) {
         out->pctx = EVP_PKEY_CTX_dup(in->pctx);
         if (out->pctx == NULL) {
@@ -586,7 +628,6 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in)
     out->update = in->update;
 
 #ifndef FIPS_MODULE
-    /* TODO(3.0): Temporarily no support for EVP_DigestSign* in FIPS module */
     if (in->pctx) {
         out->pctx = EVP_PKEY_CTX_dup(in->pctx);
         if (!out->pctx) {
@@ -620,6 +661,23 @@ int EVP_Digest(const void *data, size_t count,
     return ret;
 }
 
+int EVP_Q_digest(OSSL_LIB_CTX *libctx, const char *name, const char *propq,
+                 const void *data, size_t datalen,
+                 unsigned char *md, size_t *mdlen)
+{
+    EVP_MD *digest = EVP_MD_fetch(libctx, name, propq);
+    unsigned int temp = 0;
+    int ret = 0;
+
+    if (digest != NULL) {
+        ret = EVP_Digest(data, datalen, md, &temp, digest, NULL);
+        EVP_MD_free(digest);
+    }
+    if (mdlen != NULL)
+        *mdlen = temp;
+    return ret;
+}
+
 int EVP_MD_get_params(const EVP_MD *digest, OSSL_PARAM params[])
 {
     if (digest != NULL && digest->get_params != NULL)
@@ -631,7 +689,7 @@ const OSSL_PARAM *EVP_MD_gettable_params(const EVP_MD *digest)
 {
     if (digest != NULL && digest->gettable_params != NULL)
         return digest->gettable_params(
-                           ossl_provider_ctx(EVP_MD_provider(digest)));
+                           ossl_provider_ctx(EVP_MD_get0_provider(digest)));
     return NULL;
 }
 
@@ -643,24 +701,24 @@ int EVP_MD_CTX_set_params(EVP_MD_CTX *ctx, const OSSL_PARAM params[])
     if (pctx != NULL
             && (pctx->operation == EVP_PKEY_OP_VERIFYCTX
                 || pctx->operation == EVP_PKEY_OP_SIGNCTX)
-            && pctx->op.sig.sigprovctx != NULL
+            && pctx->op.sig.algctx != NULL
             && pctx->op.sig.signature->set_ctx_md_params != NULL)
-        return pctx->op.sig.signature->set_ctx_md_params(pctx->op.sig.sigprovctx,
+        return pctx->op.sig.signature->set_ctx_md_params(pctx->op.sig.algctx,
                                                          params);
 
     if (ctx->digest != NULL && ctx->digest->set_ctx_params != NULL)
-        return ctx->digest->set_ctx_params(ctx->provctx, params);
+        return ctx->digest->set_ctx_params(ctx->algctx, params);
 
     return 0;
 }
 
 const OSSL_PARAM *EVP_MD_settable_ctx_params(const EVP_MD *md)
 {
-    void *alg;
+    void *provctx;
 
     if (md != NULL && md->settable_ctx_params != NULL) {
-        alg = ossl_provider_ctx(EVP_MD_provider(md));
-        return md->settable_ctx_params(NULL, alg);
+        provctx = ossl_provider_ctx(EVP_MD_get0_provider(md));
+        return md->settable_ctx_params(NULL, provctx);
     }
     return NULL;
 }
@@ -678,14 +736,14 @@ const OSSL_PARAM *EVP_MD_CTX_settable_params(EVP_MD_CTX *ctx)
     if (pctx != NULL
             && (pctx->operation == EVP_PKEY_OP_VERIFYCTX
                 || pctx->operation == EVP_PKEY_OP_SIGNCTX)
-            && pctx->op.sig.sigprovctx != NULL
+            && pctx->op.sig.algctx != NULL
             && pctx->op.sig.signature->settable_ctx_md_params != NULL)
         return pctx->op.sig.signature->settable_ctx_md_params(
-                   pctx->op.sig.sigprovctx);
+                   pctx->op.sig.algctx);
 
     if (ctx->digest != NULL && ctx->digest->settable_ctx_params != NULL) {
-        alg = ossl_provider_ctx(EVP_MD_provider(ctx->digest));
-        return ctx->digest->settable_ctx_params(ctx->provctx, alg);
+        alg = ossl_provider_ctx(EVP_MD_get0_provider(ctx->digest));
+        return ctx->digest->settable_ctx_params(ctx->algctx, alg);
     }
 
     return NULL;
@@ -699,24 +757,24 @@ int EVP_MD_CTX_get_params(EVP_MD_CTX *ctx, OSSL_PARAM params[])
     if (pctx != NULL
             && (pctx->operation == EVP_PKEY_OP_VERIFYCTX
                 || pctx->operation == EVP_PKEY_OP_SIGNCTX)
-            && pctx->op.sig.sigprovctx != NULL
+            && pctx->op.sig.algctx != NULL
             && pctx->op.sig.signature->get_ctx_md_params != NULL)
-        return pctx->op.sig.signature->get_ctx_md_params(pctx->op.sig.sigprovctx,
+        return pctx->op.sig.signature->get_ctx_md_params(pctx->op.sig.algctx,
                                                          params);
 
-    if (ctx->digest != NULL && ctx->digest->get_params != NULL)
-        return ctx->digest->get_ctx_params(ctx->provctx, params);
+    if (ctx->digest != NULL && ctx->digest->get_ctx_params != NULL)
+        return ctx->digest->get_ctx_params(ctx->algctx, params);
 
     return 0;
 }
 
 const OSSL_PARAM *EVP_MD_gettable_ctx_params(const EVP_MD *md)
 {
-    void *alg;
+    void *provctx;
 
     if (md != NULL && md->gettable_ctx_params != NULL) {
-        alg = ossl_provider_ctx(EVP_MD_provider(md));
-        return md->gettable_ctx_params(NULL, alg);
+        provctx = ossl_provider_ctx(EVP_MD_get0_provider(md));
+        return md->gettable_ctx_params(NULL, provctx);
     }
     return NULL;
 }
@@ -724,7 +782,7 @@ const OSSL_PARAM *EVP_MD_gettable_ctx_params(const EVP_MD *md)
 const OSSL_PARAM *EVP_MD_CTX_gettable_params(EVP_MD_CTX *ctx)
 {
     EVP_PKEY_CTX *pctx;
-    void *alg;
+    void *provctx;
 
     if (ctx == NULL)
         return NULL;
@@ -734,19 +792,18 @@ const OSSL_PARAM *EVP_MD_CTX_gettable_params(EVP_MD_CTX *ctx)
     if (pctx != NULL
             && (pctx->operation == EVP_PKEY_OP_VERIFYCTX
                 || pctx->operation == EVP_PKEY_OP_SIGNCTX)
-            && pctx->op.sig.sigprovctx != NULL
+            && pctx->op.sig.algctx != NULL
             && pctx->op.sig.signature->gettable_ctx_md_params != NULL)
         return pctx->op.sig.signature->gettable_ctx_md_params(
-                    pctx->op.sig.sigprovctx);
+                    pctx->op.sig.algctx);
 
     if (ctx->digest != NULL && ctx->digest->gettable_ctx_params != NULL) {
-        alg = ossl_provider_ctx(EVP_MD_provider(ctx->digest));
-        return ctx->digest->gettable_ctx_params(ctx->provctx, alg);
+        provctx = ossl_provider_ctx(EVP_MD_get0_provider(ctx->digest));
+        return ctx->digest->gettable_ctx_params(ctx->algctx, provctx);
     }
     return NULL;
 }
 
-/* TODO(3.0): Remove legacy code below - only used by engines & DigestSign */
 int EVP_MD_CTX_ctrl(EVP_MD_CTX *ctx, int cmd, int p1, void *p2)
 {
     int ret = EVP_CTRL_RET_UNSUPPORTED;
@@ -822,7 +879,6 @@ EVP_MD *evp_md_new(void)
  * NIDs or any functionality that use them.
  */
 #ifndef FIPS_MODULE
-/* TODO(3.x) get rid of the need for legacy NIDs */
 static void set_legacy_nid(const char *name, void *vlegacy_nid)
 {
     int nid;
@@ -861,7 +917,7 @@ static int evp_md_cache_constants(EVP_MD *md)
     params[3] = OSSL_PARAM_construct_int(OSSL_DIGEST_PARAM_ALGID_ABSENT,
                                          &algid_absent);
     params[4] = OSSL_PARAM_construct_end();
-    ok = evp_do_md_getparams(md, params);
+    ok = evp_do_md_getparams(md, params) > 0;
     if (mdsize > INT_MAX || blksz > INT_MAX)
         ok = 0;
     if (ok) {
@@ -875,10 +931,11 @@ static int evp_md_cache_constants(EVP_MD *md)
     return ok;
 }
 
-static void *evp_md_from_dispatch(int name_id,
-                                  const OSSL_DISPATCH *fns,
-                                  OSSL_PROVIDER *prov)
+static void *evp_md_from_algorithm(int name_id,
+                                   const OSSL_ALGORITHM *algodef,
+                                   OSSL_PROVIDER *prov)
 {
+    const OSSL_DISPATCH *fns = algodef->implementation;
     EVP_MD *md = NULL;
     int fncnt = 0;
 
@@ -889,7 +946,6 @@ static void *evp_md_from_dispatch(int name_id,
     }
 
 #ifndef FIPS_MODULE
-    /* TODO(3.x) get rid of the need for legacy NIDs */
     md->type = NID_undef;
     if (!evp_names_do_all(prov, name_id, set_legacy_nid, &md->type)
             || md->type == -1) {
@@ -900,6 +956,11 @@ static void *evp_md_from_dispatch(int name_id,
 #endif
 
     md->name_id = name_id;
+    if ((md->type_name = ossl_algorithm_get1_first_name(algodef)) == NULL) {
+        EVP_MD_free(md);
+        return NULL;
+    }
+    md->description = algodef->algorithm_description;
 
     for (; fns->function_id != 0; fns++) {
         switch (fns->function_id) {
@@ -1010,7 +1071,7 @@ EVP_MD *EVP_MD_fetch(OSSL_LIB_CTX *ctx, const char *algorithm,
 {
     EVP_MD *md =
         evp_generic_fetch(ctx, OSSL_OP_DIGEST, algorithm, properties,
-                          evp_md_from_dispatch, evp_md_up_ref, evp_md_free);
+                          evp_md_from_algorithm, evp_md_up_ref, evp_md_free);
 
     return md;
 }
@@ -1019,7 +1080,8 @@ int EVP_MD_up_ref(EVP_MD *md)
 {
     int ref = 0;
 
-    CRYPTO_UP_REF(&md->refcnt, &ref, md->lock);
+    if (md->origin == EVP_ORIG_DYNAMIC)
+        CRYPTO_UP_REF(&md->refcnt, &ref, md->lock);
     return 1;
 }
 
@@ -1027,15 +1089,13 @@ void EVP_MD_free(EVP_MD *md)
 {
     int i;
 
-    if (md == NULL)
+    if (md == NULL || md->origin != EVP_ORIG_DYNAMIC)
         return;
 
     CRYPTO_DOWN_REF(&md->refcnt, &i, md->lock);
     if (i > 0)
         return;
-    ossl_provider_free(md->prov);
-    CRYPTO_THREAD_lock_free(md->lock);
-    OPENSSL_free(md);
+    evp_md_free_int(md);
 }
 
 void EVP_MD_do_all_provided(OSSL_LIB_CTX *libctx,
@@ -1044,5 +1104,5 @@ void EVP_MD_do_all_provided(OSSL_LIB_CTX *libctx,
 {
     evp_generic_do_all(libctx, OSSL_OP_DIGEST,
                        (void (*)(void *, void *))fn, arg,
-                       evp_md_from_dispatch, evp_md_free);
+                       evp_md_from_algorithm, evp_md_up_ref, evp_md_free);
 }

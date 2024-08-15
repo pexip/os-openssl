@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1999-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -35,7 +35,7 @@ static int nref_nos(STACK_OF(ASN1_INTEGER) *nnums, STACK_OF(CONF_VALUE) *nos);
 static int displaytext_str2tag(const char *tagstr, unsigned int *tag_len);
 static int displaytext_get_tag_len(const char *tagstr);
 
-const X509V3_EXT_METHOD v3_cpols = {
+const X509V3_EXT_METHOD ossl_v3_cpols = {
     NID_certificate_policies, 0, ASN1_ITEM_ref(CERTIFICATEPOLICIES),
     0, 0, 0, 0,
     0, 0,
@@ -185,7 +185,7 @@ static POLICYINFO *policy_section(X509V3_CTX *ctx,
             }
             pol->policyid = pobj;
 
-        } else if (!v3_name_cmp(cnf->name, "CPS")) {
+        } else if (!ossl_v3_name_cmp(cnf->name, "CPS")) {
             if (pol->qualifiers == NULL)
                 pol->qualifiers = sk_POLICYQUALINFO_new_null();
             if ((qual = POLICYQUALINFO_new()) == NULL)
@@ -201,7 +201,7 @@ static POLICYINFO *policy_section(X509V3_CTX *ctx,
             if (!ASN1_STRING_set(qual->d.cpsuri, cnf->value,
                                  strlen(cnf->value)))
                 goto merr;
-        } else if (!v3_name_cmp(cnf->name, "userNotice")) {
+        } else if (!ossl_v3_name_cmp(cnf->name, "userNotice")) {
             STACK_OF(CONF_VALUE) *unot;
             if (*cnf->value != '@') {
                 ERR_raise(ERR_LIB_X509V3, X509V3_R_EXPECTED_A_SECTION_NAME);
@@ -426,7 +426,8 @@ static void print_qualifiers(BIO *out, STACK_OF(POLICYQUALINFO) *quals,
         qualinfo = sk_POLICYQUALINFO_value(quals, i);
         switch (OBJ_obj2nid(qualinfo->pqualid)) {
         case NID_id_qt_cps:
-            BIO_printf(out, "%*sCPS: %s", indent, "",
+            BIO_printf(out, "%*sCPS: %.*s", indent, "",
+                       qualinfo->d.cpsuri->length,
                        qualinfo->d.cpsuri->data);
             break;
 
@@ -450,7 +451,8 @@ static void print_notice(BIO *out, USERNOTICE *notice, int indent)
     if (notice->noticeref) {
         NOTICEREF *ref;
         ref = notice->noticeref;
-        BIO_printf(out, "%*sOrganization: %s\n", indent, "",
+        BIO_printf(out, "%*sOrganization: %.*s\n", indent, "",
+                   ref->organization->length,
                    ref->organization->data);
         BIO_printf(out, "%*sNumber%s: ", indent, "",
                    sk_ASN1_INTEGER_num(ref->noticenos) > 1 ? "s" : "");
@@ -474,7 +476,8 @@ static void print_notice(BIO *out, USERNOTICE *notice, int indent)
             BIO_puts(out, "\n");
     }
     if (notice->exptext)
-        BIO_printf(out, "%*sExplicit Text: %s", indent, "",
+        BIO_printf(out, "%*sExplicit Text: %.*s", indent, "",
+                   notice->exptext->length,
                    notice->exptext->data);
 }
 

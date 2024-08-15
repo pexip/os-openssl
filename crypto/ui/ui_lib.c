@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2001-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -43,7 +43,7 @@ UI *UI_new_method(const UI_METHOD *method)
     ret->meth = method;
 
     if (!CRYPTO_new_ex_data(CRYPTO_EX_INDEX_UI, ret, &ret->ex_data)) {
-        OPENSSL_free(ret);
+        UI_free(ret);
         return NULL;
     }
     return ret;
@@ -528,6 +528,10 @@ int UI_process(UI *ui)
                 ok = 0;
                 break;
             }
+        } else {
+            ui->flags &= ~UI_FLAG_REDOABLE;
+            ok = -2;
+            goto err;
         }
     }
 

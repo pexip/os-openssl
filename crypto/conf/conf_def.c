@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -11,14 +11,17 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "e_os.h" /* struct stat */
 #ifdef __TANDEM
-# include <strings.h> /* strcasecmp */
+# include <sys/types.h> /* needed for stat.h */
+# include <sys/stat.h> /* struct stat */
 #endif
 #include "internal/cryptlib.h"
 #include "internal/o_dir.h"
 #include <openssl/lhash.h>
 #include <openssl/conf.h>
 #include <openssl/conf_api.h>
+#include "conf_local.h"
 #include "conf_def.h"
 #include <openssl/buffer.h>
 #include <openssl/err.h>
@@ -26,7 +29,6 @@
 # include <sys/stat.h>
 # ifdef _WIN32
 #  define stat    _stat
-#  define strcasecmp _stricmp
 # endif
 #endif
 
@@ -186,6 +188,23 @@ static int def_load(CONF *conf, const char *name, long *line)
     return ret;
 }
 
+
+/* Parse a boolean value and fill in *flag. Return 0 on error. */
+static int parsebool(const char *pval, int *flag)
+{
+    if (OPENSSL_strcasecmp(pval, "on") == 0
+            || OPENSSL_strcasecmp(pval, "true") == 0) {
+        *flag = 1;
+    } else if (OPENSSL_strcasecmp(pval, "off") == 0
+            || OPENSSL_strcasecmp(pval, "false") == 0) {
+        *flag = 0;
+    } else {
+        ERR_raise(ERR_LIB_CONF, CONF_R_INVALID_PRAGMA);
+        return 0;
+    }
+    return 1;
+}
+
 static int def_load_bio(CONF *conf, BIO *in, long *line)
 {
 /* The macro BUFSIZE conflicts with a system macro in VxWorks */
@@ -206,6 +225,9 @@ static int def_load_bio(CONF *conf, BIO *in, long *line)
 #ifndef OPENSSL_NO_POSIX_IO
     char *dirpath = NULL;
     OPENSSL_DIR_CTX *dirctx = NULL;
+#endif
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    int numincludes = 0;
 #endif
 
     if ((buff = BUF_MEM_new()) == NULL) {
@@ -395,19 +417,23 @@ static int def_load_bio(CONF *conf, BIO *in, long *line)
                  * Known pragmas:
                  *
                  * dollarid     takes "on", "true or "off", "false"
+                 * abspath      takes "on", "true or "off", "false"
+                 * includedir   directory prefix
                  */
                 if (strcmp(p, "dollarid") == 0) {
-                    if (strcmp(pval, "on") == 0
-                        || strcmp(pval, "true") == 0) {
-                        conf->flag_dollarid = 1;
-                    } else if (strcmp(pval, "off") == 0
-                               || strcmp(pval, "false") == 0) {
-                        conf->flag_dollarid = 0;
-                    } else {
-                        ERR_raise(ERR_LIB_CONF, CONF_R_INVALID_PRAGMA);
+                    if (!parsebool(pval, &conf->flag_dollarid))
+                        goto err;
+                } else if (strcmp(p, "abspath") == 0) {
+                    if (!parsebool(pval, &conf->flag_abspath))
+                        goto err;
+                } else if (strcmp(p, "includedir") == 0) {
+                    OPENSSL_free(conf->includedir);
+                    if ((conf->includedir = OPENSSL_strdup(pval)) == NULL) {
+                        ERR_raise(ERR_LIB_CONF, ERR_R_MALLOC_FAILURE);
                         goto err;
                     }
                 }
+
                 /*
                  * We *ignore* any unknown pragma.
                  */
@@ -418,6 +444,23 @@ static int def_load_bio(CONF *conf, BIO *in, long *line)
                 BIO *next;
                 const char *include_dir = ossl_safe_getenv("OPENSSL_CONF_INCLUDE");
                 char *include_path = NULL;
+
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+                /*
+                 * The include processing below can cause the "conf" fuzzer to
+                 * timeout due to the fuzzer inserting large and complicated
+                 * includes - with a large amount of time spent in
+                 * OPENSSL_strlcat/OPENSSL_strcpy. This is not a security
+                 * concern because config files should never come from untrusted
+                 * sources. We just set an arbitrary limit on the allowed
+                 * number of includes when fuzzing to prevent this timeout.
+                 */
+                if (numincludes++ > 10)
+                    goto err;
+#endif
+
+                if (include_dir == NULL)
+                    include_dir = conf->includedir;
 
                 if (*p == '=') {
                     p++;
@@ -444,6 +487,13 @@ static int def_load_bio(CONF *conf, BIO *in, long *line)
                     OPENSSL_free(include);
                 } else {
                     include_path = include;
+                }
+
+                if (conf->flag_abspath
+                        && !ossl_is_absolute_path(include_path)) {
+                    ERR_raise(ERR_LIB_CONF, CONF_R_RELATIVE_PATH);
+                    OPENSSL_free(include_path);
+                    goto err;
                 }
 
                 /* get the BIO of the included file */
@@ -525,6 +575,7 @@ static int def_load_bio(CONF *conf, BIO *in, long *line)
      */
     sk_BIO_free(biosk);
     return 1;
+
  err:
     BUF_MEM_free(buff);
     OPENSSL_free(section);
@@ -805,8 +856,10 @@ static BIO *get_next_file(const char *path, OPENSSL_DIR_CTX **dirctx)
         namelen = strlen(filename);
 
 
-        if ((namelen > 5 && strcasecmp(filename + namelen - 5, ".conf") == 0)
-            || (namelen > 4 && strcasecmp(filename + namelen - 4, ".cnf") == 0)) {
+        if ((namelen > 5
+             && OPENSSL_strcasecmp(filename + namelen - 5, ".conf") == 0)
+             || (namelen > 4
+                 && OPENSSL_strcasecmp(filename + namelen - 4, ".cnf") == 0)) {
             size_t newlen;
             char *newpath;
             BIO *bio;

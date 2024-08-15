@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -16,91 +16,37 @@
 
 #include <string.h>
 #include <openssl/crypto.h>
-#include <openssl/evp.h>
+#include <openssl/rsa.h>
 #include <openssl/aes.h>
 #include <openssl/rsa.h>
 #include "testutil.h"
+#include "threadstest.h"
+
+/* Limit the maximum number of threads */
+#define MAXIMUM_THREADS     10
+
+/* Limit the maximum number of providers loaded into a library context */
+#define MAXIMUM_PROVIDERS   4
 
 static int do_fips = 0;
 static char *privkey;
-
-#if !defined(OPENSSL_THREADS) || defined(CRYPTO_TDEBUG)
-
-typedef unsigned int thread_t;
-
-static int run_thread(thread_t *t, void (*f)(void))
-{
-    f();
-    return 1;
-}
-
-static int wait_for_thread(thread_t thread)
-{
-    return 1;
-}
-
-#elif defined(OPENSSL_SYS_WINDOWS)
-
-typedef HANDLE thread_t;
-
-static DWORD WINAPI thread_run(LPVOID arg)
-{
-    void (*f)(void);
-
-    *(void **) (&f) = arg;
-
-    f();
-    return 0;
-}
-
-static int run_thread(thread_t *t, void (*f)(void))
-{
-    *t = CreateThread(NULL, 0, thread_run, *(void **) &f, 0, NULL);
-    return *t != NULL;
-}
-
-static int wait_for_thread(thread_t thread)
-{
-    return WaitForSingleObject(thread, INFINITE) == 0;
-}
-
-#else
-
-typedef pthread_t thread_t;
-
-static void *thread_run(void *arg)
-{
-    void (*f)(void);
-
-    *(void **) (&f) = arg;
-
-    f();
-    return NULL;
-}
-
-static int run_thread(thread_t *t, void (*f)(void))
-{
-    return pthread_create(t, NULL, thread_run, *(void **) &f) == 0;
-}
-
-static int wait_for_thread(thread_t thread)
-{
-    return pthread_join(thread, NULL) == 0;
-}
-
-#endif
+static char *config_file = NULL;
+static int multidefault_run = 0;
+static const char *default_provider[] = { "default", NULL };
 
 static int test_lock(void)
 {
     CRYPTO_RWLOCK *lock = CRYPTO_THREAD_lock_new();
+    int res;
 
-    if (!TEST_true(CRYPTO_THREAD_read_lock(lock))
-        || !TEST_true(CRYPTO_THREAD_unlock(lock)))
-        return 0;
+    res = TEST_true(CRYPTO_THREAD_read_lock(lock))
+          && TEST_true(CRYPTO_THREAD_unlock(lock))
+          && TEST_true(CRYPTO_THREAD_write_lock(lock))
+          && TEST_true(CRYPTO_THREAD_unlock(lock));
 
     CRYPTO_THREAD_lock_free(lock);
 
-    return 1;
+    return res;
 }
 
 static CRYPTO_ONCE once_run = CRYPTO_ONCE_STATIC_INIT;
@@ -270,6 +216,94 @@ static int test_atomic(void)
 
 static OSSL_LIB_CTX *multi_libctx = NULL;
 static int multi_success;
+static OSSL_PROVIDER *multi_provider[MAXIMUM_PROVIDERS + 1];
+static size_t multi_num_threads;
+static thread_t multi_threads[MAXIMUM_THREADS];
+
+static void multi_intialise(void)
+{
+    multi_success = 1;
+    multi_libctx = NULL;
+    multi_num_threads = 0;
+    memset(multi_threads, 0, sizeof(multi_threads));
+    memset(multi_provider, 0, sizeof(multi_provider));
+}
+
+static void thead_teardown_libctx(void)
+{
+    OSSL_PROVIDER **p;
+
+    for (p = multi_provider; *p != NULL; p++)
+        OSSL_PROVIDER_unload(*p);
+    OSSL_LIB_CTX_free(multi_libctx);
+    multi_intialise();
+}
+
+static int thread_setup_libctx(int libctx, const char *providers[])
+{
+    size_t n;
+
+    if (libctx && !TEST_true(test_get_libctx(&multi_libctx, NULL, config_file,
+                                             NULL, NULL)))
+        return 0;
+
+    if (providers != NULL)
+        for (n = 0; providers[n] != NULL; n++)
+            if (!TEST_size_t_lt(n, MAXIMUM_PROVIDERS)
+                || !TEST_ptr(multi_provider[n] = OSSL_PROVIDER_load(multi_libctx,
+                                                                    providers[n]))) {
+                thead_teardown_libctx();
+                return 0;
+            }
+    return 1;
+}
+
+static int teardown_threads(void)
+{
+    size_t i;
+
+    for (i = 0; i < multi_num_threads; i++)
+        if (!TEST_true(wait_for_thread(multi_threads[i])))
+            return 0;
+    return 1;
+}
+
+static int start_threads(size_t n, void (*thread_func)(void))
+{
+    size_t i;
+
+    if (!TEST_size_t_le(multi_num_threads + n, MAXIMUM_THREADS))
+        return 0;
+
+    for (i = 0 ; i < n; i++)
+        if (!TEST_true(run_thread(multi_threads + multi_num_threads++, thread_func)))
+            return 0;
+    return 1;
+}
+
+/* Template multi-threaded test function */
+static int thread_run_test(void (*main_func)(void),
+                           size_t num_threads, void (*thread_func)(void),
+                           int libctx, const char *providers[])
+{
+    int testresult = 0;
+
+    multi_intialise();
+    if (!thread_setup_libctx(libctx, providers)
+            || !start_threads(num_threads, thread_func))
+        goto err;
+
+    if (main_func != NULL)
+        main_func();
+
+    if (!teardown_threads()
+            || !TEST_true(multi_success))
+        goto err;
+    testresult = 1;
+ err:
+    thead_teardown_libctx();
+    return testresult;
+}
 
 static void thread_general_worker(void)
 {
@@ -291,7 +325,6 @@ static void thread_general_worker(void)
     };
     unsigned int mdoutl;
     int ciphoutl;
-    EVP_PKEY_CTX *pctx = NULL;
     EVP_PKEY *pkey = NULL;
     int testresult = 0;
     int i, isfips;
@@ -320,18 +353,13 @@ static void thread_general_worker(void)
             goto err;
     }
 
-    pctx = EVP_PKEY_CTX_new_from_name(multi_libctx, "RSA", NULL);
-    if (!TEST_ptr(pctx)
-            || !TEST_int_gt(EVP_PKEY_keygen_init(pctx), 0)
-               /*
-                * We want the test to run quickly - not securely. Therefore we
-                * use an insecure bit length where we can (512). In the FIPS
-                * module though we must use a longer length.
-                */
-            || !TEST_int_gt(EVP_PKEY_CTX_set_rsa_keygen_bits(pctx,
-                                                             isfips ? 2048 : 512),
-                                                             0)
-            || !TEST_int_gt(EVP_PKEY_keygen(pctx, &pkey), 0))
+    /*
+     * We want the test to run quickly - not securely.
+     * Therefore we use an insecure bit length where we can (512).
+     * In the FIPS module though we must use a longer length.
+     */
+    pkey = EVP_PKEY_Q_keygen(multi_libctx, NULL, "RSA", isfips ? 2048 : 512);
+    if (!TEST_ptr(pkey))
         goto err;
 
     testresult = 1;
@@ -340,7 +368,6 @@ static void thread_general_worker(void)
     EVP_MD_free(md);
     EVP_CIPHER_CTX_free(cipherctx);
     EVP_CIPHER_free(ciph);
-    EVP_PKEY_CTX_free(pctx);
     EVP_PKEY_free(pkey);
     if (!testresult)
         multi_success = 0;
@@ -348,7 +375,7 @@ static void thread_general_worker(void)
 
 static void thread_multi_simple_fetch(void)
 {
-    EVP_MD *md = EVP_MD_fetch(NULL, "SHA2-256", NULL);
+    EVP_MD *md = EVP_MD_fetch(multi_libctx, "SHA2-256", NULL);
 
     if (md != NULL)
         EVP_MD_free(md);
@@ -363,7 +390,7 @@ static void thread_shared_evp_pkey(void)
     char *msg = "Hello World";
     unsigned char ctbuf[256];
     unsigned char ptbuf[256];
-    size_t ptlen = sizeof(ptbuf), ctlen = sizeof(ctbuf);
+    size_t ptlen, ctlen = sizeof(ctbuf);
     EVP_PKEY_CTX *ctx = NULL;
     int success = 0;
     int i;
@@ -389,8 +416,9 @@ static void thread_shared_evp_pkey(void)
         if (!TEST_ptr(ctx))
             goto err;
 
+        ptlen = sizeof(ptbuf);
         if (!TEST_int_ge(EVP_PKEY_decrypt_init(ctx), 0)
-                || !TEST_int_ge(EVP_PKEY_decrypt(ctx, ptbuf, &ptlen, ctbuf, ctlen),
+                || !TEST_int_gt(EVP_PKEY_decrypt(ctx, ptbuf, &ptlen, ctbuf, ctlen),
                                                 0)
                 || !TEST_mem_eq(msg, strlen(msg), ptbuf, ptlen))
             goto err;
@@ -419,6 +447,16 @@ static void thread_downgrade_shared_evp_pkey(void)
 #endif
 }
 
+static void thread_provider_load_unload(void)
+{
+    OSSL_PROVIDER *deflt = OSSL_PROVIDER_load(multi_libctx, "default");
+
+    if (!TEST_ptr(deflt)
+            || !TEST_true(OSSL_PROVIDER_available(multi_libctx, "default")))
+        multi_success = 0;
+
+    OSSL_PROVIDER_unload(deflt);
+}
 
 /*
  * Do work in multiple worker threads at the same time.
@@ -427,6 +465,7 @@ static void thread_downgrade_shared_evp_pkey(void)
  * Test 2: Simple fetch worker
  * Test 3: Worker downgrading a shared EVP_PKEY
  * Test 4: Worker using a shared EVP_PKEY
+ * Test 5: Worker loading and unloading a provider
  */
 static int test_multi(int idx)
 {
@@ -435,6 +474,7 @@ static int test_multi(int idx)
     OSSL_PROVIDER *prov = NULL, *prov2 = NULL;
     void (*worker)(void) = NULL;
     void (*worker2)(void) = NULL;
+    EVP_MD *sha256 = NULL;
 
     if (idx == 1 && !do_fips)
         return TEST_skip("FIPS not supported");
@@ -445,9 +485,10 @@ static int test_multi(int idx)
 #endif
 
     multi_success = 1;
-    multi_libctx = OSSL_LIB_CTX_new();
-    if (!TEST_ptr(multi_libctx))
-        goto err;
+    if (!TEST_true(test_get_libctx(&multi_libctx, NULL, config_file,
+                                   NULL, NULL)))
+        return 0;
+
     prov = OSSL_PROVIDER_load(multi_libctx, (idx == 1) ? "fips" : "default");
     if (!TEST_ptr(prov))
         goto err;
@@ -475,6 +516,17 @@ static int test_multi(int idx)
             goto err;
         worker = thread_shared_evp_pkey;
         break;
+    case 5:
+        /*
+         * We ensure we get an md from the default provider, and then unload the
+         * provider. This ensures the provider remains around but in a
+         * deactivated state.
+         */
+        sha256 = EVP_MD_fetch(multi_libctx, "SHA2-256", NULL);
+        OSSL_PROVIDER_unload(prov);
+        prov = NULL;
+        worker = thread_provider_load_unload;
+        break;
     default:
         TEST_error("Invalid test index");
         goto err;
@@ -488,6 +540,69 @@ static int test_multi(int idx)
 
     worker();
 
+    testresult = 1;
+    /*
+     * Don't combine these into one if statement; must wait for both threads.
+     */
+    if (!TEST_true(wait_for_thread(thread1)))
+        testresult = 0;
+    if (!TEST_true(wait_for_thread(thread2)))
+        testresult = 0;
+    if (!TEST_true(multi_success))
+        testresult = 0;
+
+ err:
+    EVP_MD_free(sha256);
+    OSSL_PROVIDER_unload(prov);
+    OSSL_PROVIDER_unload(prov2);
+    OSSL_LIB_CTX_free(multi_libctx);
+    EVP_PKEY_free(shared_evp_pkey);
+    shared_evp_pkey = NULL;
+    multi_libctx = NULL;
+    return testresult;
+}
+
+static char *multi_load_provider = "legacy";
+/*
+ * This test attempts to load several providers at the same time, and if
+ * run with a thread sanitizer, should crash if the core provider code
+ * doesn't synchronize well enough.
+ */
+#define MULTI_LOAD_THREADS 10
+static void test_multi_load_worker(void)
+{
+    OSSL_PROVIDER *prov;
+
+    if (!TEST_ptr(prov = OSSL_PROVIDER_load(NULL, multi_load_provider))
+            || !TEST_true(OSSL_PROVIDER_unload(prov)))
+        multi_success = 0;
+}
+
+static int test_multi_default(void)
+{
+    thread_t thread1, thread2;
+    int testresult = 0;
+    OSSL_PROVIDER *prov = NULL;
+
+    /* Avoid running this test twice */
+    if (multidefault_run) {
+        TEST_skip("multi default test already run");
+        return 1;
+    }
+    multidefault_run = 1;
+
+    multi_success = 1;
+    multi_libctx = NULL;
+    prov = OSSL_PROVIDER_load(multi_libctx, "default");
+    if (!TEST_ptr(prov))
+        goto err;
+
+    if (!TEST_true(run_thread(&thread1, thread_multi_simple_fetch))
+            || !TEST_true(run_thread(&thread2, thread_multi_simple_fetch)))
+        goto err;
+
+    thread_multi_simple_fetch();
+
     if (!TEST_true(wait_for_thread(thread1))
             || !TEST_true(wait_for_thread(thread2))
             || !TEST_true(multi_success))
@@ -497,45 +612,61 @@ static int test_multi(int idx)
 
  err:
     OSSL_PROVIDER_unload(prov);
-    OSSL_PROVIDER_unload(prov2);
-    OSSL_LIB_CTX_free(multi_libctx);
-    EVP_PKEY_free(shared_evp_pkey);
-    shared_evp_pkey = NULL;
     return testresult;
-}
-
-/*
- * This test attempts to load several providers at the same time, and if
- * run with a thread sanitizer, should crash if the core provider code
- * doesn't synchronize well enough.
- */
-#define MULTI_LOAD_THREADS 3
-static void test_multi_load_worker(void)
-{
-    OSSL_PROVIDER *prov;
-
-    TEST_ptr(prov = OSSL_PROVIDER_load(NULL, "default"));
-    TEST_true(OSSL_PROVIDER_unload(prov));
 }
 
 static int test_multi_load(void)
 {
     thread_t threads[MULTI_LOAD_THREADS];
-    int i;
+    int i, res = 1;
+    OSSL_PROVIDER *prov;
+
+    /* The multidefault test must run prior to this test */
+    if (!multidefault_run) {
+        TEST_info("Running multi default test first");
+        res = test_multi_default();
+    }
+
+    /*
+     * We use the legacy provider in test_multi_load_worker because it uses a
+     * child libctx that might hit more codepaths that might be sensitive to
+     * threading issues. But in a no-legacy build that won't be loadable so
+     * we use the default provider instead.
+     */
+    prov = OSSL_PROVIDER_load(NULL, "legacy");
+    if (prov == NULL) {
+        TEST_info("Cannot load legacy provider - assuming this is a no-legacy build");
+        multi_load_provider = "default";
+    }
+    OSSL_PROVIDER_unload(prov);
+
+    multi_success = 1;
+    for (i = 0; i < MULTI_LOAD_THREADS; i++)
+        (void)TEST_true(run_thread(&threads[i], test_multi_load_worker));
 
     for (i = 0; i < MULTI_LOAD_THREADS; i++)
-        TEST_true(run_thread(&threads[i], test_multi_load_worker));
+        (void)TEST_true(wait_for_thread(threads[i]));
 
-    for (i = 0; i < MULTI_LOAD_THREADS; i++)
-        TEST_true(wait_for_thread(threads[i]));
+    return res && multi_success;
+}
 
-    return 1;
+static void test_lib_ctx_load_config_worker(void)
+{
+    if (!TEST_int_eq(OSSL_LIB_CTX_load_config(multi_libctx, config_file), 1))
+        multi_success = 0;
+}
+
+static int test_lib_ctx_load_config(void)
+{
+    return thread_run_test(&test_lib_ctx_load_config_worker,
+                           MAXIMUM_THREADS, &test_lib_ctx_load_config_worker,
+                           1, default_provider);
 }
 
 typedef enum OPTION_choice {
     OPT_ERR = -1,
     OPT_EOF = 0,
-    OPT_FIPS,
+    OPT_FIPS, OPT_CONFIG_FILE,
     OPT_TEST_ENUM
 } OPTION_CHOICE;
 
@@ -544,6 +675,8 @@ const OPTIONS *test_get_options(void)
     static const OPTIONS options[] = {
         OPT_TEST_OPTIONS_DEFAULT_USAGE,
         { "fips", OPT_FIPS, '-', "Test the FIPS provider" },
+        { "config", OPT_CONFIG_FILE, '<',
+          "The configuration file to use for the libctx" },
         { NULL }
     };
     return options;
@@ -559,6 +692,9 @@ int setup_tests(void)
         case OPT_FIPS:
             do_fips = 1;
             break;
+        case OPT_CONFIG_FILE:
+            config_file = opt_arg();
+            break;
         case OPT_TEST_CASES:
             break;
         default:
@@ -573,12 +709,16 @@ int setup_tests(void)
     if (!TEST_ptr(privkey))
         return 0;
 
+    /* Keep first to validate auto creation of default library context */
+    ADD_TEST(test_multi_default);
+
     ADD_TEST(test_lock);
     ADD_TEST(test_once);
     ADD_TEST(test_thread_local);
     ADD_TEST(test_atomic);
     ADD_TEST(test_multi_load);
-    ADD_ALL_TESTS(test_multi, 5);
+    ADD_ALL_TESTS(test_multi, 6);
+    ADD_TEST(test_lib_ctx_load_config);
     return 1;
 }
 

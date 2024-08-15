@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -11,15 +11,9 @@
 # pragma once
 
 # include <openssl/e_os2.h>
+# include <openssl/trace.h>
 
-/* Used to checking reference counts, most while doing perl5 stuff :-) */
-# if defined(OPENSSL_NO_STDIO)
-#  if defined(REF_PRINT)
-#   error "REF_PRINT requires stdio"
-#  endif
-# endif
-
-# ifndef OPENSSL_DEV_NO_ATOMICS
+# if defined(OPENSSL_THREADS) && !defined(OPENSSL_DEV_NO_ATOMICS)
 #  if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L \
       && !defined(__STDC_NO_ATOMICS__)
 #   include <stdatomic.h>
@@ -140,14 +134,14 @@ static __inline int CRYPTO_DOWN_REF(volatile int *val, int *ret,
 static __inline int CRYPTO_UP_REF(volatile int *val, int *ret,
                                   ossl_unused void *lock)
 {
-    *ret = _InterlockedExchangeAdd(val, 1) + 1;
+    *ret = _InterlockedExchangeAdd((long volatile *)val, 1) + 1;
     return 1;
 }
 
 static __inline int CRYPTO_DOWN_REF(volatile int *val, int *ret,
                                     ossl_unused void *lock)
 {
-    *ret = _InterlockedExchangeAdd(val, -1) - 1;
+    *ret = _InterlockedExchangeAdd((long volatile *)val, -1) - 1;
     return 1;
 }
 #   endif
@@ -176,11 +170,9 @@ typedef int CRYPTO_REF_COUNT;
 #  define REF_ASSERT_ISNT(i)
 # endif
 
-# ifdef REF_PRINT
-#  define REF_PRINT_COUNT(a, b) \
-        fprintf(stderr, "%p:%4d:%s\n", (void*)b, b->references, a)
-# else
-#  define REF_PRINT_COUNT(a, b)
-# endif
+# define REF_PRINT_EX(text, count, object) \
+    OSSL_TRACE3(REF_COUNT, "%p:%4d:%s\n", (object), (count), (text));
+# define REF_PRINT_COUNT(text, object) \
+    REF_PRINT_EX(text, object->references, (void *)object)
 
 #endif

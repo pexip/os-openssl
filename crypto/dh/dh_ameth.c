@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2006-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -35,7 +35,7 @@ static DH *d2i_dhp(const EVP_PKEY *pkey, const unsigned char **pp,
                    long length)
 {
     DH *dh = NULL;
-    int is_dhx = (pkey->ameth == &dhx_asn1_meth);
+    int is_dhx = (pkey->ameth == &ossl_dhx_asn1_meth);
 
     if (is_dhx)
         dh = d2i_DHxparams(NULL, pp, length);
@@ -47,7 +47,7 @@ static DH *d2i_dhp(const EVP_PKEY *pkey, const unsigned char **pp,
 
 static int i2d_dhp(const EVP_PKEY *pkey, const DH *a, unsigned char **pp)
 {
-    if (pkey->ameth == &dhx_asn1_meth)
+    if (pkey->ameth == &ossl_dhx_asn1_meth)
         return i2d_DHxparams(a, pp);
     return i2d_DHparams(a, pp);
 }
@@ -163,53 +163,15 @@ static int dh_pub_encode(X509_PUBKEY *pk, const EVP_PKEY *pkey)
 
 static int dh_priv_decode(EVP_PKEY *pkey, const PKCS8_PRIV_KEY_INFO *p8)
 {
-    const unsigned char *p, *pm;
-    int pklen, pmlen;
-    int ptype;
-    const void *pval;
-    const ASN1_STRING *pstr;
-    const X509_ALGOR *palg;
-    ASN1_INTEGER *privkey = NULL;
-    DH *dh = NULL;
+    int ret = 0;
+    DH *dh = ossl_dh_key_from_pkcs8(p8, NULL, NULL);
 
-    if (!PKCS8_pkey_get0(NULL, &p, &pklen, &palg, p8))
-        return 0;
-
-    X509_ALGOR_get0(NULL, &ptype, &pval, palg);
-
-    if (ptype != V_ASN1_SEQUENCE)
-        goto decerr;
-    if ((privkey = d2i_ASN1_INTEGER(NULL, &p, pklen)) == NULL)
-        goto decerr;
-
-    pstr = pval;
-    pm = pstr->data;
-    pmlen = pstr->length;
-    if ((dh = d2i_dhp(pkey, &pm, pmlen)) == NULL)
-        goto decerr;
-
-    /* We have parameters now set private key */
-    if ((dh->priv_key = BN_secure_new()) == NULL
-        || !ASN1_INTEGER_to_BN(privkey, dh->priv_key)) {
-        ERR_raise(ERR_LIB_DH, DH_R_BN_ERROR);
-        goto dherr;
+    if (dh != NULL) {
+        ret = 1;
+        EVP_PKEY_assign(pkey, pkey->ameth->pkey_id, dh);
     }
-    /* Calculate public key, increments dirty_cnt */
-    if (!DH_generate_key(dh))
-        goto dherr;
 
-    EVP_PKEY_assign(pkey, pkey->ameth->pkey_id, dh);
-
-    ASN1_STRING_clear_free(privkey);
-
-    return 1;
-
- decerr:
-    ERR_raise(ERR_LIB_DH, EVP_R_DECODE_ERROR);
- dherr:
-    DH_free(dh);
-    ASN1_STRING_clear_free(privkey);
-    return 0;
+    return ret;
 }
 
 static int dh_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey)
@@ -244,18 +206,21 @@ static int dh_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey)
     dplen = i2d_ASN1_INTEGER(prkey, &dp);
 
     ASN1_STRING_clear_free(prkey);
-    prkey = NULL;
+
+    if (dplen <= 0) {
+        ERR_raise(ERR_LIB_DH, DH_R_BN_ERROR);
+        goto err;
+    }
 
     if (!PKCS8_pkey_set0(p8, OBJ_nid2obj(pkey->ameth->pkey_id), 0,
-                         V_ASN1_SEQUENCE, params, dp, dplen))
+                         V_ASN1_SEQUENCE, params, dp, dplen)) {
+        OPENSSL_clear_free(dp, dplen);
         goto err;
-
+    }
     return 1;
 
  err:
-    OPENSSL_free(dp);
     ASN1_STRING_free(params);
-    ASN1_STRING_clear_free(prkey);
     return 0;
 }
 
@@ -349,8 +314,8 @@ static int dh_security_bits(const EVP_PKEY *pkey)
 
 static int dh_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b)
 {
-    return ossl_ffc_params_cmp(&a->pkey.dh->params, &a->pkey.dh->params,
-                               a->ameth != &dhx_asn1_meth);
+    return ossl_ffc_params_cmp(&a->pkey.dh->params, &b->pkey.dh->params,
+                               a->ameth != &ossl_dhx_asn1_meth);
 }
 
 static int int_dh_param_copy(DH *to, const DH *from, int is_x942)
@@ -386,7 +351,7 @@ static int dh_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from)
             return 0;
     }
     return int_dh_param_copy(to->pkey.dh, from->pkey.dh,
-                             from->ameth == &dhx_asn1_meth);
+                             from->ameth == &ossl_dhx_asn1_meth);
 }
 
 static int dh_missing_parameters(const EVP_PKEY *a)
@@ -431,14 +396,21 @@ int DHparams_print(BIO *bp, const DH *x)
 
 static int dh_pkey_ctrl(EVP_PKEY *pkey, int op, long arg1, void *arg2)
 {
+    DH *dh;
     switch (op) {
     case ASN1_PKEY_CTRL_SET1_TLS_ENCPT:
         /* We should only be here if we have a legacy key */
         if (!ossl_assert(evp_pkey_is_legacy(pkey)))
             return 0;
-        return ossl_dh_buf2key(evp_pkey_get0_DH_int(pkey), arg2, arg1);
+        dh = (DH *) evp_pkey_get0_DH_int(pkey);
+        if (dh == NULL)
+            return 0;
+        return ossl_dh_buf2key(dh, arg2, arg1);
     case ASN1_PKEY_CTRL_GET1_TLS_ENCPT:
-        return ossl_dh_key2buf(EVP_PKEY_get0_DH(pkey), arg2, 0, 1);
+        dh = (DH *) EVP_PKEY_get0_DH(pkey);
+        if (dh == NULL)
+            return 0;
+        return ossl_dh_key2buf(dh, arg2, 0, 1);
     default:
         return -2;
     }
@@ -478,8 +450,8 @@ static size_t dh_pkey_dirty_cnt(const EVP_PKEY *pkey)
 }
 
 static int dh_pkey_export_to(const EVP_PKEY *from, void *to_keydata,
-                             EVP_KEYMGMT *to_keymgmt, OSSL_LIB_CTX *libctx,
-                             const char *propq)
+                             OSSL_FUNC_keymgmt_import_fn *importer,
+                             OSSL_LIB_CTX *libctx, const char *propq)
 {
     DH *dh = from->pkey.dh;
     OSSL_PARAM_BLD *tmpl;
@@ -490,13 +462,6 @@ static int dh_pkey_export_to(const EVP_PKEY *from, void *to_keydata,
     OSSL_PARAM *params = NULL;
     int selection = 0;
     int rv = 0;
-
-    /*
-     * If the DH method is foreign, then we can't be sure of anything, and
-     * can therefore not export or pretend to export.
-     */
-    if (ossl_dh_get_method(dh) != DH_OpenSSL())
-        return 0;
 
     if (p == NULL || g == NULL)
         return 0;
@@ -533,9 +498,9 @@ static int dh_pkey_export_to(const EVP_PKEY *from, void *to_keydata,
         goto err;
 
     /* We export, the provider imports */
-    rv = evp_keymgmt_import(to_keymgmt, to_keydata, selection, params);
+    rv = importer(to_keydata, selection, params);
 
-    OSSL_PARAM_BLD_free_params(params);
+    OSSL_PARAM_free(params);
 err:
     OSSL_PARAM_BLD_free(tmpl);
     return rv;
@@ -556,7 +521,7 @@ static int dh_pkey_import_from_type(const OSSL_PARAM params[], void *vpctx,
     DH_set_flags(dh, type == EVP_PKEY_DH ? DH_FLAG_TYPE_DH : DH_FLAG_TYPE_DHX);
 
     if (!ossl_dh_params_fromdata(dh, params)
-        || !ossl_dh_key_fromdata(dh, params)
+        || !ossl_dh_key_fromdata(dh, params, 1)
         || !EVP_PKEY_assign(pkey, type, dh)) {
         DH_free(dh);
         return 0;
@@ -574,7 +539,25 @@ static int dhx_pkey_import_from(const OSSL_PARAM params[], void *vpctx)
     return dh_pkey_import_from_type(params, vpctx, EVP_PKEY_DHX);
 }
 
-const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
+static int dh_pkey_copy(EVP_PKEY *to, EVP_PKEY *from)
+{
+    DH *dh = from->pkey.dh;
+    DH *dupkey = NULL;
+    int ret;
+
+    if (dh != NULL) {
+        dupkey = ossl_dh_dup(dh, OSSL_KEYMGMT_SELECT_ALL);
+        if (dupkey == NULL)
+            return 0;
+    }
+
+    ret = EVP_PKEY_assign(to, from->type, dupkey);
+    if (!ret)
+        DH_free(dupkey);
+    return ret;
+}
+
+const EVP_PKEY_ASN1_METHOD ossl_dh_asn1_meth = {
     EVP_PKEY_DH,
     EVP_PKEY_DH,
     0,
@@ -617,9 +600,10 @@ const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
     dh_pkey_dirty_cnt,
     dh_pkey_export_to,
     dh_pkey_import_from,
+    dh_pkey_copy
 };
 
-const EVP_PKEY_ASN1_METHOD dhx_asn1_meth = {
+const EVP_PKEY_ASN1_METHOD ossl_dhx_asn1_meth = {
     EVP_PKEY_DHX,
     EVP_PKEY_DHX,
     0,
@@ -660,4 +644,5 @@ const EVP_PKEY_ASN1_METHOD dhx_asn1_meth = {
     dh_pkey_dirty_cnt,
     dh_pkey_export_to,
     dhx_pkey_import_from,
+    dh_pkey_copy
 };

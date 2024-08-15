@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2014-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -140,6 +140,29 @@ static ossl_inline uint64_t constant_time_lt_64(uint64_t a, uint64_t b)
     return constant_time_msb_64(a ^ ((a ^ b) | ((a - b) ^ b)));
 }
 
+#ifdef BN_ULONG
+static ossl_inline BN_ULONG constant_time_msb_bn(BN_ULONG a)
+{
+    return 0 - (a >> (sizeof(a) * 8 - 1));
+}
+
+static ossl_inline BN_ULONG constant_time_lt_bn(BN_ULONG a, BN_ULONG b)
+{
+    return constant_time_msb_bn(a ^ ((a ^ b) | ((a - b) ^ b)));
+}
+
+static ossl_inline BN_ULONG constant_time_is_zero_bn(BN_ULONG a)
+{
+    return constant_time_msb_bn(~a & (a - 1));
+}
+
+static ossl_inline BN_ULONG constant_time_eq_bn(BN_ULONG a,
+                                                BN_ULONG b)
+{
+    return constant_time_is_zero_bn(a ^ b);
+}
+#endif
+
 static ossl_inline unsigned int constant_time_ge(unsigned int a,
                                                  unsigned int b)
 {
@@ -180,6 +203,11 @@ static ossl_inline unsigned char constant_time_is_zero_8(unsigned int a)
 static ossl_inline uint32_t constant_time_is_zero_32(uint32_t a)
 {
     return constant_time_msb_32(~a & (a - 1));
+}
+
+static ossl_inline uint64_t constant_time_is_zero_64(uint64_t a)
+{
+    return constant_time_msb_64(~a & (a - 1));
 }
 
 static ossl_inline unsigned int constant_time_eq(unsigned int a,

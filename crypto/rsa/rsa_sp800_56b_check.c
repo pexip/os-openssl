@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2018-2024 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2018-2019, Oracle and/or its affiliates.  All rights reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
@@ -218,30 +218,21 @@ int ossl_rsa_check_private_exponent(const RSA *rsa, int nbits, BN_CTX *ctx)
     return ret;
 }
 
-#ifndef FIPS_MODULE
-static int bn_is_three(const BIGNUM *bn)
-{
-    BIGNUM *num = BN_dup(bn);
-    int ret = (num != NULL && BN_sub_word(num, 3) && BN_is_zero(num));
-
-    BN_free(num);
-    return ret;
-}
-#endif /* FIPS_MODULE */
-
-/* Check exponent is odd, and has a bitlen ranging from [17..256] */
+/*
+ * Check exponent is odd.
+ * For FIPS also check the bit length is in the range [17..256]
+ */
 int ossl_rsa_check_public_exponent(const BIGNUM *e)
 {
+#ifdef FIPS_MODULE
     int bitlen;
-
-    /* For legacy purposes RSA_3 is allowed in non fips mode */
-#ifndef FIPS_MODULE
-    if (bn_is_three(e))
-        return 1;
-#endif /* FIPS_MODULE */
 
     bitlen = BN_num_bits(e);
     return (BN_is_odd(e) && bitlen > 16 && bitlen < 257);
+#else
+    /* Allow small exponents larger than 1 for legacy purposes */
+    return BN_is_odd(e) && BN_cmp(e, BN_value_one()) > 0;
+#endif /* FIPS_MODULE */
 }
 
 /*
@@ -298,6 +289,11 @@ int ossl_rsa_sp800_56b_check_public(const RSA *rsa)
         return 0;
 
     nbits = BN_num_bits(rsa->n);
+    if (nbits > OPENSSL_RSA_MAX_MODULUS_BITS) {
+        ERR_raise(ERR_LIB_RSA, RSA_R_MODULUS_TOO_LARGE);
+        return 0;
+    }
+
 #ifdef FIPS_MODULE
     /*
      * (Step a): modulus must be 2048 or 3072 (caveat from SP800-56Br1)
@@ -333,7 +329,8 @@ int ossl_rsa_sp800_56b_check_public(const RSA *rsa)
         goto err;
     }
 
-    ret = ossl_bn_miller_rabin_is_prime(rsa->n, 0, ctx, NULL, 1, &status);
+    /* Highest number of MR rounds from FIPS 186-5 Section B.3 Table B.1 */
+    ret = ossl_bn_miller_rabin_is_prime(rsa->n, 5, ctx, NULL, 1, &status);
 #ifdef FIPS_MODULE
     if (ret != 1 || status != BN_PRIMETEST_COMPOSITE_NOT_POWER_OF_PRIME) {
 #else

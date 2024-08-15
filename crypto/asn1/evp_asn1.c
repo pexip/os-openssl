@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -27,7 +27,10 @@ int ASN1_TYPE_set_octetstring(ASN1_TYPE *a, unsigned char *data, int len)
     return 1;
 }
 
-/* int max_len:  for returned value    */
+/* int max_len:  for returned value
+ * if passing NULL in data, nothing is copied but the necessary length
+ * for it is returned.
+ */
 int ASN1_TYPE_get_octetstring(const ASN1_TYPE *a, unsigned char *data, int max_len)
 {
     int ret, num;
@@ -43,7 +46,8 @@ int ASN1_TYPE_get_octetstring(const ASN1_TYPE *a, unsigned char *data, int max_l
         num = ret;
     else
         num = max_len;
-    memcpy(data, p, num);
+    if (num > 0 && data != NULL)
+        memcpy(data, p, num);
     return ret;
 }
 
@@ -143,8 +147,8 @@ ASN1_SEQUENCE(asn1_oct_int) = {
 
 DECLARE_ASN1_ITEM(asn1_oct_int)
 
-int asn1_type_set_octetstring_int(ASN1_TYPE *a, long num, unsigned char *data,
-                                  int len)
+int ossl_asn1_type_set_octetstring_int(ASN1_TYPE *a, long num,
+                                       unsigned char *data, int len)
 {
     asn1_oct_int atmp;
     ASN1_OCTET_STRING oct;
@@ -158,8 +162,8 @@ int asn1_type_set_octetstring_int(ASN1_TYPE *a, long num, unsigned char *data,
     return 0;
 }
 
-int asn1_type_get_octetstring_int(const ASN1_TYPE *a, long *num,
-                                  unsigned char *data, int max_len)
+int ossl_asn1_type_get_octetstring_int(const ASN1_TYPE *a, long *num,
+                                       unsigned char *data, int max_len)
 {
     asn1_oct_int *atmp = NULL;
     int ret = -1;

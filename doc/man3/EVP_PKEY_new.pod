@@ -5,6 +5,7 @@
 EVP_PKEY,
 EVP_PKEY_new,
 EVP_PKEY_up_ref,
+EVP_PKEY_dup,
 EVP_PKEY_free,
 EVP_PKEY_new_raw_private_key_ex,
 EVP_PKEY_new_raw_private_key,
@@ -24,6 +25,7 @@ EVP_PKEY_get_raw_public_key
 
  EVP_PKEY *EVP_PKEY_new(void);
  int EVP_PKEY_up_ref(EVP_PKEY *key);
+ EVP_PKEY *EVP_PKEY_dup(EVP_PKEY *key);
  void EVP_PKEY_free(EVP_PKEY *key);
 
  EVP_PKEY *EVP_PKEY_new_raw_private_key_ex(OSSL_LIB_CTX *libctx,
@@ -48,9 +50,9 @@ EVP_PKEY_get_raw_public_key
  int EVP_PKEY_get_raw_public_key(const EVP_PKEY *pkey, unsigned char *pub,
                                  size_t *len);
 
-Deprecated since OpenSSL 3.0, can be hidden entirely by defining
-B<OPENSSL_API_COMPAT> with a suitable version value, see
-L<openssl_user_macros(7)>:
+The following function has been deprecated since OpenSSL 3.0, and can be
+hidden entirely by defining B<OPENSSL_API_COMPAT> with a suitable version value,
+see L<openssl_user_macros(7)>:
 
  EVP_PKEY *EVP_PKEY_new_CMAC_key(ENGINE *e, const unsigned char *priv,
                                  size_t len, const EVP_CIPHER *cipher);
@@ -60,7 +62,7 @@ L<openssl_user_macros(7)>:
 B<EVP_PKEY> is a generic structure to hold diverse types of asymmetric keys
 (also known as "key pairs"), and can be used for diverse operations, like
 signing, verifying signatures, key derivation, etc.  The asymmetric keys
-themselves are often refered to as the "internal key", and are handled by
+themselves are often referred to as the "internal key", and are handled by
 backends, such as providers (through L<EVP_KEYMGMT(3)>) or B<ENGINE>s.
 
 Conceptually, an B<EVP_PKEY> internal key may hold a private key, a public
@@ -81,6 +83,9 @@ used by OpenSSL to store public and private keys. The reference count is set to
 B<1>.
 
 EVP_PKEY_up_ref() increments the reference count of I<key>.
+
+EVP_PKEY_dup() duplicates the I<key>. The I<key> must not be ENGINE based or
+a raw key, otherwise the duplication will fail.
 
 EVP_PKEY_free() decrements the reference count of I<key> and, if the reference
 count is zero, frees it up. If I<key> is NULL, nothing is done.
@@ -169,7 +174,9 @@ L<EVP_PKEY_set1_EC_KEY(3)>.
 
 EVP_PKEY_new(), EVP_PKEY_new_raw_private_key(), EVP_PKEY_new_raw_public_key(),
 EVP_PKEY_new_CMAC_key() and EVP_PKEY_new_mac_key() return either the newly
-allocated B<EVP_PKEY> structure or B<NULL> if an error occurred.
+allocated B<EVP_PKEY> structure or NULL if an error occurred.
+
+EVP_PKEY_dup() returns the key duplicate or NULL if an error occurred.
 
 EVP_PKEY_up_ref(), EVP_PKEY_get_raw_private_key() and
 EVP_PKEY_get_raw_public_key() return 1 for success and 0 for failure.
@@ -191,7 +198,7 @@ EVP_PKEY_new_raw_private_key(), EVP_PKEY_new_raw_public_key(),
 EVP_PKEY_new_CMAC_key(), EVP_PKEY_new_raw_private_key() and
 EVP_PKEY_get_raw_public_key() functions were added in OpenSSL 1.1.1.
 
-The EVP_PKEY_new_raw_private_key_ex() and
+The EVP_PKEY_dup(), EVP_PKEY_new_raw_private_key_ex(), and
 EVP_PKEY_new_raw_public_key_ex()
 functions were added in OpenSSL 3.0.
 
@@ -203,7 +210,7 @@ previously implied to be disallowed.
 
 =head1 COPYRIGHT
 
-Copyright 2002-2021 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2002-2023 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the Apache License 2.0 (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy

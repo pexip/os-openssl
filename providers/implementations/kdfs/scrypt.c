@@ -108,13 +108,15 @@ static int scrypt_set_membuf(unsigned char **buffer, size_t *buflen,
                              const OSSL_PARAM *p)
 {
     OPENSSL_clear_free(*buffer, *buflen);
+    *buffer = NULL;
+    *buflen = 0;
+
     if (p->data_size == 0) {
         if ((*buffer = OPENSSL_malloc(1)) == NULL) {
             ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
             return 0;
         }
     } else if (p->data != NULL) {
-        *buffer = NULL;
         if (!OSSL_PARAM_get_octet_string(p, (void **)buffer, 0, buflen))
             return 0;
     }
@@ -184,6 +186,9 @@ static int kdf_scrypt_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     const OSSL_PARAM *p;
     KDF_SCRYPT *ctx = vctx;
     uint64_t u64_value;
+
+    if (params == NULL)
+        return 1;
 
     if ((p = OSSL_PARAM_locate_const(params, OSSL_KDF_PARAM_PASSWORD)) != NULL)
         if (!scrypt_set_membuf(&ctx->pass, &ctx->pass_len, p))
@@ -490,15 +495,15 @@ static int scrypt_alg(const char *pass, size_t passlen,
     X = (uint32_t *)(B + Blen);
     T = X + 32 * r;
     V = T + 32 * r;
-    if (pkcs5_pbkdf2_hmac_ex(pass, passlen, salt, saltlen, 1, sha256, (int)Blen,
-                             B, libctx, propq) == 0)
+    if (ossl_pkcs5_pbkdf2_hmac_ex(pass, passlen, salt, saltlen, 1, sha256,
+                                  (int)Blen, B, libctx, propq) == 0)
         goto err;
 
     for (i = 0; i < p; i++)
         scryptROMix(B + 128 * r * i, r, N, X, T, V);
 
-    if (pkcs5_pbkdf2_hmac_ex(pass, passlen, B, (int)Blen, 1, sha256, keylen,
-                             key, libctx, propq) == 0)
+    if (ossl_pkcs5_pbkdf2_hmac_ex(pass, passlen, B, (int)Blen, 1, sha256,
+                                  keylen, key, libctx, propq) == 0)
         goto err;
     rv = 1;
  err:

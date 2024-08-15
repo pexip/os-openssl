@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved
  * Copyright 2005 Nokia. All rights reserved.
  *
@@ -133,7 +133,7 @@ static int ssl_cipher_info_find(const ssl_cipher_table * table,
  * is engine-provided, we'll fill it only if corresponding EVP_PKEY_METHOD is
  * found
  */
-static int ssl_mac_pkey_id[SSL_MD_NUM_IDX] = {
+static const int default_mac_pkey_id[SSL_MD_NUM_IDX] = {
     /* MD5, SHA, GOST94, MAC89 */
     EVP_PKEY_HMAC, EVP_PKEY_HMAC, EVP_PKEY_HMAC, NID_undef,
     /* SHA256, SHA384, GOST2012_256, MAC89-12 */
@@ -346,7 +346,7 @@ int ssl_load_ciphers(SSL_CTX *ctx)
         if (md == NULL) {
             ctx->disabled_mac_mask |= t->mask;
         } else {
-            int tmpsize = EVP_MD_size(md);
+            int tmpsize = EVP_MD_get_size(md);
             if (!ossl_assert(tmpsize >= 0))
                 return 0;
             ctx->ssl_mac_secret_size[i] = tmpsize;
@@ -395,29 +395,33 @@ int ssl_load_ciphers(SSL_CTX *ctx)
      * Check for presence of GOST 34.10 algorithms, and if they are not
      * present, disable appropriate auth and key exchange
      */
-    ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX] = get_optional_pkey_id(SN_id_Gost28147_89_MAC);
-    if (ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX])
+    memcpy(ctx->ssl_mac_pkey_id, default_mac_pkey_id,
+           sizeof(ctx->ssl_mac_pkey_id));
+
+    ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX] =
+        get_optional_pkey_id(SN_id_Gost28147_89_MAC);
+    if (ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_GOST89MAC_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_GOST89MAC;
 
-    ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX] =
+    ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX] =
         get_optional_pkey_id(SN_gost_mac_12);
-    if (ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX])
+    if (ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_GOST89MAC12_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_GOST89MAC12;
 
-    ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX] =
+    ctx->ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX] =
         get_optional_pkey_id(SN_magma_mac);
-    if (ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX])
+    if (ctx->ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_MAGMAOMAC_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_MAGMAOMAC;
 
-    ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX] =
+    ctx->ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX] =
         get_optional_pkey_id(SN_kuznyechik_mac);
-    if (ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX])
+    if (ctx->ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_KUZNYECHIKOMAC_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_KUZNYECHIKOMAC;
@@ -461,7 +465,8 @@ DEFINE_RUN_ONCE_STATIC(do_load_builtin_compressions)
             comp->method = method;
             comp->id = SSL_COMP_ZLIB_IDX;
             comp->name = COMP_get_name(method);
-            sk_SSL_COMP_push(ssl_comp_methods, comp);
+            if (!sk_SSL_COMP_push(ssl_comp_methods, comp))
+                OPENSSL_free(comp);
             sk_SSL_COMP_sort(ssl_comp_methods);
         }
     }
@@ -528,7 +533,8 @@ int ssl_cipher_get_evp(SSL_CTX *ctx, const SSL_SESSION *s,
         ctmp.id = s->compress_meth;
         if (ssl_comp_methods != NULL) {
             i = sk_SSL_COMP_find(ssl_comp_methods, &ctmp);
-            *comp = sk_SSL_COMP_value(ssl_comp_methods, i);
+            if (i >= 0)
+                *comp = sk_SSL_COMP_value(ssl_comp_methods, i);
         }
         /* If were only interested in comp then return success */
         if ((enc == NULL) && (md == NULL))
@@ -551,19 +557,23 @@ int ssl_cipher_get_evp(SSL_CTX *ctx, const SSL_SESSION *s,
         if (c->algorithm_mac == SSL_AEAD)
             mac_pkey_type = NULL;
     } else {
-        if (!ssl_evp_md_up_ref(ctx->ssl_digest_methods[i])) {
+        const EVP_MD *digest = ctx->ssl_digest_methods[i];
+
+        if (digest == NULL
+                || !ssl_evp_md_up_ref(digest)) {
             ssl_evp_cipher_free(*enc);
             return 0;
         }
-        *md = ctx->ssl_digest_methods[i];
+        *md = digest;
         if (mac_pkey_type != NULL)
-            *mac_pkey_type = ssl_mac_pkey_id[i];
+            *mac_pkey_type = ctx->ssl_mac_pkey_id[i];
         if (mac_secret_size != NULL)
             *mac_secret_size = ctx->ssl_mac_secret_size[i];
     }
 
-    if ((*enc != NULL) &&
-        (*md != NULL || (EVP_CIPHER_flags(*enc) & EVP_CIPH_FLAG_AEAD_CIPHER))
+    if ((*enc != NULL)
+        && (*md != NULL 
+            || (EVP_CIPHER_get_flags(*enc) & EVP_CIPH_FLAG_AEAD_CIPHER))
         && (!mac_pkey_type || *mac_pkey_type != NID_undef)) {
         const EVP_CIPHER *evp = NULL;
 
@@ -1054,9 +1064,7 @@ static int ssl_cipher_process_rulestr(const char *rule_str,
                  * alphanumeric, so we call this an error.
                  */
                 ERR_raise(ERR_LIB_SSL, SSL_R_INVALID_COMMAND);
-                retval = found = 0;
-                l++;
-                break;
+                return 0;
             }
 
             if (rule == CIPHER_SPECIAL) {
@@ -1360,7 +1368,8 @@ static int update_cipher_list_by_id(STACK_OF(SSL_CIPHER) **cipher_list_by_id,
     return 1;
 }
 
-static int update_cipher_list(STACK_OF(SSL_CIPHER) **cipher_list,
+static int update_cipher_list(SSL_CTX *ctx,
+                              STACK_OF(SSL_CIPHER) **cipher_list,
                               STACK_OF(SSL_CIPHER) **cipher_list_by_id,
                               STACK_OF(SSL_CIPHER) *tls13_ciphersuites)
 {
@@ -1380,12 +1389,22 @@ static int update_cipher_list(STACK_OF(SSL_CIPHER) **cipher_list,
         (void)sk_SSL_CIPHER_delete(tmp_cipher_list, 0);
 
     /* Insert the new TLSv1.3 ciphersuites */
-    for (i = 0; i < sk_SSL_CIPHER_num(tls13_ciphersuites); i++)
-        sk_SSL_CIPHER_insert(tmp_cipher_list,
-                             sk_SSL_CIPHER_value(tls13_ciphersuites, i), i);
+    for (i = sk_SSL_CIPHER_num(tls13_ciphersuites) - 1; i >= 0; i--) {
+        const SSL_CIPHER *sslc = sk_SSL_CIPHER_value(tls13_ciphersuites, i);
 
-    if (!update_cipher_list_by_id(cipher_list_by_id, tmp_cipher_list))
+        /* Don't include any TLSv1.3 ciphersuites that are disabled */
+        if ((sslc->algorithm_enc & ctx->disabled_enc_mask) == 0
+                && (ssl_cipher_table_mac[sslc->algorithm2
+                                         & SSL_HANDSHAKE_MAC_MASK].mask
+                    & ctx->disabled_mac_mask) == 0) {
+            sk_SSL_CIPHER_unshift(tmp_cipher_list, sslc);
+        }
+    }
+
+    if (!update_cipher_list_by_id(cipher_list_by_id, tmp_cipher_list)) {
+        sk_SSL_CIPHER_free(tmp_cipher_list);
         return 0;
+    }
 
     sk_SSL_CIPHER_free(*cipher_list);
     *cipher_list = tmp_cipher_list;
@@ -1398,7 +1417,7 @@ int SSL_CTX_set_ciphersuites(SSL_CTX *ctx, const char *str)
     int ret = set_ciphersuites(&(ctx->tls13_ciphersuites), str);
 
     if (ret && ctx->cipher_list != NULL)
-        return update_cipher_list(&ctx->cipher_list, &ctx->cipher_list_by_id,
+        return update_cipher_list(ctx, &ctx->cipher_list, &ctx->cipher_list_by_id,
                                   ctx->tls13_ciphersuites);
 
     return ret;
@@ -1414,7 +1433,7 @@ int SSL_set_ciphersuites(SSL *s, const char *str)
             s->cipher_list = sk_SSL_CIPHER_dup(cipher_list);
     }
     if (ret && s->cipher_list != NULL)
-        return update_cipher_list(&s->cipher_list, &s->cipher_list_by_id,
+        return update_cipher_list(s->ctx, &s->cipher_list, &s->cipher_list_by_id,
                                   s->tls13_ciphersuites);
 
     return ret;
@@ -1536,7 +1555,6 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(SSL_CTX *ctx,
 
     /*
      * Partially overrule strength sort to prefer TLS 1.2 ciphers/PRFs.
-     * TODO(openssl-team): is there an easier way to accomplish all this?
      */
     ssl_cipher_apply_rule(0, 0, 0, 0, 0, TLS1_2_VERSION, 0, CIPHER_BUMP, -1,
                           &head, &tail);
@@ -1632,6 +1650,7 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(SSL_CTX *ctx,
         }
 
         if (!sk_SSL_CIPHER_push(cipherstack, sslc)) {
+            OPENSSL_free(co_list);
             sk_SSL_CIPHER_free(cipherstack);
             return NULL;
         }
@@ -1674,7 +1693,7 @@ char *SSL_CIPHER_description(const SSL_CIPHER *cipher, char *buf, int len)
     const char *ver;
     const char *kx, *au, *enc, *mac;
     uint32_t alg_mkey, alg_auth, alg_enc, alg_mac;
-    static const char *format = "%-30s %-7s Kx=%-8s Au=%-5s Enc=%-9s Mac=%-4s\n";
+    static const char *format = "%-30s %-7s Kx=%-8s Au=%-5s Enc=%-22s Mac=%-4s\n";
 
     if (buf == NULL) {
         len = 128;
@@ -2166,7 +2185,7 @@ int ssl_cipher_get_overhead(const SSL_CIPHER *c, size_t *mac_overhead,
         if (e_md == NULL)
             return 0;
 
-        mac = EVP_MD_size(e_md);
+        mac = EVP_MD_get_size(e_md);
         if (c->algorithm_enc != SSL_eNULL) {
             int cipher_nid = SSL_CIPHER_get_cipher_nid(c);
             const EVP_CIPHER *e_ciph = EVP_get_cipherbynid(cipher_nid);
@@ -2174,12 +2193,12 @@ int ssl_cipher_get_overhead(const SSL_CIPHER *c, size_t *mac_overhead,
             /* If it wasn't AEAD or SSL_eNULL, we expect it to be a
                known CBC cipher. */
             if (e_ciph == NULL ||
-                EVP_CIPHER_mode(e_ciph) != EVP_CIPH_CBC_MODE)
+                EVP_CIPHER_get_mode(e_ciph) != EVP_CIPH_CBC_MODE)
                 return 0;
 
             in = 1; /* padding length byte */
-            out = EVP_CIPHER_iv_length(e_ciph);
-            blk = EVP_CIPHER_block_size(e_ciph);
+            out = EVP_CIPHER_get_iv_length(e_ciph);
+            blk = EVP_CIPHER_get_block_size(e_ciph);
         }
     }
 

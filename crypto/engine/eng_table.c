@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2001-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -86,14 +86,19 @@ int engine_table_register(ENGINE_TABLE **table, ENGINE_CLEANUP_CB *cleanup,
 {
     int ret = 0, added = 0;
     ENGINE_PILE tmplate, *fnd;
-    CRYPTO_THREAD_write_lock(global_engine_lock);
+
+    if (!CRYPTO_THREAD_write_lock(global_engine_lock))
+        return 0;
     if (!(*table))
         added = 1;
     if (!int_table_check(table, 1))
         goto end;
-    if (added)
-        /* The cleanup callback needs to be added */
-        engine_cleanup_add_first(cleanup);
+    /* The cleanup callback needs to be added */
+    if (added && !engine_cleanup_add_first(cleanup)) {
+        lh_ENGINE_PILE_free(&(*table)->piles);
+        *table = NULL;
+        goto end;
+    }
     while (num_nids--) {
         tmplate.nid = *nids;
         fnd = lh_ENGINE_PILE_retrieve(&(*table)->piles, &tmplate);
@@ -161,7 +166,9 @@ IMPLEMENT_LHASH_DOALL_ARG(ENGINE_PILE, ENGINE);
 
 void engine_table_unregister(ENGINE_TABLE **table, ENGINE *e)
 {
-    CRYPTO_THREAD_write_lock(global_engine_lock);
+    if (!CRYPTO_THREAD_write_lock(global_engine_lock))
+        /* Can't return a value. :( */
+        return;
     if (int_table_check(table, 0))
         lh_ENGINE_PILE_doall_ENGINE(&(*table)->piles, int_unregister_cb, e);
     CRYPTO_THREAD_unlock(global_engine_lock);
@@ -179,7 +186,8 @@ static void int_cleanup_cb_doall(ENGINE_PILE *p)
 
 void engine_table_cleanup(ENGINE_TABLE **table)
 {
-    CRYPTO_THREAD_write_lock(global_engine_lock);
+    if (!CRYPTO_THREAD_write_lock(global_engine_lock))
+        return;
     if (*table) {
         lh_ENGINE_PILE_doall(&(*table)->piles, int_cleanup_cb_doall);
         lh_ENGINE_PILE_free(&(*table)->piles);
@@ -189,15 +197,17 @@ void engine_table_cleanup(ENGINE_TABLE **table)
 }
 
 /* return a functional reference for a given 'nid' */
-ENGINE *engine_table_select_int(ENGINE_TABLE **table, int nid, const char *f,
-                                int l)
+ENGINE *ossl_engine_table_select(ENGINE_TABLE **table, int nid,
+                                 const char *f, int l)
 {
     ENGINE *ret = NULL;
     ENGINE_PILE tmplate, *fnd = NULL;
     int initres, loop = 0;
 
+#ifndef OPENSSL_NO_AUTOLOAD_CONFIG
     /* Load the config before trying to check if engines are available */
     OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL);
+#endif
 
     if (!(*table)) {
         OSSL_TRACE3(ENGINE_TABLE,
@@ -206,7 +216,8 @@ ENGINE *engine_table_select_int(ENGINE_TABLE **table, int nid, const char *f,
         return NULL;
     }
     ERR_set_mark();
-    CRYPTO_THREAD_write_lock(global_engine_lock);
+    if (!CRYPTO_THREAD_write_lock(global_engine_lock))
+        goto end;
     /*
      * Check again inside the lock otherwise we could race against cleanup
      * operations. But don't worry about a debug printout

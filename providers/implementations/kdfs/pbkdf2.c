@@ -119,20 +119,22 @@ static void kdf_pbkdf2_init(KDF_PBKDF2 *ctx)
         /* This is an error, but there is no way to indicate such directly */
         ossl_prov_digest_reset(&ctx->digest);
     ctx->iter = PKCS5_DEFAULT_ITER;
-    ctx->lower_bound_checks = kdf_pbkdf2_default_checks;
+    ctx->lower_bound_checks = ossl_kdf_pbkdf2_default_checks;
 }
 
 static int pbkdf2_set_membuf(unsigned char **buffer, size_t *buflen,
                              const OSSL_PARAM *p)
 {
     OPENSSL_clear_free(*buffer, *buflen);
+    *buffer = NULL;
+    *buflen = 0;
+
     if (p->data_size == 0) {
         if ((*buffer = OPENSSL_malloc(1)) == NULL) {
             ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
             return 0;
         }
     } else if (p->data != NULL) {
-        *buffer = NULL;
         if (!OSSL_PARAM_get_octet_string(p, (void **)buffer, 0, buflen))
             return 0;
     }
@@ -171,6 +173,9 @@ static int kdf_pbkdf2_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     OSSL_LIB_CTX *provctx = PROV_LIBCTX_OF(ctx->provctx);
     int pkcs5;
     uint64_t iter, min_iter;
+
+    if (params == NULL)
+        return 1;
 
     if (!ossl_prov_digest_load_from_params(&ctx->digest, params, provctx))
         return 0;
@@ -278,7 +283,7 @@ static int pbkdf2_derive(const char *pass, size_t passlen,
     unsigned long i = 1;
     HMAC_CTX *hctx_tpl = NULL, *hctx = NULL;
 
-    mdlen = EVP_MD_size(digest);
+    mdlen = EVP_MD_get_size(digest);
     if (mdlen <= 0)
         return 0;
 

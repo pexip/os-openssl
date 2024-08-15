@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1999-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -23,7 +23,7 @@ static void *v2i_crld(const X509V3_EXT_METHOD *method,
 static int i2r_crldp(const X509V3_EXT_METHOD *method, void *pcrldp, BIO *out,
                      int indent);
 
-const X509V3_EXT_METHOD v3_crld = {
+const X509V3_EXT_METHOD ossl_v3_crld = {
     NID_crl_distribution_points, 0, ASN1_ITEM_ref(CRL_DIST_POINTS),
     0, 0, 0, 0,
     0, 0,
@@ -33,7 +33,7 @@ const X509V3_EXT_METHOD v3_crld = {
     NULL
 };
 
-const X509V3_EXT_METHOD v3_freshest_crl = {
+const X509V3_EXT_METHOD ossl_v3_freshest_crl = {
     NID_freshest_crl, 0, ASN1_ITEM_ref(CRL_DIST_POINTS),
     0, 0, 0, 0,
     0, 0,
@@ -70,6 +70,11 @@ static int set_dist_point_name(DIST_POINT_NAME **pdp, X509V3_CTX *ctx,
     STACK_OF(GENERAL_NAME) *fnm = NULL;
     STACK_OF(X509_NAME_ENTRY) *rnm = NULL;
 
+    if (cnf->value == NULL) {
+        ERR_raise(ERR_LIB_X509V3, X509V3_R_MISSING_VALUE);
+        goto err;
+    }
+
     if (strncmp(cnf->name, "fullname", 9) == 0) {
         fnm = gnames_from_sectname(ctx, cnf->value);
         if (!fnm)
@@ -83,6 +88,7 @@ static int set_dist_point_name(DIST_POINT_NAME **pdp, X509V3_CTX *ctx,
             return -1;
         dnsect = X509V3_get_section(ctx, cnf->value);
         if (!dnsect) {
+            X509_NAME_free(nm);
             ERR_raise(ERR_LIB_X509V3, X509V3_R_SECTION_NOT_FOUND);
             return -1;
         }
@@ -344,7 +350,7 @@ static int i2r_idp(const X509V3_EXT_METHOD *method, void *pidp, BIO *out,
 static void *v2i_idp(const X509V3_EXT_METHOD *method, X509V3_CTX *ctx,
                      STACK_OF(CONF_VALUE) *nval);
 
-const X509V3_EXT_METHOD v3_idp = {
+const X509V3_EXT_METHOD ossl_v3_idp = {
     NID_issuing_distribution_point, X509V3_EXT_MULTILINE,
     ASN1_ITEM_ref(ISSUING_DIST_POINT),
     0, 0, 0, 0,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2000-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -50,7 +50,7 @@ static int do_passwd(int passed_salt, char **salt_p, char **salt_malloc_p,
                      int reverse, size_t pw_maxlen, passwd_modes mode);
 
 typedef enum OPTION_choice {
-    OPT_ERR = -1, OPT_EOF = 0, OPT_HELP,
+    OPT_COMMON,
     OPT_IN,
     OPT_NOVERIFY, OPT_QUIET, OPT_TABLE, OPT_REVERSE, OPT_APR1,
     OPT_1, OPT_5, OPT_6, OPT_AIXMD5, OPT_SALT, OPT_STDIN,
@@ -195,7 +195,9 @@ int passwd_main(int argc, char **argv)
         passwds = argv;
     }
 
-    app_RAND_load();
+    if (!app_RAND_load())
+        goto end;
+
     if (mode == passwd_unset) {
         /* use default */
         mode = passwd_md5;
@@ -408,7 +410,7 @@ static char *md5crypt(const char *passwd, const char *magic, const char *salt)
         n >>= 1;
     }
     if (!EVP_DigestFinal_ex(md, buf, NULL))
-        return NULL;
+        goto err;
 
     for (i = 0; i < 1000; i++) {
         if (!EVP_DigestInit_ex(md2, EVP_md5(), NULL))
@@ -634,7 +636,7 @@ static char *shacrypt(const char *passwd, const char *magic, const char *salt)
         n >>= 1;
     }
     if (!EVP_DigestFinal_ex(md, buf, NULL))
-        return NULL;
+        goto err;
 
     /* P sequence */
     if (!EVP_DigestInit_ex(md2, sha, NULL))
@@ -645,7 +647,7 @@ static char *shacrypt(const char *passwd, const char *magic, const char *salt)
             goto err;
 
     if (!EVP_DigestFinal_ex(md2, temp_buf, NULL))
-        return NULL;
+        goto err;
 
     if ((p_bytes = OPENSSL_zalloc(passwd_len)) == NULL)
         goto err;
@@ -662,7 +664,7 @@ static char *shacrypt(const char *passwd, const char *magic, const char *salt)
             goto err;
 
     if (!EVP_DigestFinal_ex(md2, temp_buf, NULL))
-        return NULL;
+        goto err;
 
     if ((s_bytes = OPENSSL_zalloc(salt_len)) == NULL)
         goto err;

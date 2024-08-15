@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -39,18 +39,22 @@ unsigned long X509_issuer_and_serial_hash(X509 *a)
     unsigned long ret = 0;
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     unsigned char md[16];
-    char *f;
+    char *f = NULL;
+    EVP_MD *digest = NULL;
 
     if (ctx == NULL)
         goto err;
     f = X509_NAME_oneline(a->cert_info.issuer, NULL, 0);
     if (f == NULL)
         goto err;
-    if (!EVP_DigestInit_ex(ctx, EVP_md5(), NULL))
+    digest = EVP_MD_fetch(a->libctx, SN_md5, a->propq);
+    if (digest == NULL)
+        goto err;
+
+    if (!EVP_DigestInit_ex(ctx, digest, NULL))
         goto err;
     if (!EVP_DigestUpdate(ctx, (unsigned char *)f, strlen(f)))
         goto err;
-    OPENSSL_free(f);
     if (!EVP_DigestUpdate
         (ctx, (unsigned char *)a->cert_info.serialNumber.data,
          (unsigned long)a->cert_info.serialNumber.length))
@@ -61,6 +65,8 @@ unsigned long X509_issuer_and_serial_hash(X509 *a)
            ((unsigned long)md[2] << 16L) | ((unsigned long)md[3] << 24L)
         ) & 0xffffffffL;
  err:
+    OPENSSL_free(f);
+    EVP_MD_free(digest);
     EVP_MD_CTX_free(ctx);
     return ret;
 }
@@ -202,8 +208,12 @@ int X509_add_cert(STACK_OF(X509) *sk, X509 *cert, int flags)
                 return 1;
         }
     }
-    if ((flags & X509_ADD_FLAG_NO_SS) != 0 && X509_self_signed(cert, 0))
-        return 1;
+    if ((flags & X509_ADD_FLAG_NO_SS) != 0) {
+        int ret = X509_self_signed(cert, 0);
+
+        if (ret != 0)
+            return ret > 0 ? 1 : 0;
+    }
     if (!sk_X509_insert(sk, cert,
                         (flags & X509_ADD_FLAG_PREPEND) != 0 ? 0 : -1)) {
         ERR_raise(ERR_LIB_X509, ERR_R_MALLOC_FAILURE);
@@ -251,21 +261,27 @@ int X509_NAME_cmp(const X509_NAME *a, const X509_NAME *b)
         return -1;
 
     /* Ensure canonical encoding is present and up to date */
-    if (!a->canon_enc || a->modified) {
+    if (a->canon_enc == NULL || a->modified) {
         ret = i2d_X509_NAME((X509_NAME *)a, NULL);
         if (ret < 0)
             return -2;
     }
 
-    if (!b->canon_enc || b->modified) {
+    if (b->canon_enc == NULL || b->modified) {
         ret = i2d_X509_NAME((X509_NAME *)b, NULL);
         if (ret < 0)
             return -2;
     }
 
     ret = a->canon_enclen - b->canon_enclen;
-    if (ret == 0 && a->canon_enclen != 0)
+    if (ret == 0 && a->canon_enclen == 0)
+        return 0;
+
+    if (ret == 0) {
+        if (a->canon_enc == NULL || b->canon_enc == NULL)
+            return -2;
         ret = memcmp(a->canon_enc, b->canon_enc, a->canon_enclen);
+    }
 
     return ret < 0 ? -1 : ret > 0;
 }
@@ -276,12 +292,13 @@ unsigned long X509_NAME_hash_ex(const X509_NAME *x, OSSL_LIB_CTX *libctx,
     unsigned long ret = 0;
     unsigned char md[SHA_DIGEST_LENGTH];
     EVP_MD *sha1 = EVP_MD_fetch(libctx, "SHA1", propq);
+    int i2d_ret;
 
     /* Make sure X509_NAME structure contains valid cached encoding */
-    i2d_X509_NAME(x, NULL);
+    i2d_ret = i2d_X509_NAME(x, NULL);
     if (ok != NULL)
         *ok = 0;
-    if (sha1 != NULL
+    if (i2d_ret >= 0 && sha1 != NULL
         && EVP_Digest(x->canon_enc, x->canon_enclen, md, NULL, sha1, NULL)) {
         ret = (((unsigned long)md[0]) | ((unsigned long)md[1] << 8L) |
                ((unsigned long)md[2] << 16L) | ((unsigned long)md[3] << 24L)
@@ -309,7 +326,9 @@ unsigned long X509_NAME_hash_old(const X509_NAME *x)
         goto end;
 
     /* Make sure X509_NAME structure contains valid cached encoding */
-    i2d_X509_NAME(x, NULL);
+    if (i2d_X509_NAME(x, NULL) < 0)
+        goto end;
+
     if (EVP_DigestInit_ex(md_ctx, md5, NULL)
         && EVP_DigestUpdate(md_ctx, x->bytes->data, x->bytes->length)
         && EVP_DigestFinal_ex(md_ctx, md, NULL))
@@ -379,15 +398,12 @@ int X509_check_private_key(const X509 *x, const EVP_PKEY *k)
     int ret;
 
     xk = X509_get0_pubkey(x);
+    if (xk == NULL) {
+        ERR_raise(ERR_LIB_X509, X509_R_UNABLE_TO_GET_CERTS_PUBLIC_KEY);
+        return 0;
+    }
 
-    if (xk)
-        ret = EVP_PKEY_eq(xk, k);
-    else
-        ret = -2;
-
-    switch (ret) {
-    case 1:
-        break;
+    switch (ret = EVP_PKEY_eq(xk, k)) {
     case 0:
         ERR_raise(ERR_LIB_X509, X509_R_KEY_VALUES_MISMATCH);
         break;
@@ -396,10 +412,10 @@ int X509_check_private_key(const X509 *x, const EVP_PKEY *k)
         break;
     case -2:
         ERR_raise(ERR_LIB_X509, X509_R_UNKNOWN_KEY_TYPE);
+        break;
     }
-    if (ret > 0)
-        return 1;
-    return 0;
+
+    return ret > 0;
 }
 
 /*
@@ -474,7 +490,7 @@ int X509_chain_check_suiteb(int *perror_depth, X509 *x, STACK_OF(X509) *chain,
     if (chain == NULL)
         return check_suite_b(pk, -1, &tflags);
 
-    if (X509_get_version(x) != 2) {
+    if (X509_get_version(x) != X509_VERSION_3) {
         rv = X509_V_ERR_SUITE_B_INVALID_VERSION;
         /* Correct error depth */
         i = 0;
@@ -491,7 +507,7 @@ int X509_chain_check_suiteb(int *perror_depth, X509 *x, STACK_OF(X509) *chain,
     for (; i < sk_X509_num(chain); i++) {
         sign_nid = X509_get_signature_nid(x);
         x = sk_X509_value(chain, i);
-        if (X509_get_version(x) != 2) {
+        if (X509_get_version(x) != X509_VERSION_3) {
             rv = X509_V_ERR_SUITE_B_INVALID_VERSION;
             goto end;
         }

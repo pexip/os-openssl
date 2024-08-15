@@ -145,11 +145,12 @@ int custom_ext_parse(SSL *s, unsigned int context, unsigned int ext_type,
     }
 
     /*
-     * Extensions received in the ClientHello are marked with the
-     * SSL_EXT_FLAG_RECEIVED. This is so we know to add the equivalent
-     * extensions in the ServerHello/EncryptedExtensions message
+     * Extensions received in the ClientHello or CertificateRequest are marked
+     * with the SSL_EXT_FLAG_RECEIVED. This is so we know to add the equivalent
+     * extensions in the response messages
      */
-    if ((context & SSL_EXT_CLIENT_HELLO) != 0)
+    if ((context & (SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_3_CERTIFICATE_REQUEST))
+            != 0)
         meth->ext_flags |= SSL_EXT_FLAG_RECEIVED;
 
     /* If no parse function set return success */
@@ -191,7 +192,7 @@ int custom_ext_add(SSL *s, int context, WPACKET *pkt, X509 *x, size_t chainidx,
                         | SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS
                         | SSL_EXT_TLS1_3_CERTIFICATE
                         | SSL_EXT_TLS1_3_HELLO_RETRY_REQUEST)) != 0) {
-            /* Only send extensions present in ClientHello. */
+            /* Only send extensions present in ClientHello/CertificateRequest */
             if (!(meth->ext_flags & SSL_EXT_FLAG_RECEIVED))
                 continue;
         }
@@ -219,6 +220,8 @@ int custom_ext_add(SSL *s, int context, WPACKET *pkt, X509 *x, size_t chainidx,
                 || !WPACKET_start_sub_packet_u16(pkt)
                 || (outlen > 0 && !WPACKET_memcpy(pkt, out, outlen))
                 || !WPACKET_close(pkt)) {
+            if (meth->free_cb != NULL)
+                meth->free_cb(s, meth->ext_type, context, out, meth->add_arg);
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
             return 0;
         }
@@ -227,6 +230,9 @@ int custom_ext_add(SSL *s, int context, WPACKET *pkt, X509 *x, size_t chainidx,
              * We can't send duplicates: code logic should prevent this.
              */
             if (!ossl_assert((meth->ext_flags & SSL_EXT_FLAG_SENT) == 0)) {
+                if (meth->free_cb != NULL)
+                    meth->free_cb(s, meth->ext_type, context, out,
+                                  meth->add_arg);
                 SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
                 return 0;
             }
@@ -327,6 +333,8 @@ void custom_exts_free(custom_ext_methods *exts)
         OPENSSL_free(meth->parse_arg);
     }
     OPENSSL_free(exts->meths);
+    exts->meths = NULL;
+    exts->meths_count = 0;
 }
 
 /* Return true if a client custom extension exists, false otherwise */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2020-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -80,6 +80,9 @@ static int print_labeled_bignum(BIO *out, const char *label, const BIGNUM *bn)
     }
 
     hex_str = BN_bn2hex(bn);
+    if (hex_str == NULL)
+        return 0;
+
     p = hex_str;
     if (*p == '-') {
         ++p;
@@ -217,6 +220,7 @@ static int dh_to_text(BIO *out, const void *key, int selection)
     const BIGNUM *priv_key = NULL, *pub_key = NULL;
     const FFC_PARAMS *params = NULL;
     const BIGNUM *p = NULL;
+    long length;
 
     if (out == NULL || dh == NULL) {
         ERR_raise(ERR_LIB_PROV, ERR_R_PASSED_NULL_PARAMETER);
@@ -237,7 +241,7 @@ static int dh_to_text(BIO *out, const void *key, int selection)
             return 0;
         }
     }
-    if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0) {
+    if ((selection & OSSL_KEYMGMT_SELECT_KEYPAIR) != 0) {
         pub_key = DH_get0_pub_key(dh);
         if (pub_key == NULL) {
             ERR_raise(ERR_LIB_PROV, PROV_R_NOT_A_PUBLIC_KEY);
@@ -268,6 +272,11 @@ static int dh_to_text(BIO *out, const void *key, int selection)
         return 0;
     if (params != NULL
         && !ffc_params_to_text(out, params))
+        return 0;
+    length = DH_get_length(dh);
+    if (length > 0
+        && BIO_printf(out, "recommended-private-length: %ld bits\n",
+                      length) <= 0)
         return 0;
 
     return 1;
@@ -307,7 +316,7 @@ static int dsa_to_text(BIO *out, const void *key, int selection)
             return 0;
         }
     }
-    if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0) {
+    if ((selection & OSSL_KEYMGMT_SELECT_KEYPAIR) != 0) {
         pub_key = DSA_get0_pub_key(dsa);
         if (pub_key == NULL) {
             ERR_raise(ERR_LIB_PROV, PROV_R_NOT_A_PUBLIC_KEY);
@@ -516,7 +525,7 @@ static int ec_to_text(BIO *out, const void *key, int selection)
         if (priv_len == 0)
             goto err;
     }
-    if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0) {
+    if ((selection & OSSL_KEYMGMT_SELECT_KEYPAIR) != 0) {
         const EC_POINT *pub_pt = EC_KEY_get0_public_key(ec);
 
         if (pub_pt == NULL) {
@@ -566,26 +575,31 @@ static int ecx_to_text(BIO *out, const void *key, int selection)
         return 0;
     }
 
+    switch (ecx->type) {
+    case ECX_KEY_TYPE_X25519:
+        type_label = "X25519";
+        break;
+    case ECX_KEY_TYPE_X448:
+        type_label = "X448";
+        break;
+    case ECX_KEY_TYPE_ED25519:
+        type_label = "ED25519";
+        break;
+    case ECX_KEY_TYPE_ED448:
+        type_label = "ED448";
+        break;
+    }
+
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0) {
         if (ecx->privkey == NULL) {
             ERR_raise(ERR_LIB_PROV, PROV_R_NOT_A_PRIVATE_KEY);
             return 0;
         }
 
-        switch (ecx->type) {
-        case ECX_KEY_TYPE_X25519:
-            type_label = "X25519 Private-Key";
-            break;
-        case ECX_KEY_TYPE_X448:
-            type_label = "X448 Private-Key";
-            break;
-        case ECX_KEY_TYPE_ED25519:
-            type_label = "ED25519 Private-Key";
-            break;
-        case ECX_KEY_TYPE_ED448:
-            type_label = "ED448 Private-Key";
-            break;
-        }
+        if (BIO_printf(out, "%s Private-Key:\n", type_label) <= 0)
+            return 0;
+        if (!print_labeled_buf(out, "priv:", ecx->privkey, ecx->keylen))
+            return 0;
     } else if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0) {
         /* ecx->pubkey is an array, not a pointer... */
         if (!ecx->haspubkey) {
@@ -593,29 +607,11 @@ static int ecx_to_text(BIO *out, const void *key, int selection)
             return 0;
         }
 
-        switch (ecx->type) {
-        case ECX_KEY_TYPE_X25519:
-            type_label = "X25519 Public-Key";
-            break;
-        case ECX_KEY_TYPE_X448:
-            type_label = "X448 Public-Key";
-            break;
-        case ECX_KEY_TYPE_ED25519:
-            type_label = "ED25519 Public-Key";
-            break;
-        case ECX_KEY_TYPE_ED448:
-            type_label = "ED448 Public-Key";
-            break;
-        }
+        if (BIO_printf(out, "%s Public-Key:\n", type_label) <= 0)
+            return 0;
     }
 
-    if (BIO_printf(out, "%s:\n", type_label) <= 0)
-        return 0;
-    if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0
-        && !print_labeled_buf(out, "priv:", ecx->privkey, ecx->keylen))
-        return 0;
-    if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0
-        && !print_labeled_buf(out, "pub:", ecx->pubkey, ecx->keylen))
+    if (!print_labeled_buf(out, "pub:", ecx->pubkey, ecx->keylen))
         return 0;
 
     return 1;
@@ -633,8 +629,8 @@ static int rsa_to_text(BIO *out, const void *key, int selection)
 {
     const RSA *rsa = key;
     const char *type_label = "RSA key";
-    const char *modulus_label;
-    const char *exponent_label;
+    const char *modulus_label = NULL;
+    const char *exponent_label = NULL;
     const BIGNUM *rsa_d = NULL, *rsa_n = NULL, *rsa_e = NULL;
     STACK_OF(BIGNUM_const) *factors = NULL;
     STACK_OF(BIGNUM_const) *exps = NULL;
@@ -764,13 +760,6 @@ static int rsa_to_text(BIO *out, const void *key, int selection)
                                saltlen,
                                (saltlen == 20 ? " (default)" : "")) <= 0)
                     goto err;
-                /*
-                 * TODO(3.0) Should we show the ASN.1 trailerField value, or
-                 * the actual trailerfield byte (i.e. 0xBC for 1)?
-                 * crypto/rsa/rsa_ameth.c isn't very clear on that, as it
-                 * does display 0xBC when the default applies, but the ASN.1
-                 * trailerField value otherwise...
-                 */
                 if (BIO_printf(out, "  Trailer Field: 0x%x%s\n",
                                trailerfield,
                                (trailerfield == 1 ? " (default)" : "")) <= 0)
@@ -802,38 +791,13 @@ static void key2text_freectx(ossl_unused void *vctx)
 {
 }
 
-static const OSSL_PARAM *key2text_gettable_params(void *provctx)
-{
-    static const OSSL_PARAM gettables[] = {
-        { OSSL_ENCODER_PARAM_OUTPUT_TYPE, OSSL_PARAM_UTF8_PTR, NULL, 0, 0 },
-        OSSL_PARAM_END,
-    };
-
-    return gettables;
-}
-
-static int key2text_get_params(OSSL_PARAM params[], const char *input_type)
-{
-    OSSL_PARAM *p;
-
-    p = OSSL_PARAM_locate(params, OSSL_ENCODER_PARAM_INPUT_TYPE);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, input_type))
-        return 0;
-
-    p = OSSL_PARAM_locate(params, OSSL_ENCODER_PARAM_OUTPUT_TYPE);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "TEXT"))
-        return 0;
-
-    return 1;
-}
-
 static int key2text_encode(void *vctx, const void *key, int selection,
                            OSSL_CORE_BIO *cout,
                            int (*key2text)(BIO *out, const void *key,
                                            int selection),
                            OSSL_PASSPHRASE_CALLBACK *cb, void *cbarg)
 {
-    BIO *out = bio_new_from_core_bio(vctx, cout);
+    BIO *out = ossl_bio_new_from_core_bio(vctx, cout);
     int ret;
 
     if (out == NULL)
@@ -846,18 +810,12 @@ static int key2text_encode(void *vctx, const void *key, int selection,
 }
 
 #define MAKE_TEXT_ENCODER(impl, type)                                   \
-    static OSSL_FUNC_encoder_get_params_fn                              \
-    impl##2text_get_params;                                             \
     static OSSL_FUNC_encoder_import_object_fn                           \
     impl##2text_import_object;                                          \
     static OSSL_FUNC_encoder_free_object_fn                             \
     impl##2text_free_object;                                            \
     static OSSL_FUNC_encoder_encode_fn impl##2text_encode;              \
                                                                         \
-    static int impl##2text_get_params(OSSL_PARAM params[])              \
-    {                                                                   \
-        return key2text_get_params(params, impl##_input_type);          \
-    }                                                                   \
     static void *impl##2text_import_object(void *ctx, int selection,    \
                                            const OSSL_PARAM params[])   \
     {                                                                   \
@@ -888,10 +846,6 @@ static int key2text_encode(void *vctx, const void *key, int selection,
           (void (*)(void))key2text_newctx },                            \
         { OSSL_FUNC_ENCODER_FREECTX,                                    \
           (void (*)(void))key2text_freectx },                           \
-        { OSSL_FUNC_ENCODER_GETTABLE_PARAMS,                            \
-          (void (*)(void))key2text_gettable_params },                   \
-        { OSSL_FUNC_ENCODER_GET_PARAMS,                                 \
-          (void (*)(void))impl##2text_get_params },                     \
         { OSSL_FUNC_ENCODER_IMPORT_OBJECT,                              \
           (void (*)(void))impl##2text_import_object },                  \
         { OSSL_FUNC_ENCODER_FREE_OBJECT,                                \

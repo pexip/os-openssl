@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
@@ -24,6 +24,16 @@
 #include "ssl_local.h"
 #include "ssl_cert_table.h"
 #include "internal/thread_once.h"
+#ifndef OPENSSL_NO_POSIX_IO
+# include <sys/stat.h>
+# ifdef _WIN32
+#  define stat _stat
+# endif
+# ifndef S_ISDIR
+#  define S_ISDIR(a) (((a) & S_IFMT) == S_IFDIR)
+# endif
+#endif
+
 
 static int ssl_security_default_callback(const SSL *s, const SSL_CTX *ctx,
                                          int op, int bits, int nid, void *other,
@@ -362,6 +372,13 @@ void ssl_cert_set_cert_cb(CERT *c, int (*cb) (SSL *ssl, void *arg), void *arg)
     c->cert_cb_arg = arg;
 }
 
+/*
+ * Verify a certificate chain
+ * Return codes:
+ *  1: Verify success
+ *  0: Verify failure or error
+ * -1: Retry required
+ */
 int ssl_verify_cert_chain(SSL *s, STACK_OF(X509) *sk)
 {
     X509 *x;
@@ -423,10 +440,14 @@ int ssl_verify_cert_chain(SSL *s, STACK_OF(X509) *sk)
     if (s->verify_callback)
         X509_STORE_CTX_set_verify_cb(ctx, s->verify_callback);
 
-    if (s->ctx->app_verify_callback != NULL)
+    if (s->ctx->app_verify_callback != NULL) {
         i = s->ctx->app_verify_callback(ctx, s->ctx->app_verify_arg);
-    else
+    } else {
         i = X509_verify_cert(ctx);
+        /* We treat an error in the same way as a failure to verify */
+        if (i < 0)
+            i = 0;
+    }
 
     s->verify_result = X509_STORE_CTX_get_error(ctx);
     sk_X509_pop_free(s->verified_chain, X509_free);
@@ -625,7 +646,7 @@ STACK_OF(X509_NAME) *SSL_load_client_CA_file_ex(const char *file,
         ERR_raise(ERR_LIB_SSL, ERR_R_MALLOC_FAILURE);
         goto err;
     }
-    if (!BIO_read_filename(in, file))
+    if (BIO_read_filename(in, file) <= 0)
         goto err;
 
     /* Internally lh_X509_NAME_retrieve() needs the libctx to retrieve SHA1 */
@@ -696,7 +717,7 @@ int SSL_add_file_cert_subjects_to_stack(STACK_OF(X509_NAME) *stack,
         goto err;
     }
 
-    if (!BIO_read_filename(in, file))
+    if (BIO_read_filename(in, file) <= 0)
         goto err;
 
     for (;;) {
@@ -740,7 +761,14 @@ int SSL_add_dir_cert_subjects_to_stack(STACK_OF(X509_NAME) *stack,
     while ((filename = OPENSSL_DIR_read(&d, dir))) {
         char buf[1024];
         int r;
+#ifndef OPENSSL_NO_POSIX_IO
+        struct stat st;
 
+#else
+        /* Cannot use stat so just skip current and parent directories */
+        if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+            continue;
+#endif
         if (strlen(dir) + strlen(filename) + 2 > sizeof(buf)) {
             ERR_raise(ERR_LIB_SSL, SSL_R_PATH_TOO_LONG);
             goto err;
@@ -749,6 +777,11 @@ int SSL_add_dir_cert_subjects_to_stack(STACK_OF(X509_NAME) *stack,
         r = BIO_snprintf(buf, sizeof(buf), "%s%s", dir, filename);
 #else
         r = BIO_snprintf(buf, sizeof(buf), "%s/%s", dir, filename);
+#endif
+#ifndef OPENSSL_NO_POSIX_IO
+        /* Skip subdirectories */
+        if (!stat(buf, &st) && S_ISDIR(st.st_mode))
+            continue;
 #endif
         if (r <= 0 || r >= (int)sizeof(buf))
             goto err;
@@ -960,18 +993,47 @@ int ssl_cert_set_cert_store(CERT *c, X509_STORE *store, int chain, int ref)
     return 1;
 }
 
-static int ssl_security_default_callback(const SSL *s, const SSL_CTX *ctx,
-                                         int op, int bits, int nid, void *other,
-                                         void *ex)
+int ssl_cert_get_cert_store(CERT *c, X509_STORE **pstore, int chain)
 {
-    int level, minbits;
-    static const int minbits_table[5] = { 80, 112, 128, 192, 256 };
-    if (ctx)
+    *pstore = (chain ? c->chain_store : c->verify_store);
+    return 1;
+}
+
+int ssl_get_security_level_bits(const SSL *s, const SSL_CTX *ctx, int *levelp)
+{
+    int level;
+    /*
+     * note that there's a corresponding minbits_table
+     * in crypto/x509/x509_vfy.c that's used for checking the security level
+     * of RSA and DSA keys
+     */
+    static const int minbits_table[5 + 1] = { 0, 80, 112, 128, 192, 256 };
+
+    if (ctx != NULL)
         level = SSL_CTX_get_security_level(ctx);
     else
         level = SSL_get_security_level(s);
 
-    if (level <= 0) {
+    if (level > 5)
+        level = 5;
+    else if (level < 0)
+        level = 0;
+
+    if (levelp != NULL)
+        *levelp = level;
+
+    return minbits_table[level];
+}
+
+static int ssl_security_default_callback(const SSL *s, const SSL_CTX *ctx,
+                                         int op, int bits, int nid, void *other,
+                                         void *ex)
+{
+    int level, minbits, pfs_mask;
+
+    minbits = ssl_get_security_level_bits(s, ctx, &level);
+
+    if (level == 0) {
         /*
          * No EDH keys weaker than 1024-bits even at level 0, otherwise,
          * anything goes.
@@ -980,9 +1042,6 @@ static int ssl_security_default_callback(const SSL *s, const SSL_CTX *ctx,
             return 0;
         return 1;
     }
-    if (level > 5)
-        level = 5;
-    minbits = minbits_table[level - 1];
     switch (op) {
     case SSL_SECOP_CIPHER_SUPPORTED:
     case SSL_SECOP_CIPHER_SHARED:
@@ -1005,8 +1064,9 @@ static int ssl_security_default_callback(const SSL *s, const SSL_CTX *ctx,
             if (level >= 2 && c->algorithm_enc == SSL_RC4)
                 return 0;
             /* Level 3: forward secure ciphersuites only */
+            pfs_mask = SSL_kDHE | SSL_kECDHE | SSL_kDHEPSK | SSL_kECDHEPSK;
             if (level >= 3 && c->min_tls != TLS1_3_VERSION &&
-                               !(c->algorithm_mkey & (SSL_kEDH | SSL_kEECDH)))
+                               !(c->algorithm_mkey & pfs_mask))
                 return 0;
             break;
         }

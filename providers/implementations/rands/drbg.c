@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2011-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -256,7 +256,7 @@ static void cleanup_entropy(PROV_DRBG *drbg, unsigned char *out, size_t outlen)
     } else if (drbg->parent_clear_seed != NULL) {
         if (!ossl_drbg_lock_parent(drbg))
             return;
-        drbg->parent_clear_seed(drbg, out, outlen);
+        drbg->parent_clear_seed(drbg->parent, out, outlen);
         ossl_drbg_unlock_parent(drbg);
     }
 }
@@ -303,6 +303,7 @@ static void prov_drbg_nonce_ossl_ctx_free(void *vdngbl)
 }
 
 static const OSSL_LIB_CTX_METHOD drbg_nonce_ossl_ctx_method = {
+    OSSL_LIB_CTX_METHOD_DEFAULT_PRIORITY,
     prov_drbg_nonce_ossl_ctx_new,
     prov_drbg_nonce_ossl_ctx_free,
 };
@@ -458,9 +459,11 @@ int ossl_prov_drbg_instantiate(PROV_DRBG *drbg, unsigned int strength,
 
     if (!drbg->instantiate(drbg, entropy, entropylen, nonce, noncelen,
                            pers, perslen)) {
+        cleanup_entropy(drbg, entropy, entropylen);
         ERR_raise(ERR_LIB_PROV, PROV_R_ERROR_INSTANTIATING_DRBG);
         goto end;
     }
+    cleanup_entropy(drbg, entropy, entropylen);
 
     drbg->state = EVP_RAND_STATE_READY;
     drbg->generate_counter = 1;
@@ -468,8 +471,6 @@ int ossl_prov_drbg_instantiate(PROV_DRBG *drbg, unsigned int strength,
     tsan_store(&drbg->reseed_counter, drbg->reseed_next_counter);
 
  end:
-    if (entropy != NULL)
-        cleanup_entropy(drbg, entropy, entropylen);
     if (nonce != NULL)
         ossl_prov_cleanup_nonce(drbg->provctx, nonce, noncelen);
     if (drbg->state == EVP_RAND_STATE_READY)
@@ -764,6 +765,7 @@ int ossl_drbg_enable_locking(void *vctx)
 PROV_DRBG *ossl_rand_drbg_new
     (void *provctx, void *parent, const OSSL_DISPATCH *p_dispatch,
      int (*dnew)(PROV_DRBG *ctx),
+     void (*dfree)(void *vctx),
      int (*instantiate)(PROV_DRBG *drbg,
                         const unsigned char *entropy, size_t entropylen,
                         const unsigned char *nonce, size_t noncelen,
@@ -836,10 +838,14 @@ PROV_DRBG *ossl_rand_drbg_new
             goto err;
         }
     }
+#ifdef TSAN_REQUIRES_LOCKING
+    if (!ossl_drbg_enable_locking(drbg))
+        goto err;
+#endif
     return drbg;
 
  err:
-    ossl_rand_drbg_free(drbg);
+    dfree(drbg);
     return NULL;
 }
 
@@ -914,6 +920,9 @@ int ossl_drbg_get_ctx_params(PROV_DRBG *drbg, OSSL_PARAM params[])
 int ossl_drbg_set_ctx_params(PROV_DRBG *drbg, const OSSL_PARAM params[])
 {
     const OSSL_PARAM *p;
+
+    if (params == NULL)
+        return 1;
 
     p = OSSL_PARAM_locate_const(params, OSSL_DRBG_PARAM_RESEED_REQUESTS);
     if (p != NULL && !OSSL_PARAM_get_uint(p, &drbg->reseed_interval))

@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-# Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2019-2022 The OpenSSL Project Authors. All Rights Reserved.
 #
 # Licensed under the Apache License 2.0 (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
@@ -24,10 +24,11 @@ use platform;
 
 plan skip_all => "Test only supported in a fips build" if disabled("fips");
 
-plan tests => 24;
+plan tests => 29;
 
 my $infile = bldtop_file('providers', platform->dso('fips'));
-my $fipskey = $ENV{FIPSKEY} // '00';
+my $fipskey = $ENV{FIPSKEY} // config('FIPSKEY') // '00';
+my $provconf = srctop_file("test", "fips-and-base.cnf");
 
 # Read in a text $infile and replace the regular expression in $srch with the
 # value in $repl and output to a new file $outfile.
@@ -191,6 +192,20 @@ ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips_fail.cnf', '-module', $infi
             '-section_name', 'fips_sect', '-corrupt_desc', 'SHA3'])),
    "fipsinstall fails when the digest result is corrupted");
 
+# corrupt cipher encrypt test
+ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips_fail.cnf', '-module', $infile,
+            '-provider_name', 'fips', '-mac_name', 'HMAC',
+            '-macopt', 'digest:SHA256', '-macopt', "hexkey:$fipskey",
+            '-section_name', 'fips_sect', '-corrupt_desc', 'AES_GCM'])),
+   "fipsinstall fails when the AES_GCM result is corrupted");
+
+# corrupt cipher decrypt test
+ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips_fail.cnf', '-module', $infile,
+            '-provider_name', 'fips', '-mac_name', 'HMAC',
+            '-macopt', 'digest:SHA256', '-macopt', "hexkey:$fipskey",
+            '-section_name', 'fips_sect', '-corrupt_desc', 'AES_ECB_Decrypt'])),
+   "fipsinstall fails when the AES_ECB result is corrupted");
+
 # corrupt DRBG
 ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips_fail.cnf', '-module', $infile,
             '-provider_name', 'fips', '-mac_name', 'HMAC',
@@ -216,12 +231,18 @@ SKIP: {
 SKIP: {
     skip "Skipping Signature DSA corruption test because of no dsa in this build", 1
         if disabled("dsa");
+
+    run(test(["fips_version_test", "-config", $provconf, "<3.1.0"]),
+             capture => 1, statusvar => \my $exit);
+    skip "FIPS provider version is too new for PCT DSA signature test", 1
+        if !$exit;
+
     ok(!run(app(['openssl', 'fipsinstall', '-out', 'fips.cnf', '-module', $infile,
                 '-provider_name', 'fips', '-mac_name', 'HMAC',
                 '-macopt', 'digest:SHA256', '-macopt', "hexkey:$fipskey",
                 '-section_name', 'fips_sect',
                 '-corrupt_desc', 'DSA',
-                '-corrupt_type', 'KAT_Signature'])),
+                '-corrupt_type', 'PCT_Signature'])),
        "fipsinstall fails when the signature result is corrupted");
 }
 
@@ -272,3 +293,18 @@ ok(replace_parent_line_file('fips_bad_module_mac.cnf',
    && !run(app(['openssl', 'fipsinstall',
                 '-config', 'fips_parent_bad_module_mac.cnf'])),
    "verify load config fail bad module mac");
+
+
+my $stconf = "fipsmodule_selftest.cnf";
+
+ok(run(app(['openssl', 'fipsinstall', '-out', $stconf,
+            '-module', $infile, '-self_test_onload'])),
+       "fipsinstall config saved without self test indicator");
+
+ok(!run(app(['openssl', 'fipsinstall', '-in', $stconf,
+             '-module', $infile, '-verify'])),
+        "fipsinstall config verify fails without self test indicator");
+
+ok(run(app(['openssl', 'fipsinstall', '-in', $stconf,
+            '-module', $infile, '-self_test_onload', '-verify'])),
+       "fipsinstall config verify passes when self test indicator is not present");

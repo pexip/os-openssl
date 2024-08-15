@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2015-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -138,6 +138,10 @@ static void async_release_job(ASYNC_JOB *job) {
     async_pool *pool;
 
     pool = (async_pool *)CRYPTO_THREAD_get_local(&poolkey);
+    if (pool == NULL) {
+        ERR_raise(ERR_LIB_ASYNC, ERR_R_INTERNAL_ERROR);
+        return;
+    }
     OPENSSL_free(job->funcargs);
     job->funcargs = NULL;
     sk_ASYNC_JOB_push(pool->jobs, job);
@@ -148,6 +152,10 @@ void async_start_func(void)
     ASYNC_JOB *job;
     async_ctx *ctx = async_get_ctx();
 
+    if (ctx == NULL) {
+        ERR_raise(ERR_LIB_ASYNC, ERR_R_INTERNAL_ERROR);
+        return;
+    }
     while (1) {
         /* Run the job */
         job = ctx->currjob;
@@ -181,7 +189,7 @@ int ASYNC_start_job(ASYNC_JOB **job, ASYNC_WAIT_CTX *wctx, int *ret,
     if (ctx == NULL)
         return ASYNC_ERR;
 
-    if (*job)
+    if (*job != NULL)
         ctx->currjob = *job;
 
     for (;;) {
@@ -203,15 +211,24 @@ int ASYNC_start_job(ASYNC_JOB **job, ASYNC_WAIT_CTX *wctx, int *ret,
             }
 
             if (ctx->currjob->status == ASYNC_JOB_PAUSED) {
+                if (*job == NULL)
+                    return ASYNC_ERR;
                 ctx->currjob = *job;
+
                 /*
                  * Restore the default libctx to what it was the last time the
                  * fibre ran
                  */
                 libctx = OSSL_LIB_CTX_set0_default(ctx->currjob->libctx);
+                if (libctx == NULL) {
+                    /* Failed to set the default context */
+                    ERR_raise(ERR_LIB_ASYNC, ERR_R_INTERNAL_ERROR);
+                    goto err;
+                }
                 /* Resume previous job */
                 if (!async_fibre_swapcontext(&ctx->dispatcher,
                         &ctx->currjob->fibrectx, 1)) {
+                    ctx->currjob->libctx = OSSL_LIB_CTX_set0_default(libctx);
                     ERR_raise(ERR_LIB_ASYNC, ASYNC_R_FAILED_TO_SWAP_CONTEXT);
                     goto err;
                 }
@@ -393,7 +410,6 @@ err:
     return 0;
 }
 
-/* TODO(3.0): arg ignored for now */
 static void async_delete_thread_state(void *arg)
 {
     async_pool *pool = (async_pool *)CRYPTO_THREAD_get_local(&poolkey);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2001-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -157,7 +157,7 @@ static void dynamic_data_ctx_free_func(void *parent, void *ptr,
 static int dynamic_set_data_ctx(ENGINE *e, dynamic_data_ctx **ctx)
 {
     dynamic_data_ctx *c = OPENSSL_zalloc(sizeof(*c));
-    int ret = 1;
+    int ret = 0;
 
     if (c == NULL) {
         ERR_raise(ERR_LIB_ENGINE, ERR_R_MALLOC_FAILURE);
@@ -166,13 +166,13 @@ static int dynamic_set_data_ctx(ENGINE *e, dynamic_data_ctx **ctx)
     c->dirs = sk_OPENSSL_STRING_new_null();
     if (c->dirs == NULL) {
         ERR_raise(ERR_LIB_ENGINE, ERR_R_MALLOC_FAILURE);
-        OPENSSL_free(c);
-        return 0;
+        goto end;
     }
     c->DYNAMIC_F1 = "v_check";
     c->DYNAMIC_F2 = "bind_engine";
     c->dir_load = 1;
-    CRYPTO_THREAD_write_lock(global_engine_lock);
+    if (!CRYPTO_THREAD_write_lock(global_engine_lock))
+        goto end;
     if ((*ctx = (dynamic_data_ctx *)ENGINE_get_ex_data(e,
                                                        dynamic_ex_data_idx))
         == NULL) {
@@ -184,11 +184,13 @@ static int dynamic_set_data_ctx(ENGINE *e, dynamic_data_ctx **ctx)
         }
     }
     CRYPTO_THREAD_unlock(global_engine_lock);
+    ret = 1;
     /*
      * If we lost the race to set the context, c is non-NULL and *ctx is the
      * context of the thread that won.
      */
-    if (c)
+end:
+    if (c != NULL)
         sk_OPENSSL_STRING_free(c->dirs);
     OPENSSL_free(c);
     return ret;
@@ -213,7 +215,8 @@ static dynamic_data_ctx *dynamic_get_data_ctx(ENGINE *e)
             ERR_raise(ERR_LIB_ENGINE, ENGINE_R_NO_INDEX);
             return NULL;
         }
-        CRYPTO_THREAD_write_lock(global_engine_lock);
+        if (!CRYPTO_THREAD_write_lock(global_engine_lock))
+            return NULL;
         /* Avoid a race by checking again inside this lock */
         if (dynamic_ex_data_idx < 0) {
             /* Good, someone didn't beat us to it */
@@ -398,6 +401,26 @@ static int int_load(dynamic_data_ctx *ctx)
     return 0;
 }
 
+/*
+ * Unfortunately the version checker does not distinguish between
+ * engines built for openssl 1.1.x and openssl 3.x, but loading
+ * an engine that is built for openssl 1.1.x will cause a fatal
+ * error.  Detect such engines, since EVP_PKEY_base_id is exported
+ * as a function in openssl 1.1.x, while it is named EVP_PKEY_get_base_id
+ * in openssl 3.x.  Therefore we take the presence of that symbol
+ * as an indication that the engine will be incompatible.
+ */
+static int using_libcrypto_11(dynamic_data_ctx *ctx)
+{
+    int ret;
+
+    ERR_set_mark();
+    ret = DSO_bind_func(ctx->dynamic_dso, "EVP_PKEY_base_id") != NULL;
+    ERR_pop_to_mark();
+
+    return ret;
+}
+
 static int dynamic_load(ENGINE *e, dynamic_data_ctx *ctx)
 {
     ENGINE cpy;
@@ -447,9 +470,9 @@ static int dynamic_load(ENGINE *e, dynamic_data_ctx *ctx)
         /*
          * We fail if the version checker veto'd the load *or* if it is
          * deferring to us (by returning its version) and we think it is too
-         * old.
+         * old. Also fail if this is engine for openssl 1.1.x.
          */
-        if (vcheck_res < OSSL_DYNAMIC_OLDEST) {
+        if (vcheck_res < OSSL_DYNAMIC_OLDEST || using_libcrypto_11(ctx)) {
             /* Fail */
             ctx->bind_engine = NULL;
             ctx->v_check = NULL;
@@ -481,7 +504,9 @@ static int dynamic_load(ENGINE *e, dynamic_data_ctx *ctx)
     engine_set_all_null(e);
 
     /* Try to bind the ENGINE onto our own ENGINE structure */
-    if (!ctx->bind_engine(e, ctx->engine_id, &fns)) {
+    if (!engine_add_dynamic_id(e, (ENGINE_DYNAMIC_ID)ctx->bind_engine, 1)
+            || !ctx->bind_engine(e, ctx->engine_id, &fns)) {
+        engine_remove_dynamic_id(e, 1);
         ctx->bind_engine = NULL;
         ctx->v_check = NULL;
         DSO_free(ctx->dynamic_dso);

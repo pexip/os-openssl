@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2006-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -149,69 +149,14 @@ static int dsa_pub_encode(X509_PUBKEY *pk, const EVP_PKEY *pkey)
 
 static int dsa_priv_decode(EVP_PKEY *pkey, const PKCS8_PRIV_KEY_INFO *p8)
 {
-    const unsigned char *p, *pm;
-    int pklen, pmlen;
-    int ptype;
-    const void *pval;
-    const ASN1_STRING *pstr;
-    const X509_ALGOR *palg;
-    ASN1_INTEGER *privkey = NULL;
-    BN_CTX *ctx = NULL;
-
-    DSA *dsa = NULL;
-
     int ret = 0;
+    DSA *dsa = ossl_dsa_key_from_pkcs8(p8, NULL, NULL);
 
-    if (!PKCS8_pkey_get0(NULL, &p, &pklen, &palg, p8))
-        return 0;
-    X509_ALGOR_get0(NULL, &ptype, &pval, palg);
-
-    if ((privkey = d2i_ASN1_INTEGER(NULL, &p, pklen)) == NULL)
-        goto decerr;
-    if (privkey->type == V_ASN1_NEG_INTEGER || ptype != V_ASN1_SEQUENCE)
-        goto decerr;
-
-    pstr = pval;
-    pm = pstr->data;
-    pmlen = pstr->length;
-    if ((dsa = d2i_DSAparams(NULL, &pm, pmlen)) == NULL)
-        goto decerr;
-    /* We have parameters now set private key */
-    if ((dsa->priv_key = BN_secure_new()) == NULL
-        || !ASN1_INTEGER_to_BN(privkey, dsa->priv_key)) {
-        ERR_raise(ERR_LIB_DSA, DSA_R_BN_ERROR);
-        goto dsaerr;
-    }
-    /* Calculate public key */
-    if ((dsa->pub_key = BN_new()) == NULL) {
-        ERR_raise(ERR_LIB_DSA, ERR_R_MALLOC_FAILURE);
-        goto dsaerr;
-    }
-    if ((ctx = BN_CTX_new()) == NULL) {
-        ERR_raise(ERR_LIB_DSA, ERR_R_MALLOC_FAILURE);
-        goto dsaerr;
+    if (dsa != NULL) {
+        ret = 1;
+        EVP_PKEY_assign_DSA(pkey, dsa);
     }
 
-    BN_set_flags(dsa->priv_key, BN_FLG_CONSTTIME);
-    if (!BN_mod_exp(dsa->pub_key, dsa->params.g, dsa->priv_key, dsa->params.p,
-                    ctx)) {
-        ERR_raise(ERR_LIB_DSA, DSA_R_BN_ERROR);
-        goto dsaerr;
-    }
-
-    dsa->dirty_cnt++;
-    EVP_PKEY_assign_DSA(pkey, dsa);
-
-    ret = 1;
-    goto done;
-
- decerr:
-    ERR_raise(ERR_LIB_DSA, DSA_R_DECODE_ERROR);
- dsaerr:
-    DSA_free(dsa);
- done:
-    BN_CTX_free(ctx);
-    ASN1_STRING_clear_free(privkey);
     return ret;
 }
 
@@ -252,18 +197,21 @@ static int dsa_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey)
     dplen = i2d_ASN1_INTEGER(prkey, &dp);
 
     ASN1_STRING_clear_free(prkey);
-    prkey = NULL;
+
+    if (dplen <= 0) {
+        ERR_raise(ERR_LIB_DSA, DSA_R_BN_ERROR);
+        goto err;
+    }
 
     if (!PKCS8_pkey_set0(p8, OBJ_nid2obj(NID_dsa), 0,
-                         V_ASN1_SEQUENCE, params, dp, dplen))
+                         V_ASN1_SEQUENCE, params, dp, dplen)) {
+        OPENSSL_clear_free(dp, dplen);
         goto err;
-
+    }
     return 1;
 
  err:
-    OPENSSL_free(dp);
     ASN1_STRING_free(params);
-    ASN1_STRING_clear_free(prkey);
     return 0;
 }
 
@@ -479,8 +427,8 @@ static size_t dsa_pkey_dirty_cnt(const EVP_PKEY *pkey)
 }
 
 static int dsa_pkey_export_to(const EVP_PKEY *from, void *to_keydata,
-                              EVP_KEYMGMT *to_keymgmt, OSSL_LIB_CTX *libctx,
-                              const char *propq)
+                              OSSL_FUNC_keymgmt_import_fn *importer,
+                              OSSL_LIB_CTX *libctx, const char *propq)
 {
     DSA *dsa = from->pkey.dsa;
     OSSL_PARAM_BLD *tmpl;
@@ -490,13 +438,6 @@ static int dsa_pkey_export_to(const EVP_PKEY *from, void *to_keydata,
     OSSL_PARAM *params;
     int selection = 0;
     int rv = 0;
-
-    /*
-     * If the DSA method is foreign, then we can't be sure of anything, and
-     * can therefore not export or pretend to export.
-     */
-    if (DSA_get_method(dsa) != DSA_OpenSSL())
-        return 0;
 
     if (p == NULL || q == NULL || g == NULL)
         return 0;
@@ -527,10 +468,10 @@ static int dsa_pkey_export_to(const EVP_PKEY *from, void *to_keydata,
         goto err;
 
     /* We export, the provider imports */
-    rv = evp_keymgmt_import(to_keymgmt, to_keydata, selection, params);
+    rv = importer(to_keydata, selection, params);
 
-    OSSL_PARAM_BLD_free_params(params);
-err:
+    OSSL_PARAM_free(params);
+ err:
     OSSL_PARAM_BLD_free(tmpl);
     return rv;
 }
@@ -547,7 +488,7 @@ static int dsa_pkey_import_from(const OSSL_PARAM params[], void *vpctx)
     }
 
     if (!ossl_dsa_ffc_params_fromdata(dsa, params)
-        || !ossl_dsa_key_fromdata(dsa, params)
+        || !ossl_dsa_key_fromdata(dsa, params, 1)
         || !EVP_PKEY_assign_DSA(pkey, dsa)) {
         DSA_free(dsa);
         return 0;
@@ -555,9 +496,27 @@ static int dsa_pkey_import_from(const OSSL_PARAM params[], void *vpctx)
     return 1;
 }
 
+static int dsa_pkey_copy(EVP_PKEY *to, EVP_PKEY *from)
+{
+    DSA *dsa = from->pkey.dsa;
+    DSA *dupkey = NULL;
+    int ret;
+
+    if (dsa != NULL) {
+        dupkey = ossl_dsa_dup(dsa, OSSL_KEYMGMT_SELECT_ALL);
+        if (dupkey == NULL)
+            return 0;
+    }
+
+    ret = EVP_PKEY_assign_DSA(to, dupkey);
+    if (!ret)
+        DSA_free(dupkey);
+    return ret;
+}
+
 /* NB these are sorted in pkey_id order, lowest first */
 
-const EVP_PKEY_ASN1_METHOD dsa_asn1_meths[5] = {
+const EVP_PKEY_ASN1_METHOD ossl_dsa_asn1_meths[5] = {
 
     {
      EVP_PKEY_DSA2,
@@ -619,6 +578,7 @@ const EVP_PKEY_ASN1_METHOD dsa_asn1_meths[5] = {
 
      dsa_pkey_dirty_cnt,
      dsa_pkey_export_to,
-     dsa_pkey_import_from
+     dsa_pkey_import_from,
+     dsa_pkey_copy
     }
 };

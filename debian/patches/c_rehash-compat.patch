@@ -1,13 +1,13 @@
 From: Ludwig Nussel <ludwig.nussel@suse.de>
 Date: Wed, 21 Apr 2010 15:52:10 +0200
-Subject: [PATCH] also create old hash for compatibility
+Subject: also create old hash for compatibility
 
 ---
- tools/c_rehash.in | 20 ++++++++++++++------
- 1 file changed, 14 insertions(+), 6 deletions(-)
+ tools/c_rehash.in | 19 ++++++++-----------
+ 1 file changed, 8 insertions(+), 11 deletions(-)
 
 diff --git a/tools/c_rehash.in b/tools/c_rehash.in
-index 1566d141d3b0..7ef840ab9f31 100644
+index 343cdc1e7575..229a37f3b608 100644
 --- a/tools/c_rehash.in
 +++ b/tools/c_rehash.in
 @@ -17,8 +17,6 @@ my $prefix = {- quotify1($config{prefix}) -};
@@ -24,49 +24,40 @@ index 1566d141d3b0..7ef840ab9f31 100644
      my $flag = shift @ARGV;
      last if ( $flag eq '--');
 -    if ( $flag eq '-old') {
--	    $x509hash = "-subject_hash_old";
--	    $crlhash = "-hash_old";
+-        $x509hash = "-subject_hash_old";
+-        $crlhash = "-hash_old";
 -    } elsif ( $flag eq '-h' || $flag eq '-help' ) {
 +    if ( $flag eq '-h' || $flag eq '-help' ) {
- 	    help();
+         help();
      } elsif ( $flag eq '-n' ) {
- 	    $removelinks = 0;
-@@ -128,7 +123,9 @@ sub hash_dir {
- 			next;
- 		}
- 		link_hash_cert($fname) if ($cert);
-+		link_hash_cert_old($fname) if ($cert);
- 		link_hash_crl($fname) if ($crl);
-+		link_hash_crl_old($fname) if ($crl);
- 	}
- }
- 
-@@ -161,6 +158,7 @@ sub check_file {
+         $removelinks = 0;
+@@ -203,22 +198,24 @@ sub compute_hash {
+ # certificate fingerprints
  
  sub link_hash_cert {
- 		my $fname = $_[0];
-+		my $x509hash = $_[1] || '-subject_hash';
- 		$fname =~ s/\"/\\\"/g;
- 		my ($hash, $fprint) = `"$openssl" x509 $x509hash -fingerprint -noout -in "$fname"`;
- 		chomp $hash;
-@@ -198,10 +196,20 @@ sub link_hash_cert {
- 		$hashlist{$hash} = $fprint;
+-    link_hash($_[0], 'cert');
++    link_hash($_[0], 'cert', '-subject_hash');
++    link_hash($_[0], 'cert', '-subject_hash_old');
  }
  
-+sub link_hash_cert_old {
-+		link_hash_cert($_[0], '-subject_hash_old');
-+}
-+
-+sub link_hash_crl_old {
-+		link_hash_crl($_[0], '-hash_old');
-+}
-+
-+
  # Same as above except for a CRL. CRL links are of the form <hash>.r<n>
  
  sub link_hash_crl {
- 		my $fname = $_[0];
-+		my $crlhash = $_[1] || "-hash";
- 		$fname =~ s/'/'\\''/g;
- 		my ($hash, $fprint) = `"$openssl" crl $crlhash -fingerprint -noout -in '$fname'`;
- 		chomp $hash;
+-    link_hash($_[0], 'crl');
++    link_hash($_[0], 'crl', '-hash');
++    link_hash($_[0], 'crl', '-hash_old');
+ }
+ 
+ sub link_hash {
+-    my ($fname, $type) = @_;
+-    my $is_cert = $type eq 'cert';
++    my ($fname, $type, $hash_name) = @_;
++    my $is_cert = $type eq 'cert' or $type eq 'cert_old';
+ 
+     my ($hash, $fprint) = compute_hash($openssl,
+                                        $is_cert ? "x509" : "crl",
+-                                       $is_cert ? $x509hash : $crlhash,
++                                       $hash_name,
+                                        "-fingerprint", "-noout",
+                                        "-in", $fname);
+     chomp $hash;

@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -219,8 +219,8 @@ static int x509_name_ex_i2d(const ASN1_VALUE **val, unsigned char **out,
         if (ret < 0)
             return ret;
         ret = x509_name_canon(a);
-        if (ret < 0)
-            return ret;
+        if (!ret)
+            return -1;
     }
     ret = a->bytes->length;
     if (out != NULL) {
@@ -298,6 +298,7 @@ static int x509_name_ex_print(BIO *out, const ASN1_VALUE **pval,
  * comparison of Name structures can be rapidly performed by just using
  * memcmp() of the canonical encoding. By omitting the leading SEQUENCE name
  * constraints of type dirName can also be checked with a simple memcmp().
+ * NOTE: For empty X509_NAME (NULL-DN), canon_enclen == 0 && canon_enc == NULL
  */
 
 static int x509_name_canon(X509_NAME *a)
@@ -498,9 +499,7 @@ int X509_NAME_set(X509_NAME **xn, const X509_NAME *name)
 int X509_NAME_print(BIO *bp, const X509_NAME *name, int obase)
 {
     char *s, *c, *b;
-    int l, i;
-
-    l = 80 - 2 - obase;
+    int i;
 
     b = X509_NAME_oneline(name, NULL, 0);
     if (b == NULL)
@@ -526,12 +525,10 @@ int X509_NAME_print(BIO *bp, const X509_NAME *name, int obase)
                 if (BIO_write(bp, ", ", 2) != 2)
                     goto err;
             }
-            l--;
         }
         if (*s == '\0')
             break;
         s++;
-        l--;
     }
 
     OPENSSL_free(b);

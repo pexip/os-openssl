@@ -20,8 +20,9 @@ EC_GROUP_set_curve_GFp,
 EC_GROUP_get_curve_GFp,
 EC_GROUP_set_curve_GF2m,
 EC_GROUP_get_curve_GF2m,
-EC_get_builtin_curves - Functions for creating and destroying EC_GROUP
-objects
+EC_get_builtin_curves,
+OSSL_EC_curve_nid2name -
+Functions for creating and destroying EC_GROUP objects
 
 =head1 SYNOPSIS
 
@@ -45,6 +46,22 @@ objects
                         const BIGNUM *b, BN_CTX *ctx);
  int EC_GROUP_get_curve(const EC_GROUP *group, BIGNUM *p, BIGNUM *a, BIGNUM *b,
                         BN_CTX *ctx);
+
+ ECPARAMETERS *EC_GROUP_get_ecparameters(const EC_GROUP *group,
+                                         ECPARAMETERS *params);
+ ECPKPARAMETERS *EC_GROUP_get_ecpkparameters(const EC_GROUP *group,
+                                             ECPKPARAMETERS *params);
+
+ size_t EC_get_builtin_curves(EC_builtin_curve *r, size_t nitems);
+ const char *OSSL_EC_curve_nid2name(int nid);
+
+The following functions have been deprecated since OpenSSL 3.0, and can be
+hidden entirely by defining B<OPENSSL_API_COMPAT> with a suitable version value,
+see L<openssl_user_macros(7)>:
+
+ EC_GROUP *EC_GROUP_new(const EC_METHOD *meth);
+ void EC_GROUP_clear_free(EC_GROUP *group);
+
  int EC_GROUP_set_curve_GFp(EC_GROUP *group, const BIGNUM *p,
                             const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx);
  int EC_GROUP_get_curve_GFp(const EC_GROUP *group, BIGNUM *p,
@@ -53,20 +70,6 @@ objects
                              const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx);
  int EC_GROUP_get_curve_GF2m(const EC_GROUP *group, BIGNUM *p,
                              BIGNUM *a, BIGNUM *b, BN_CTX *ctx);
-
- ECPARAMETERS *EC_GROUP_get_ecparameters(const EC_GROUP *group,
-                                         ECPARAMETERS *params);
- ECPKPARAMETERS *EC_GROUP_get_ecpkparameters(const EC_GROUP *group,
-                                             ECPKPARAMETERS *params);
-
- size_t EC_get_builtin_curves(EC_builtin_curve *r, size_t nitems);
-
-Deprecated since OpenSSL 3.0, can be hidden entirely by defining
-B<OPENSSL_API_COMPAT> with a suitable version value, see
-L<openssl_user_macros(7)>:
-
- EC_GROUP *EC_GROUP_new(const EC_METHOD *meth);
- void EC_GROUP_clear_free(EC_GROUP *group);
 
 =head1 DESCRIPTION
 
@@ -172,6 +175,8 @@ in the EC_GROUP is public anyway, this function is unnecessary.
 Its use can be safely replaced with EC_GROUP_free().
 If I<group> is NULL nothing is done.
 
+OSSL_EC_curve_nid2name() converts a curve I<nid> into the corresponding name.
+
 =head1 RETURN VALUES
 
 All EC_GROUP_new* functions return a pointer to the newly constructed group, or
@@ -182,6 +187,8 @@ available.
 
 EC_GROUP_set_curve_GFp(), EC_GROUP_get_curve_GFp(), EC_GROUP_set_curve_GF2m(),
 EC_GROUP_get_curve_GF2m() return 1 on success or 0 on error.
+
+OSSL_EC_curve_nid2name() returns a character string constant, or NULL on error.
 
 =head1 SEE ALSO
 
@@ -206,11 +213,17 @@ added in OpenSSL 3.0.
 EC_GROUP_clear_free() was deprecated in OpenSSL 3.0; use EC_GROUP_free()
 instead.
 
+=item *
+
+ EC_GROUP_set_curve_GFp(), EC_GROUP_get_curve_GFp(),
+ EC_GROUP_set_curve_GF2m() and EC_GROUP_get_curve_GF2m() were deprecated in
+ OpenSSL 3.0; use EC_GROUP_set_curve() and EC_GROUP_get_curve() instead.
+
 =back
 
 =head1 COPYRIGHT
 
-Copyright 2013-2020 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2013-2021 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the Apache License 2.0 (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2017-2024 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright 2017 Ribose Inc. All Rights Reserved.
  * Ported from Ribose contributions from Botan.
  *
@@ -67,29 +67,33 @@ static size_t ec_field_size(const EC_GROUP *group)
     return field_size;
 }
 
-int ossl_sm2_plaintext_size(const EC_KEY *key, const EVP_MD *digest,
-                            size_t msg_len, size_t *pt_size)
+static int is_all_zeros(const unsigned char *msg, size_t msglen)
 {
-    const size_t field_size = ec_field_size(EC_KEY_get0_group(key));
-    const int md_size = EVP_MD_size(digest);
-    size_t overhead;
+    unsigned char re = 0;
+    size_t i;
 
-    if (md_size < 0) {
-        ERR_raise(ERR_LIB_SM2, SM2_R_INVALID_DIGEST);
-        return 0;
-    }
-    if (field_size == 0) {
-        ERR_raise(ERR_LIB_SM2, SM2_R_INVALID_FIELD);
-        return 0;
+    for (i = 0; i < msglen; i++) {
+        re |= msg[i];
     }
 
-    overhead = 10 + 2 * field_size + (size_t)md_size;
-    if (msg_len <= overhead) {
+    return re == 0 ? 1 : 0;
+}
+
+int ossl_sm2_plaintext_size(const unsigned char *ct, size_t ct_size,
+                            size_t *pt_size)
+{
+    struct SM2_Ciphertext_st *sm2_ctext = NULL;
+
+    sm2_ctext = d2i_SM2_Ciphertext(NULL, &ct, ct_size);
+
+    if (sm2_ctext == NULL) {
         ERR_raise(ERR_LIB_SM2, SM2_R_INVALID_ENCODING);
         return 0;
     }
 
-    *pt_size = msg_len - overhead;
+    *pt_size = sm2_ctext->C2->length;
+    SM2_Ciphertext_free(sm2_ctext);
+
     return 1;
 }
 
@@ -97,7 +101,7 @@ int ossl_sm2_ciphertext_size(const EC_KEY *key, const EVP_MD *digest,
                              size_t msg_len, size_t *ct_size)
 {
     const size_t field_size = ec_field_size(EC_KEY_get0_group(key));
-    const int md_size = EVP_MD_size(digest);
+    const int md_size = EVP_MD_get_size(digest);
     size_t sz;
 
     if (field_size == 0 || md_size < 0)
@@ -137,7 +141,7 @@ int ossl_sm2_encrypt(const EC_KEY *key,
     uint8_t *x2y2 = NULL;
     uint8_t *C3 = NULL;
     size_t field_size;
-    const int C3_size = EVP_MD_size(digest);
+    const int C3_size = EVP_MD_get_size(digest);
     EVP_MD *fetched_digest = NULL;
     OSSL_LIB_CTX *libctx = ossl_ec_key_get_libctx(key);
     const char *propq = ossl_ec_key_get0_propq(key);
@@ -187,7 +191,14 @@ int ossl_sm2_encrypt(const EC_KEY *key,
 
     memset(ciphertext_buf, 0, *ciphertext_len);
 
-    if (!BN_priv_rand_range(k, order)) {
+    msg_mask = OPENSSL_zalloc(msg_len);
+    if (msg_mask == NULL) {
+       ERR_raise(ERR_LIB_SM2, ERR_R_MALLOC_FAILURE);
+       goto done;
+    }
+
+again:
+    if (!BN_priv_rand_range_ex(k, order, 0, ctx)) {
         ERR_raise(ERR_LIB_SM2, ERR_R_INTERNAL_ERROR);
         goto done;
     }
@@ -206,12 +217,6 @@ int ossl_sm2_encrypt(const EC_KEY *key,
         goto done;
     }
 
-    msg_mask = OPENSSL_zalloc(msg_len);
-    if (msg_mask == NULL) {
-       ERR_raise(ERR_LIB_SM2, ERR_R_MALLOC_FAILURE);
-       goto done;
-   }
-
     /* X9.63 with no salt happens to match the KDF used in SM2 */
     if (!ossl_ecdh_kdf_X9_63(msg_mask, msg_len, x2y2, 2 * field_size, NULL, 0,
                              digest, libctx, propq)) {
@@ -219,10 +224,15 @@ int ossl_sm2_encrypt(const EC_KEY *key,
         goto done;
     }
 
+    if (is_all_zeros(msg_mask, msg_len)) {
+        memset(x2y2, 0, 2 * field_size);
+        goto again;
+    }
+
     for (i = 0; i != msg_len; ++i)
         msg_mask[i] ^= msg[i];
 
-    fetched_digest = EVP_MD_fetch(libctx, EVP_MD_name(digest), propq);
+    fetched_digest = EVP_MD_fetch(libctx, EVP_MD_get0_name(digest), propq);
     if (fetched_digest == NULL) {
         ERR_raise(ERR_LIB_SM2, ERR_R_INTERNAL_ERROR);
         goto done;
@@ -291,7 +301,7 @@ int ossl_sm2_decrypt(const EC_KEY *key,
     uint8_t *x2y2 = NULL;
     uint8_t *computed_C3 = NULL;
     const size_t field_size = ec_field_size(group);
-    const int hash_size = EVP_MD_size(digest);
+    const int hash_size = EVP_MD_get_size(digest);
     uint8_t *msg_mask = NULL;
     const uint8_t *C2 = NULL;
     const uint8_t *C3 = NULL;
@@ -320,6 +330,10 @@ int ossl_sm2_decrypt(const EC_KEY *key,
     C2 = sm2_ctext->C2->data;
     C3 = sm2_ctext->C3->data;
     msg_len = sm2_ctext->C2->length;
+    if (*ptext_len < (size_t)msg_len) {
+        ERR_raise(ERR_LIB_SM2, SM2_R_BUFFER_TOO_SMALL);
+        goto done;
+    }
 
     ctx = BN_CTX_new_ex(libctx);
     if (ctx == NULL) {
@@ -365,6 +379,11 @@ int ossl_sm2_decrypt(const EC_KEY *key,
             || !ossl_ecdh_kdf_X9_63(msg_mask, msg_len, x2y2, 2 * field_size,
                                     NULL, 0, digest, libctx, propq)) {
         ERR_raise(ERR_LIB_SM2, ERR_R_INTERNAL_ERROR);
+        goto done;
+    }
+
+    if (is_all_zeros(msg_mask, msg_len)) {
+        ERR_raise(ERR_LIB_SM2, SM2_R_INVALID_ENCODING);
         goto done;
     }
 

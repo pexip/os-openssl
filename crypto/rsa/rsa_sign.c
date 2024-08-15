@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -18,22 +18,22 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/objects.h>
-#include <openssl/x509.h>
-#include "crypto/x509.h"
-#ifndef OPENSSL_NO_MD2
-# include <openssl/md2.h> /* uses MD2_DIGEST_LENGTH */
-#endif
-#ifndef OPENSSL_NO_MD4
-# include <openssl/md4.h> /* uses MD4_DIGEST_LENGTH */
-#endif
-#ifndef OPENSSL_NO_MD5
-# include <openssl/md5.h> /* uses MD5_DIGEST_LENGTH */
-#endif
-#ifndef OPENSSL_NO_MDC2
-# include <openssl/mdc2.h> /* uses MDC2_DIGEST_LENGTH */
-#endif
-#ifndef OPENSSL_NO_RMD160
-# include <openssl/ripemd.h> /* uses RIPEMD160_DIGEST_LENGTH */
+#ifndef FIPS_MODULE
+# ifndef OPENSSL_NO_MD2
+#  include <openssl/md2.h> /* uses MD2_DIGEST_LENGTH */
+# endif
+# ifndef OPENSSL_NO_MD4
+#  include <openssl/md4.h> /* uses MD4_DIGEST_LENGTH */
+# endif
+# ifndef OPENSSL_NO_MD5
+#  include <openssl/md5.h> /* uses MD5_DIGEST_LENGTH */
+# endif
+# ifndef OPENSSL_NO_MDC2
+#  include <openssl/mdc2.h> /* uses MDC2_DIGEST_LENGTH */
+# endif
+# ifndef OPENSSL_NO_RMD160
+#  include <openssl/ripemd.h> /* uses RIPEMD160_DIGEST_LENGTH */
+# endif
 #endif
 #include <openssl/sha.h> /* uses SHA???_DIGEST_LENGTH */
 #include "crypto/rsa.h"
@@ -280,7 +280,7 @@ int RSA_sign(int type, const unsigned char *m, unsigned int m_len,
 
 #ifndef FIPS_MODULE
     if (rsa->meth->rsa_sign != NULL)
-        return rsa->meth->rsa_sign(type, m, m_len, sigret, siglen, rsa);
+        return rsa->meth->rsa_sign(type, m, m_len, sigret, siglen, rsa) > 0;
 #endif /* FIPS_MODULE */
 
     /* Compute the encoded digest. */
@@ -328,9 +328,9 @@ err:
  *
  * It returns one on successful verification or zero otherwise.
  */
-int int_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
-                   unsigned char *rm, size_t *prm_len,
-                   const unsigned char *sigbuf, size_t siglen, RSA *rsa)
+int ossl_rsa_verify(int type, const unsigned char *m, unsigned int m_len,
+                    unsigned char *rm, size_t *prm_len,
+                    const unsigned char *sigbuf, size_t siglen, RSA *rsa)
 {
     int len, ret = 0;
     size_t decrypt_len, encoded_len = 0;
@@ -453,5 +453,5 @@ int RSA_verify(int type, const unsigned char *m, unsigned int m_len,
     if (rsa->meth->rsa_verify != NULL)
         return rsa->meth->rsa_verify(type, m, m_len, sigbuf, siglen, rsa);
 
-    return int_rsa_verify(type, m, m_len, NULL, NULL, sigbuf, siglen, rsa);
+    return ossl_rsa_verify(type, m, m_len, NULL, NULL, sigbuf, siglen, rsa);
 }

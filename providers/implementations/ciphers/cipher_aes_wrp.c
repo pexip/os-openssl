@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2019-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -34,6 +34,7 @@ static OSSL_FUNC_cipher_decrypt_init_fn aes_wrap_dinit;
 static OSSL_FUNC_cipher_update_fn aes_wrap_cipher;
 static OSSL_FUNC_cipher_final_fn aes_wrap_final;
 static OSSL_FUNC_cipher_freectx_fn aes_wrap_freectx;
+static OSSL_FUNC_cipher_set_ctx_params_fn aes_wrap_set_ctx_params;
 
 typedef struct prov_aes_wrap_ctx_st {
     PROV_CIPHER_CTX base;
@@ -65,6 +66,26 @@ static void *aes_wrap_newctx(size_t kbits, size_t blkbits,
     return wctx;
 }
 
+static void *aes_wrap_dupctx(void *wctx)
+{
+    PROV_AES_WRAP_CTX *ctx = wctx;
+    PROV_AES_WRAP_CTX *dctx = wctx;
+
+    if (ctx == NULL)
+        return NULL;
+    dctx = OPENSSL_memdup(ctx, sizeof(*ctx));
+
+    if (dctx != NULL && dctx->base.tlsmac != NULL && dctx->base.alloced) {
+        dctx->base.tlsmac = OPENSSL_memdup(dctx->base.tlsmac,
+                                           dctx->base.tlsmacsize);
+        if (dctx->base.tlsmac == NULL) {
+            OPENSSL_free(dctx);
+            dctx = NULL;
+        }
+    }
+    return dctx;
+}
+
 static void aes_wrap_freectx(void *vctx)
 {
     PROV_AES_WRAP_CTX *wctx = (PROV_AES_WRAP_CTX *)vctx;
@@ -75,7 +96,7 @@ static void aes_wrap_freectx(void *vctx)
 
 static int aes_wrap_init(void *vctx, const unsigned char *key,
                          size_t keylen, const unsigned char *iv,
-                         size_t ivlen, int enc)
+                         size_t ivlen, const OSSL_PARAM params[], int enc)
 {
     PROV_CIPHER_CTX *ctx = (PROV_CIPHER_CTX *)vctx;
     PROV_AES_WRAP_CTX *wctx = (PROV_AES_WRAP_CTX *)vctx;
@@ -121,19 +142,21 @@ static int aes_wrap_init(void *vctx, const unsigned char *key,
             ctx->block = (block128_f)AES_decrypt;
         }
     }
-    return 1;
+    return aes_wrap_set_ctx_params(ctx, params);
 }
 
 static int aes_wrap_einit(void *ctx, const unsigned char *key, size_t keylen,
-                          const unsigned char *iv, size_t ivlen)
+                          const unsigned char *iv, size_t ivlen,
+                          const OSSL_PARAM params[])
 {
-    return aes_wrap_init(ctx, key, keylen, iv, ivlen, 1);
+    return aes_wrap_init(ctx, key, keylen, iv, ivlen, params, 1);
 }
 
 static int aes_wrap_dinit(void *ctx, const unsigned char *key, size_t keylen,
-                          const unsigned char *iv, size_t ivlen)
+                          const unsigned char *iv, size_t ivlen,
+                          const OSSL_PARAM params[])
 {
-    return aes_wrap_init(ctx, key, keylen, iv, ivlen, 0);
+    return aes_wrap_init(ctx, key, keylen, iv, ivlen, params, 0);
 }
 
 static int aes_wrap_cipher_internal(void *vctx, unsigned char *out,
@@ -149,16 +172,22 @@ static int aes_wrap_cipher_internal(void *vctx, unsigned char *out,
         return 0;
 
     /* Input length must always be non-zero */
-    if (inlen == 0)
+    if (inlen == 0) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_INPUT_LENGTH);
         return -1;
+    }
 
     /* If decrypting need at least 16 bytes and multiple of 8 */
-    if (!ctx->enc && (inlen < 16 || inlen & 0x7))
+    if (!ctx->enc && (inlen < 16 || inlen & 0x7)) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_INPUT_LENGTH);
         return -1;
+    }
 
     /* If not padding input must be multiple of 8 */
-    if (!pad && inlen & 0x7)
+    if (!pad && inlen & 0x7) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_INPUT_LENGTH);
         return -1;
+    }
 
     if (out == NULL) {
         if (ctx->enc) {
@@ -179,7 +208,15 @@ static int aes_wrap_cipher_internal(void *vctx, unsigned char *out,
 
     rv = wctx->wrapfn(&wctx->ks.ks, ctx->iv_set ? ctx->iv : NULL, out, in,
                       inlen, ctx->block);
-    return rv ? (int)rv : -1;
+    if (!rv) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_CIPHER_OPERATION_FAILED);
+        return -1;
+    }
+    if (rv > INT_MAX) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_OUTPUT_LENGTH);
+        return -1;
+    }
+    return (int)rv;
 }
 
 static int aes_wrap_final(void *vctx, unsigned char *out, size_t *outl,
@@ -209,12 +246,12 @@ static int aes_wrap_cipher(void *vctx,
 
     if (outsize < inl) {
         ERR_raise(ERR_LIB_PROV, PROV_R_OUTPUT_BUFFER_TOO_SMALL);
-        return -1;
+        return 0;
     }
 
     len = aes_wrap_cipher_internal(ctx, out, in, inl);
-    if (len == 0)
-        return -1;
+    if (len <= 0)
+        return 0;
 
     *outl = len;
     return 1;
@@ -225,6 +262,9 @@ static int aes_wrap_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     PROV_CIPHER_CTX *ctx = (PROV_CIPHER_CTX *)vctx;
     const OSSL_PARAM *p;
     size_t keylen = 0;
+
+    if (params == NULL)
+        return 1;
 
     p = OSSL_PARAM_locate_const(params, OSSL_CIPHER_PARAM_KEYLEN);
     if (p != NULL) {
@@ -261,6 +301,7 @@ static int aes_wrap_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         { OSSL_FUNC_CIPHER_UPDATE, (void (*)(void))aes_##mode##_cipher },      \
         { OSSL_FUNC_CIPHER_FINAL, (void (*)(void))aes_##mode##_final },        \
         { OSSL_FUNC_CIPHER_FREECTX, (void (*)(void))aes_##mode##_freectx },    \
+        { OSSL_FUNC_CIPHER_DUPCTX, (void (*)(void))aes_##mode##_dupctx },      \
         { OSSL_FUNC_CIPHER_GET_PARAMS,                                         \
             (void (*)(void))aes_##kbits##_##fname##_get_params },              \
         { OSSL_FUNC_CIPHER_GETTABLE_PARAMS,                                    \

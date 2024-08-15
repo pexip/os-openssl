@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include "internal/cryptlib.h"
+#include "crypto/x509.h"
 #include <openssl/conf.h>
 #include <openssl/x509v3.h>
 #include <openssl/bio.h>
@@ -25,7 +26,7 @@ static int copy_issuer(X509V3_CTX *ctx, GENERAL_NAMES *gens);
 static int do_othername(GENERAL_NAME *gen, const char *value, X509V3_CTX *ctx);
 static int do_dirname(GENERAL_NAME *gen, const char *value, X509V3_CTX *ctx);
 
-const X509V3_EXT_METHOD v3_alt[3] = {
+const X509V3_EXT_METHOD ossl_v3_alt[3] = {
     {NID_subject_alt_name, 0, ASN1_ITEM_ref(GENERAL_NAMES),
      0, 0, 0, 0,
      0, 0,
@@ -87,36 +88,41 @@ STACK_OF(CONF_VALUE) *i2v_GENERAL_NAME(X509V3_EXT_METHOD *method,
         switch (OBJ_obj2nid(gen->d.otherName->type_id)) {
         case NID_id_on_SmtpUTF8Mailbox:
             if (gen->d.otherName->value->type != V_ASN1_UTF8STRING
-                    || !X509V3_add_value_uchar("othername: SmtpUTF8Mailbox:",
+                    || !x509v3_add_len_value_uchar("othername: SmtpUTF8Mailbox:",
                             gen->d.otherName->value->value.utf8string->data,
+                            gen->d.otherName->value->value.utf8string->length,
                             &ret))
                 return NULL;
             break;
         case NID_XmppAddr:
             if (gen->d.otherName->value->type != V_ASN1_UTF8STRING
-                    || !X509V3_add_value_uchar("othername: XmppAddr:",
+                    || !x509v3_add_len_value_uchar("othername: XmppAddr:",
                             gen->d.otherName->value->value.utf8string->data,
+                            gen->d.otherName->value->value.utf8string->length,
                             &ret))
                 return NULL;
             break;
         case NID_SRVName:
             if (gen->d.otherName->value->type != V_ASN1_IA5STRING
-                    || !X509V3_add_value_uchar("othername: SRVName:",
+                    || !x509v3_add_len_value_uchar("othername: SRVName:",
                             gen->d.otherName->value->value.ia5string->data,
+                            gen->d.otherName->value->value.ia5string->length,
                             &ret))
                 return NULL;
             break;
         case NID_ms_upn:
             if (gen->d.otherName->value->type != V_ASN1_UTF8STRING
-                    || !X509V3_add_value_uchar("othername: UPN:",
+                    || !x509v3_add_len_value_uchar("othername: UPN:",
                             gen->d.otherName->value->value.utf8string->data,
+                            gen->d.otherName->value->value.utf8string->length,
                             &ret))
                 return NULL;
             break;
         case NID_NAIRealm:
             if (gen->d.otherName->value->type != V_ASN1_UTF8STRING
-                    || !X509V3_add_value_uchar("othername: NAIRealm:",
+                    || !x509v3_add_len_value_uchar("othername: NAIRealm:",
                             gen->d.otherName->value->value.utf8string->data,
+                            gen->d.otherName->value->value.utf8string->length,
                             &ret))
                 return NULL;
             break;
@@ -129,14 +135,16 @@ STACK_OF(CONF_VALUE) *i2v_GENERAL_NAME(X509V3_EXT_METHOD *method,
 
             /* check if the value is something printable */
             if (gen->d.otherName->value->type == V_ASN1_IA5STRING) {
-                if (X509V3_add_value_uchar(othername,
+                if (x509v3_add_len_value_uchar(othername,
                              gen->d.otherName->value->value.ia5string->data,
+                             gen->d.otherName->value->value.ia5string->length,
                              &ret)) 
                     return ret;
             }
             if (gen->d.otherName->value->type == V_ASN1_UTF8STRING) {
-                if (X509V3_add_value_uchar(othername,
+                if (x509v3_add_len_value_uchar(othername,
                              gen->d.otherName->value->value.utf8string->data,
+                             gen->d.otherName->value->value.utf8string->length,
                              &ret)) 
                     return ret;
             }
@@ -157,17 +165,20 @@ STACK_OF(CONF_VALUE) *i2v_GENERAL_NAME(X509V3_EXT_METHOD *method,
         break;
 
     case GEN_EMAIL:
-        if (!X509V3_add_value_uchar("email", gen->d.ia5->data, &ret))
+        if (!x509v3_add_len_value_uchar("email", gen->d.ia5->data,
+                                        gen->d.ia5->length, &ret))
             return NULL;
         break;
 
     case GEN_DNS:
-        if (!X509V3_add_value_uchar("DNS", gen->d.ia5->data, &ret))
+        if (!x509v3_add_len_value_uchar("DNS", gen->d.ia5->data,
+                                        gen->d.ia5->length, &ret))
             return NULL;
         break;
 
     case GEN_URI:
-        if (!X509V3_add_value_uchar("URI", gen->d.ia5->data, &ret))
+        if (!x509v3_add_len_value_uchar("URI", gen->d.ia5->data,
+                                        gen->d.ia5->length, &ret))
             return NULL;
         break;
 
@@ -178,7 +189,7 @@ STACK_OF(CONF_VALUE) *i2v_GENERAL_NAME(X509V3_EXT_METHOD *method,
         break;
 
     case GEN_IPADD:
-        tmp = ipaddr_to_asc(gen->d.ip->data, gen->d.ip->length);
+        tmp = ossl_ipaddr_to_asc(gen->d.ip->data, gen->d.ip->length);
         if (tmp == NULL || !X509V3_add_value("IP Address", tmp, &ret))
             ret = NULL;
         OPENSSL_free(tmp);
@@ -212,23 +223,28 @@ int GENERAL_NAME_print(BIO *out, GENERAL_NAME *gen)
 
         switch (nid) {
         case NID_id_on_SmtpUTF8Mailbox:
-            BIO_printf(out, "othername:SmtpUTF8Mailbox:%s",
+            BIO_printf(out, "othername:SmtpUTF8Mailbox:%.*s",
+                       gen->d.otherName->value->value.utf8string->length,
                        gen->d.otherName->value->value.utf8string->data);
             break;
         case NID_XmppAddr:
-            BIO_printf(out, "othername:XmppAddr:%s",
+            BIO_printf(out, "othername:XmppAddr:%.*s",
+                       gen->d.otherName->value->value.utf8string->length,
                        gen->d.otherName->value->value.utf8string->data);
             break;
         case NID_SRVName:
-            BIO_printf(out, "othername:SRVName:%s",
+            BIO_printf(out, "othername:SRVName:%.*s",
+                       gen->d.otherName->value->value.ia5string->length,
                        gen->d.otherName->value->value.ia5string->data);
             break;
         case NID_ms_upn:
-            BIO_printf(out, "othername:UPN:%s",
+            BIO_printf(out, "othername:UPN:%.*s",
+                       gen->d.otherName->value->value.utf8string->length,
                        gen->d.otherName->value->value.utf8string->data);
             break;
         case NID_NAIRealm:
-            BIO_printf(out, "othername:NAIRealm:%s",
+            BIO_printf(out, "othername:NAIRealm:%.*s",
+                       gen->d.otherName->value->value.utf8string->length,
                        gen->d.otherName->value->value.utf8string->data);
             break;
         default:
@@ -267,7 +283,7 @@ int GENERAL_NAME_print(BIO *out, GENERAL_NAME *gen)
         break;
 
     case GEN_IPADD:
-        tmp = ipaddr_to_asc(gen->d.ip->data, gen->d.ip->length);
+        tmp = ossl_ipaddr_to_asc(gen->d.ip->data, gen->d.ip->length);
         if (tmp == NULL)
             return 0;
         BIO_printf(out, "IP Address:%s", tmp);
@@ -298,7 +314,7 @@ static GENERAL_NAMES *v2i_issuer_alt(X509V3_EXT_METHOD *method,
     for (i = 0; i < num; i++) {
         CONF_VALUE *cnf = sk_CONF_VALUE_value(nval, i);
 
-        if (!v3_name_cmp(cnf->name, "issuer")
+        if (!ossl_v3_name_cmp(cnf->name, "issuer")
             && cnf->value && strcmp(cnf->value, "copy") == 0) {
             if (!copy_issuer(ctx, gens))
                 goto err;
@@ -377,11 +393,11 @@ static GENERAL_NAMES *v2i_subject_alt(X509V3_EXT_METHOD *method,
 
     for (i = 0; i < num; i++) {
         cnf = sk_CONF_VALUE_value(nval, i);
-        if (!v3_name_cmp(cnf->name, "email")
+        if (ossl_v3_name_cmp(cnf->name, "email") == 0
             && cnf->value && strcmp(cnf->value, "copy") == 0) {
             if (!copy_email(ctx, gens, 0))
                 goto err;
-        } else if (!v3_name_cmp(cnf->name, "email")
+        } else if (ossl_v3_name_cmp(cnf->name, "email") == 0
                    && cnf->value && strcmp(cnf->value, "move") == 0) {
             if (!copy_email(ctx, gens, 1))
                 goto err;
@@ -418,10 +434,9 @@ static int copy_email(X509V3_CTX *ctx, GENERAL_NAMES *gens, int move_p)
         return 0;
     }
     /* Find the subject name */
-    if (ctx->subject_cert)
-        nm = X509_get_subject_name(ctx->subject_cert);
-    else
-        nm = X509_REQ_get_subject_name(ctx->subject_req);
+    nm = ctx->subject_cert != NULL ?
+        X509_get_subject_name(ctx->subject_cert) :
+        X509_REQ_get_subject_name(ctx->subject_req);
 
     /* Now add any email address(es) to STACK */
     while ((i = X509_NAME_get_index_by_NID(nm,
@@ -566,6 +581,8 @@ GENERAL_NAME *a2i_GENERAL_NAME(GENERAL_NAME *out,
         if ((gen->d.ia5 = ASN1_IA5STRING_new()) == NULL ||
             !ASN1_STRING_set(gen->d.ia5, (unsigned char *)value,
                              strlen(value))) {
+            ASN1_IA5STRING_free(gen->d.ia5);
+            gen->d.ia5 = NULL;
             ERR_raise(ERR_LIB_X509V3, ERR_R_MALLOC_FAILURE);
             goto err;
         }
@@ -597,19 +614,19 @@ GENERAL_NAME *v2i_GENERAL_NAME_ex(GENERAL_NAME *out,
         return NULL;
     }
 
-    if (!v3_name_cmp(name, "email"))
+    if (!ossl_v3_name_cmp(name, "email"))
         type = GEN_EMAIL;
-    else if (!v3_name_cmp(name, "URI"))
+    else if (!ossl_v3_name_cmp(name, "URI"))
         type = GEN_URI;
-    else if (!v3_name_cmp(name, "DNS"))
+    else if (!ossl_v3_name_cmp(name, "DNS"))
         type = GEN_DNS;
-    else if (!v3_name_cmp(name, "RID"))
+    else if (!ossl_v3_name_cmp(name, "RID"))
         type = GEN_RID;
-    else if (!v3_name_cmp(name, "IP"))
+    else if (!ossl_v3_name_cmp(name, "IP"))
         type = GEN_IPADD;
-    else if (!v3_name_cmp(name, "dirName"))
+    else if (!ossl_v3_name_cmp(name, "dirName"))
         type = GEN_DIRNAME;
-    else if (!v3_name_cmp(name, "otherName"))
+    else if (!ossl_v3_name_cmp(name, "otherName"))
         type = GEN_OTHERNAME;
     else {
         ERR_raise_data(ERR_LIB_X509V3, X509V3_R_UNSUPPORTED_OPTION,
@@ -636,16 +653,21 @@ static int do_othername(GENERAL_NAME *gen, const char *value, X509V3_CTX *ctx)
      */
     ASN1_TYPE_free(gen->d.otherName->value);
     if ((gen->d.otherName->value = ASN1_generate_v3(p + 1, ctx)) == NULL)
-        return 0;
+        goto err;
     objlen = p - value;
     objtmp = OPENSSL_strndup(value, objlen);
     if (objtmp == NULL)
-        return 0;
+        goto err;
     gen->d.otherName->type_id = OBJ_txt2obj(objtmp, 0);
     OPENSSL_free(objtmp);
     if (!gen->d.otherName->type_id)
-        return 0;
+        goto err;
     return 1;
+
+ err:
+    OTHERNAME_free(gen->d.otherName);
+    gen->d.otherName = NULL;
+    return 0;
 }
 
 static int do_dirname(GENERAL_NAME *gen, const char *value, X509V3_CTX *ctx)

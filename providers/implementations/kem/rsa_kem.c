@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2020-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -12,8 +12,8 @@
  * internal use.
  */
 #include "internal/deprecated.h"
+#include "internal/nelem.h"
 
-#include "e_os.h"  /* strcasecmp */
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/core_dispatch.h>
@@ -21,7 +21,7 @@
 #include <openssl/rsa.h>
 #include <openssl/params.h>
 #include <openssl/err.h>
-#include <crypto/rsa.h>
+#include "crypto/rsa.h"
 #include <openssl/proverr.h>
 #include "prov/provider_ctx.h"
 #include "prov/implementations.h"
@@ -69,7 +69,7 @@ static int name2id(const char *name, const OSSL_ITEM *map, size_t sz)
         return -1;
 
     for (i = 0; i < sz; ++i) {
-        if (strcasecmp(map[i].ptr, name) == 0)
+        if (OPENSSL_strcasecmp(map[i].ptr, name) == 0)
             return map[i].id;
     }
     return -1;
@@ -117,39 +117,42 @@ static void *rsakem_dupctx(void *vprsactx)
     return dstctx;
 }
 
-static int rsakem_init(void *vprsactx, void *vrsa, int operation)
+static int rsakem_init(void *vprsactx, void *vrsa,
+                       const OSSL_PARAM params[], int operation)
 {
     PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;
 
-    if (prsactx == NULL || vrsa == NULL || !RSA_up_ref(vrsa))
+    if (prsactx == NULL || vrsa == NULL)
+        return 0;
+
+    if (!ossl_rsa_check_key(prsactx->libctx, vrsa, operation))
+        return 0;
+
+    if (!RSA_up_ref(vrsa))
         return 0;
     RSA_free(prsactx->rsa);
     prsactx->rsa = vrsa;
 
-    if (!ossl_rsa_check_key(vrsa, operation == EVP_PKEY_OP_ENCAPSULATE)) {
-        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_KEY_LENGTH);
-        return 0;
-    }
-    return 1;
+    return rsakem_set_ctx_params(prsactx, params);
 }
 
-static int rsakem_encapsulate_init(void *vprsactx, void *vrsa)
+static int rsakem_encapsulate_init(void *vprsactx, void *vrsa,
+                                   const OSSL_PARAM params[])
 {
-    return rsakem_init(vprsactx, vrsa, EVP_PKEY_OP_ENCAPSULATE);
+    return rsakem_init(vprsactx, vrsa, params, EVP_PKEY_OP_ENCAPSULATE);
 }
 
-static int rsakem_decapsulate_init(void *vprsactx, void *vrsa)
+static int rsakem_decapsulate_init(void *vprsactx, void *vrsa,
+                                   const OSSL_PARAM params[])
 {
-    return rsakem_init(vprsactx, vrsa, EVP_PKEY_OP_DECAPSULATE);
+    return rsakem_init(vprsactx, vrsa, params, EVP_PKEY_OP_DECAPSULATE);
 }
 
 static int rsakem_get_ctx_params(void *vprsactx, OSSL_PARAM *params)
 {
     PROV_RSA_CTX *ctx = (PROV_RSA_CTX *)vprsactx;
 
-    if (ctx == NULL || params == NULL)
-        return 0;
-    return 1;
+    return ctx != NULL;
 }
 
 static const OSSL_PARAM known_gettable_rsakem_ctx_params[] = {
@@ -168,8 +171,11 @@ static int rsakem_set_ctx_params(void *vprsactx, const OSSL_PARAM params[])
     const OSSL_PARAM *p;
     int op;
 
-    if (prsactx == NULL || params == NULL)
+    if (prsactx == NULL)
         return 0;
+    if (params == NULL)
+        return 1;
+
 
     p = OSSL_PARAM_locate_const(params, OSSL_KEM_PARAM_OPERATION);
     if (p != NULL) {
@@ -223,7 +229,7 @@ static int rsasve_gen_rand_bytes(RSA *rsa_pub,
     ret = (z != NULL
            && (BN_copy(nminus3, RSA_get0_n(rsa_pub)) != NULL)
            && BN_sub_word(nminus3, 3)
-           && BN_priv_rand_range_ex(z, nminus3, bnctx)
+           && BN_priv_rand_range_ex(z, nminus3, 0, bnctx)
            && BN_add_word(z, 2)
            && (BN_bn2binpad(z, out, outlen) == outlen));
     BN_CTX_end(bnctx);

@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2024 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
@@ -29,6 +29,7 @@
 #include <math.h>
 #include "apps.h"
 #include "progs.h"
+#include "internal/numbers.h"
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -66,6 +67,7 @@
 #  define HAVE_FORK 0
 # else
 #  define HAVE_FORK 1
+#  include <sys/wait.h>
 # endif
 #endif
 
@@ -207,7 +209,7 @@ static int opt_found(const char *name, unsigned int *result,
     opt_found(value, result, pairs, OSSL_NELEM(pairs))
 
 typedef enum OPTION_choice {
-    OPT_ERR = -1, OPT_EOF = 0, OPT_HELP,
+    OPT_COMMON,
     OPT_ELAPSED, OPT_EVP, OPT_HMAC, OPT_DECRYPT, OPT_ENGINE, OPT_MULTI,
     OPT_MR, OPT_MB, OPT_MISALIGN, OPT_ASYNCJOBS, OPT_R_ENUM, OPT_PROV_ENUM,
     OPT_PRIMES, OPT_SECONDS, OPT_BYTES, OPT_AEAD, OPT_CMAC
@@ -451,7 +453,7 @@ static const OPT_PAIR sm2_choices[SM2_NUM] = {
 static double sm2_results[SM2_NUM][2];    /* 2 ops: sign then verify */
 #endif /* OPENSSL_NO_SM2 */
 
-#define COND(unused_cond) (run && count < 0x7fffffff)
+#define COND(unused_cond) (run && count < INT_MAX)
 #define COUNT(d) (count)
 
 typedef struct loopargs_st {
@@ -462,6 +464,7 @@ typedef struct loopargs_st {
     unsigned char *buf_malloc;
     unsigned char *buf2_malloc;
     unsigned char *key;
+    size_t buflen;
     size_t sigsize;
     EVP_PKEY_CTX *rsa_sign_ctx[RSA_NUM];
     EVP_PKEY_CTX *rsa_verify_ctx[RSA_NUM];
@@ -502,73 +505,35 @@ static const char *evp_md_name = NULL;
 static char *evp_mac_ciphername = "aes-128-cbc";
 static char *evp_cmac_name = NULL;
 
-static EVP_MD *obtain_md(const char *name, int *fetched)
-{
-    EVP_MD *md = NULL;
-
-    *fetched = 0;
-    /* Look through providers' digests */
-    ERR_set_mark();
-    md = EVP_MD_fetch(NULL, name, NULL);
-    ERR_pop_to_mark();
-    if (md != NULL) {
-        *fetched = 1;
-        return md;
-    }
-
-    return (EVP_MD *)EVP_get_digestbyname(name);
-}
-
 static int have_md(const char *name)
 {
-    int fetched = 0;
     int ret = 0;
-    EVP_MD *md = obtain_md(name, &fetched);
+    EVP_MD *md = NULL;
 
-    if (md != NULL) {
+    if (opt_md_silent(name, &md)) {
         EVP_MD_CTX *ctx = EVP_MD_CTX_new();
 
         if (ctx != NULL && EVP_DigestInit(ctx, md) > 0)
             ret = 1;
         EVP_MD_CTX_free(ctx);
-        if (fetched)
-            EVP_MD_free(md);
+        EVP_MD_free(md);
     }
     return ret;
 }
 
-static EVP_CIPHER *obtain_cipher(const char *name, int *fetched)
-{
-    EVP_CIPHER *cipher = NULL;
-
-    *fetched = 0;
-    /* Look through providers' digests */
-    ERR_set_mark();
-    cipher = EVP_CIPHER_fetch(NULL, name, NULL);
-    ERR_pop_to_mark();
-    if (cipher != NULL) {
-        *fetched = 1;
-        return cipher;
-    }
-
-    return (EVP_CIPHER *)EVP_get_cipherbyname(name);
-}
-
 static int have_cipher(const char *name)
 {
-    int fetched = 0;
     int ret = 0;
-    EVP_CIPHER *cipher = obtain_cipher(name, &fetched);
+    EVP_CIPHER *cipher = NULL;
 
-    if (cipher != NULL) {
+    if (opt_cipher_silent(name, &cipher)) {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 
         if (ctx != NULL
             && EVP_CipherInit_ex(ctx, cipher, NULL, NULL, NULL, 1) > 0)
             ret = 1;
         EVP_CIPHER_CTX_free(ctx);
-        if (fetched)
-            EVP_CIPHER_free(cipher);
+        EVP_CIPHER_free(cipher);
     }
     return ret;
 }
@@ -578,10 +543,10 @@ static int EVP_Digest_loop(const char *mdname, int algindex, void *args)
     loopargs_t *tempargs = *(loopargs_t **) args;
     unsigned char *buf = tempargs->buf;
     unsigned char digest[EVP_MAX_MD_SIZE];
-    int count, fetched = 0;
-    EVP_MD *md = obtain_md(mdname, &fetched);
+    int count;
+    EVP_MD *md = NULL;
 
-    if (md == NULL)
+    if (!opt_md_silent(mdname, &md))
         return -1;
     for (count = 0; COND(c[algindex][testnum]); count++) {
         if (!EVP_Digest(buf, (size_t)lengths[testnum], digest, NULL, md,
@@ -590,8 +555,7 @@ static int EVP_Digest_loop(const char *mdname, int algindex, void *args)
             break;
         }
     }
-    if (fetched)
-        EVP_MD_free(md);
+    EVP_MD_free(md);
     return count;
 }
 
@@ -714,10 +678,9 @@ static EVP_CIPHER_CTX *init_evp_cipher_ctx(const char *ciphername,
                                            int keylen)
 {
     EVP_CIPHER_CTX *ctx = NULL;
-    int fetched = 0;
-    EVP_CIPHER *cipher = obtain_cipher(ciphername, &fetched);
+    EVP_CIPHER *cipher = NULL;
 
-    if (cipher == NULL)
+    if (!opt_cipher_silent(ciphername, &cipher))
         return NULL;
 
     if ((ctx = EVP_CIPHER_CTX_new()) == NULL)
@@ -729,7 +692,11 @@ static EVP_CIPHER_CTX *init_evp_cipher_ctx(const char *ciphername,
         goto end;
     }
 
-    EVP_CIPHER_CTX_set_key_length(ctx, keylen);
+    if (EVP_CIPHER_CTX_set_key_length(ctx, keylen) <= 0) {
+        EVP_CIPHER_CTX_free(ctx);
+        ctx = NULL;
+        goto end;
+    }
 
     if (!EVP_CipherInit_ex(ctx, NULL, NULL, key, iv, 1)) {
         EVP_CIPHER_CTX_free(ctx);
@@ -738,8 +705,7 @@ static EVP_CIPHER_CTX *init_evp_cipher_ctx(const char *ciphername,
     }
 
 end:
-    if (fetched)
-        EVP_CIPHER_free(cipher);
+    EVP_CIPHER_free(cipher);
     return ctx;
 }
 
@@ -761,8 +727,12 @@ static int EVP_Update_loop(void *args)
     unsigned char *buf = tempargs->buf;
     EVP_CIPHER_CTX *ctx = tempargs->ctx;
     int outl, count, rc;
+    unsigned char faketag[16] = { 0xcc };
 
     if (decrypt) {
+        if (EVP_CIPHER_get_flags(EVP_CIPHER_CTX_get0_cipher(ctx)) & EVP_CIPH_FLAG_AEAD_CIPHER) {
+            (void)EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, sizeof(faketag), faketag);
+        }
         for (count = 0; COND(c[D_EVP][testnum]); count++) {
             rc = EVP_DecryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
             if (rc != 1) {
@@ -801,24 +771,25 @@ static int EVP_Update_loop_ccm(void *args)
 
     if (decrypt) {
         for (count = 0; COND(c[D_EVP][testnum]); count++) {
-            EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, sizeof(tag), tag);
+            (void)EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, sizeof(tag),
+                                      tag);
             /* reset iv */
-            EVP_DecryptInit_ex(ctx, NULL, NULL, NULL, iv);
+            (void)EVP_DecryptInit_ex(ctx, NULL, NULL, NULL, iv);
             /* counter is reset on every update */
-            EVP_DecryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
+            (void)EVP_DecryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
         }
     } else {
         for (count = 0; COND(c[D_EVP][testnum]); count++) {
             /* restore iv length field */
-            EVP_EncryptUpdate(ctx, NULL, &outl, NULL, lengths[testnum]);
+            (void)EVP_EncryptUpdate(ctx, NULL, &outl, NULL, lengths[testnum]);
             /* counter is reset on every update */
-            EVP_EncryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
+            (void)EVP_EncryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
         }
     }
     if (decrypt)
-        EVP_DecryptFinal_ex(ctx, buf, &outl);
+        (void)EVP_DecryptFinal_ex(ctx, buf, &outl);
     else
-        EVP_EncryptFinal_ex(ctx, buf, &outl);
+        (void)EVP_EncryptFinal_ex(ctx, buf, &outl);
     return count;
 }
 
@@ -838,19 +809,19 @@ static int EVP_Update_loop_aead(void *args)
 
     if (decrypt) {
         for (count = 0; COND(c[D_EVP][testnum]); count++) {
-            EVP_DecryptInit_ex(ctx, NULL, NULL, NULL, iv);
-            EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
-                                sizeof(faketag), faketag);
-            EVP_DecryptUpdate(ctx, NULL, &outl, aad, sizeof(aad));
-            EVP_DecryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
-            EVP_DecryptFinal_ex(ctx, buf + outl, &outl);
+            (void)EVP_DecryptInit_ex(ctx, NULL, NULL, NULL, iv);
+            (void)EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
+                                      sizeof(faketag), faketag);
+            (void)EVP_DecryptUpdate(ctx, NULL, &outl, aad, sizeof(aad));
+            (void)EVP_DecryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
+            (void)EVP_DecryptFinal_ex(ctx, buf + outl, &outl);
         }
     } else {
         for (count = 0; COND(c[D_EVP][testnum]); count++) {
-            EVP_EncryptInit_ex(ctx, NULL, NULL, NULL, iv);
-            EVP_EncryptUpdate(ctx, NULL, &outl, aad, sizeof(aad));
-            EVP_EncryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
-            EVP_EncryptFinal_ex(ctx, buf + outl, &outl);
+            (void)EVP_EncryptInit_ex(ctx, NULL, NULL, NULL, iv);
+            (void)EVP_EncryptUpdate(ctx, NULL, &outl, aad, sizeof(aad));
+            (void)EVP_EncryptUpdate(ctx, buf, &outl, buf, lengths[testnum]);
+            (void)EVP_EncryptFinal_ex(ctx, buf + outl, &outl);
         }
     }
     return count;
@@ -868,6 +839,7 @@ static int RSA_sign_loop(void *args)
     int ret, count;
 
     for (count = 0; COND(rsa_c[testnum][0]); count++) {
+        *rsa_num = tempargs->buflen;
         ret = EVP_PKEY_sign(rsa_sign_ctx[testnum], buf2, rsa_num, buf, 36);
         if (ret <= 0) {
             BIO_printf(bio_err, "RSA sign failure\n");
@@ -908,11 +880,14 @@ static int FFDH_derive_key_loop(void *args)
     loopargs_t *tempargs = *(loopargs_t **) args;
     EVP_PKEY_CTX *ffdh_ctx = tempargs->ffdh_ctx[testnum];
     unsigned char *derived_secret = tempargs->secret_ff_a;
-    size_t outlen = MAX_FFDH_SIZE;
     int count;
 
-    for (count = 0; COND(ffdh_c[testnum][0]); count++)
+    for (count = 0; COND(ffdh_c[testnum][0]); count++) {
+        /* outlen can be overwritten with a too small value (no padding used) */
+        size_t outlen = MAX_FFDH_SIZE;
+
         EVP_PKEY_derive(ffdh_ctx, derived_secret, &outlen);
+    }
     return count;
 }
 #endif /* OPENSSL_NO_DH */
@@ -928,6 +903,7 @@ static int DSA_sign_loop(void *args)
     int ret, count;
 
     for (count = 0; COND(dsa_c[testnum][0]); count++) {
+        *dsa_num = tempargs->buflen;
         ret = EVP_PKEY_sign(dsa_sign_ctx[testnum], buf2, dsa_num, buf, 20);
         if (ret <= 0) {
             BIO_printf(bio_err, "DSA sign failure\n");
@@ -971,6 +947,7 @@ static int ECDSA_sign_loop(void *args)
     int ret, count;
 
     for (count = 0; COND(ecdsa_c[testnum][0]); count++) {
+        *ecdsa_num = tempargs->buflen;
         ret = EVP_PKEY_sign(ecdsa_sign_ctx[testnum], buf2, ecdsa_num, buf, 20);
         if (ret <= 0) {
             BIO_printf(bio_err, "ECDSA sign failure\n");
@@ -1032,6 +1009,13 @@ static int EdDSA_sign_loop(void *args)
     int ret, count;
 
     for (count = 0; COND(eddsa_c[testnum][0]); count++) {
+        ret = EVP_DigestSignInit(edctx[testnum], NULL, NULL, NULL, NULL);
+        if (ret == 0) {
+            BIO_printf(bio_err, "EdDSA sign init failure\n");
+            ERR_print_errors(bio_err);
+            count = -1;
+            break;
+        }
         ret = EVP_DigestSign(edctx[testnum], eddsasig, eddsasigsize, buf, 20);
         if (ret == 0) {
             BIO_printf(bio_err, "EdDSA sign failure\n");
@@ -1053,6 +1037,13 @@ static int EdDSA_verify_loop(void *args)
     int ret, count;
 
     for (count = 0; COND(eddsa_c[testnum][1]); count++) {
+        ret = EVP_DigestVerifyInit(edctx[testnum], NULL, NULL, NULL, NULL);
+        if (ret == 0) {
+            BIO_printf(bio_err, "EdDSA verify init failure\n");
+            ERR_print_errors(bio_err);
+            count = -1;
+            break;
+        }
         ret = EVP_DigestVerify(edctx[testnum], eddsasig, eddsasigsize, buf, 20);
         if (ret != 1) {
             BIO_printf(bio_err, "EdDSA verify failure\n");
@@ -1075,7 +1066,7 @@ static int SM2_sign_loop(void *args)
     size_t sm2sigsize;
     int ret, count;
     EVP_PKEY **sm2_pkey = tempargs->sm2_pkey;
-    const size_t max_size = EVP_PKEY_size(sm2_pkey[testnum]);
+    const size_t max_size = EVP_PKEY_get_size(sm2_pkey[testnum]);
 
     for (count = 0; COND(sm2_c[testnum][0]); count++) {
         sm2sigsize = max_size;
@@ -1374,6 +1365,7 @@ int speed_main(int argc, char **argv)
     const char *prog;
     const char *engine_id = NULL;
     EVP_CIPHER *evp_cipher = NULL;
+    EVP_MAC *mac = NULL;
     double d = 0.0;
     OPTION_CHOICE o;
     int async_init = 0, multiblock = 0, pr_header = 0;
@@ -1384,7 +1376,6 @@ int speed_main(int argc, char **argv)
     unsigned int i, k, loopargs_len = 0, async_jobs = 0;
     int keylen;
     int buflen;
-    int fetched_cipher = 0;
     BIGNUM *bn = NULL;
     EVP_PKEY_CTX *genctx = NULL;
 #ifndef NO_FORK
@@ -1529,17 +1520,19 @@ int speed_main(int argc, char **argv)
                 BIO_printf(bio_err, "%s: -evp option cannot be used more than once\n", prog);
                 goto opterr;
             }
-            evp_cipher = obtain_cipher(opt_arg(), &fetched_cipher);
-            if (evp_cipher == NULL) {
+            ERR_set_mark();
+            if (!opt_cipher_silent(opt_arg(), &evp_cipher)) {
                 if (have_md(opt_arg()))
                     evp_md_name = opt_arg();
             }
             if (evp_cipher == NULL && evp_md_name == NULL) {
+                ERR_clear_last_mark();
                 BIO_printf(bio_err,
                            "%s: %s is an unknown cipher or digest\n",
                            prog, opt_arg());
                 goto end;
             }
+            ERR_pop_to_mark();
             doit[D_EVP] = 1;
             break;
         case OPT_HMAC:
@@ -1574,6 +1567,10 @@ int speed_main(int argc, char **argv)
         case OPT_MULTI:
 #ifndef NO_FORK
             multi = atoi(opt_arg());
+            if ((size_t)multi >= SIZE_MAX / sizeof(int)) {
+                BIO_printf(bio_err, "%s: multi argument too large\n", prog);
+                return 0;
+            }
 #endif
             break;
         case OPT_ASYNCJOBS:
@@ -1592,8 +1589,7 @@ int speed_main(int argc, char **argv)
 #endif
             break;
         case OPT_MISALIGN:
-            if (!opt_int(opt_arg(), &misalign))
-                goto end;
+            misalign = opt_int_arg();
             if (misalign > MISALIGN) {
                 BIO_printf(bio_err,
                            "%s: Maximum offset is %d\n", prog, MISALIGN);
@@ -1621,8 +1617,7 @@ int speed_main(int argc, char **argv)
                 goto end;
             break;
         case OPT_PRIMES:
-            if (!opt_int(opt_arg(), &primes))
-                goto end;
+            primes = opt_int_arg();
             break;
         case OPT_SECONDS:
             seconds.sym = seconds.rsa = seconds.dsa = seconds.ecdsa
@@ -1644,7 +1639,9 @@ int speed_main(int argc, char **argv)
     argc = opt_num_rest();
     argv = opt_rest();
 
-    app_RAND_load();
+    if (!app_RAND_load())
+        goto end;
+
     for (; *argv; argv++) {
         const char *algo = *argv;
 
@@ -1751,10 +1748,10 @@ int speed_main(int argc, char **argv)
         if (evp_cipher == NULL) {
             BIO_printf(bio_err, "-aead can be used only with an AEAD cipher\n");
             goto end;
-        } else if (!(EVP_CIPHER_flags(evp_cipher) &
+        } else if (!(EVP_CIPHER_get_flags(evp_cipher) &
                      EVP_CIPH_FLAG_AEAD_CIPHER)) {
             BIO_printf(bio_err, "%s is not an AEAD cipher\n",
-                       OBJ_nid2ln(EVP_CIPHER_nid(evp_cipher)));
+                       EVP_CIPHER_get0_name(evp_cipher));
             goto end;
         }
     }
@@ -1763,10 +1760,10 @@ int speed_main(int argc, char **argv)
             BIO_printf(bio_err, "-mb can be used only with a multi-block"
                                 " capable cipher\n");
             goto end;
-        } else if (!(EVP_CIPHER_flags(evp_cipher) &
+        } else if (!(EVP_CIPHER_get_flags(evp_cipher) &
                      EVP_CIPH_FLAG_TLS1_1_MULTIBLOCK)) {
             BIO_printf(bio_err, "%s is not a multi-block capable\n",
-                       OBJ_nid2ln(EVP_CIPHER_nid(evp_cipher)));
+                       EVP_CIPHER_get0_name(evp_cipher));
             goto end;
         } else if (async_jobs > 0) {
             BIO_printf(bio_err, "Async mode is not supported with -mb");
@@ -1800,6 +1797,10 @@ int speed_main(int argc, char **argv)
         buflen = lengths[size_num - 1];
         if (buflen < 36)    /* size of random vector in RSA benchmark */
             buflen = 36;
+        if (INT_MAX - (MAX_MISALIGNMENT + 1) < buflen) {
+            BIO_printf(bio_err, "Error: buffer size too large\n");
+            goto end;
+        }
         buflen += MAX_MISALIGNMENT + 1;
         loopargs[i].buf_malloc = app_malloc(buflen, "input buffer");
         loopargs[i].buf2_malloc = app_malloc(buflen, "input buffer");
@@ -1809,6 +1810,8 @@ int speed_main(int argc, char **argv)
         /* Align the start of buffers on a 64 byte boundary */
         loopargs[i].buf = loopargs[i].buf_malloc + misalign;
         loopargs[i].buf2 = loopargs[i].buf2_malloc + misalign;
+        loopargs[i].buflen = buflen - misalign;
+        loopargs[i].sigsize = buflen - misalign;
         loopargs[i].secret_a = app_malloc(MAX_ECDH_SIZE, "ECDH secret a");
         loopargs[i].secret_b = app_malloc(MAX_ECDH_SIZE, "ECDH secret b");
 #ifndef OPENSSL_NO_DH
@@ -1827,8 +1830,6 @@ int speed_main(int argc, char **argv)
 
     /* No parameters; turn on everything. */
     if (argc == 0 && !doit[D_EVP] && !doit[D_HMAC] && !doit[D_EVP_CMAC]) {
-        EVP_MAC *mac;
-
         memset(doit, 1, sizeof(doit));
         doit[D_EVP] = doit[D_EVP_CMAC] = 0;
         ERR_set_mark();
@@ -1840,14 +1841,20 @@ int speed_main(int argc, char **argv)
             if (!have_cipher(names[i]))
                 doit[i] = 0;
         }
-        if ((mac = EVP_MAC_fetch(NULL, "GMAC", NULL)) != NULL)
+        if ((mac = EVP_MAC_fetch(app_get0_libctx(), "GMAC",
+                                 app_get0_propq())) != NULL) {
             EVP_MAC_free(mac);
-        else
+            mac = NULL;
+        } else {
             doit[D_GHASH] = 0;
-        if ((mac = EVP_MAC_fetch(NULL, "HMAC", NULL)) != NULL)
+        }
+        if ((mac = EVP_MAC_fetch(app_get0_libctx(), "HMAC",
+                                 app_get0_propq())) != NULL) {
             EVP_MAC_free(mac);
-        else
+            mac = NULL;
+        } else {
             doit[D_HMAC] = 0;
+        }
         ERR_pop_to_mark();
         memset(rsa_doit, 1, sizeof(rsa_doit));
 #ifndef OPENSSL_NO_DH
@@ -1994,9 +2001,9 @@ int speed_main(int argc, char **argv)
     if (doit[D_HMAC]) {
         static const char hmac_key[] = "This is a key...";
         int len = strlen(hmac_key);
-        EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
         OSSL_PARAM params[3];
 
+        mac = EVP_MAC_fetch(app_get0_libctx(), "HMAC", app_get0_propq());
         if (mac == NULL || evp_mac_mdname == NULL)
             goto end;
 
@@ -2019,7 +2026,7 @@ int speed_main(int argc, char **argv)
                 goto end;
 
             if (!EVP_MAC_CTX_set_params(loopargs[i].mctx, params))
-                goto end;
+                goto skip_hmac; /* Digest not found */
         }
         for (testnum = 0; testnum < size_num; testnum++) {
             print_message(names[D_HMAC], c[D_HMAC][testnum], lengths[testnum],
@@ -2034,8 +2041,9 @@ int speed_main(int argc, char **argv)
         for (i = 0; i < loopargs_len; i++)
             EVP_MAC_CTX_free(loopargs[i].mctx);
         EVP_MAC_free(mac);
+        mac = NULL;
     }
-
+skip_hmac:
     if (doit[D_CBC_DES]) {
         int st = 1;
 
@@ -2084,7 +2092,7 @@ int speed_main(int argc, char **argv)
         if (doit[algindex]) {
             int st = 1;
 
-            keylen = 16 + i * 8;
+            keylen = 16 + k * 8;
             for (i = 0; st && i < loopargs_len; i++) {
                 loopargs[i].ctx = init_evp_cipher_ctx(names[algindex],
                                                       key32, keylen);
@@ -2110,7 +2118,7 @@ int speed_main(int argc, char **argv)
         if (doit[algindex]) {
             int st = 1;
 
-            keylen = 16 + i * 8;
+            keylen = 16 + k * 8;
             for (i = 0; st && i < loopargs_len; i++) {
                 loopargs[i].ctx = init_evp_cipher_ctx(names[algindex],
                                                       key32, keylen);
@@ -2157,9 +2165,9 @@ int speed_main(int argc, char **argv)
     }
     if (doit[D_GHASH]) {
         static const char gmac_iv[] = "0123456789ab";
-        EVP_MAC *mac = EVP_MAC_fetch(NULL, "GMAC", NULL);
         OSSL_PARAM params[3];
 
+        mac = EVP_MAC_fetch(app_get0_libctx(), "GMAC", app_get0_propq());
         if (mac == NULL)
             goto end;
 
@@ -2191,6 +2199,7 @@ int speed_main(int argc, char **argv)
         for (i = 0; i < loopargs_len; i++)
             EVP_MAC_CTX_free(loopargs[i].mctx);
         EVP_MAC_free(mac);
+        mac = NULL;
     }
 
     if (doit[D_RAND]) {
@@ -2208,18 +2217,18 @@ int speed_main(int argc, char **argv)
         if (evp_cipher != NULL) {
             int (*loopfunc) (void *) = EVP_Update_loop;
 
-            if (multiblock && (EVP_CIPHER_flags(evp_cipher) &
+            if (multiblock && (EVP_CIPHER_get_flags(evp_cipher) &
                                EVP_CIPH_FLAG_TLS1_1_MULTIBLOCK)) {
                 multiblock_speed(evp_cipher, lengths_single, &seconds);
                 ret = 0;
                 goto end;
             }
 
-            names[D_EVP] = OBJ_nid2ln(EVP_CIPHER_nid(evp_cipher));
+            names[D_EVP] = EVP_CIPHER_get0_name(evp_cipher);
 
-            if (EVP_CIPHER_mode(evp_cipher) == EVP_CIPH_CCM_MODE) {
+            if (EVP_CIPHER_get_mode(evp_cipher) == EVP_CIPH_CCM_MODE) {
                 loopfunc = EVP_Update_loop_ccm;
-            } else if (aead && (EVP_CIPHER_flags(evp_cipher) &
+            } else if (aead && (EVP_CIPHER_get_flags(evp_cipher) &
                                 EVP_CIPH_FLAG_AEAD_CIPHER)) {
                 loopfunc = EVP_Update_loop_aead;
                 if (lengths == lengths_list) {
@@ -2247,7 +2256,7 @@ int speed_main(int argc, char **argv)
 
                     EVP_CIPHER_CTX_set_padding(loopargs[k].ctx, 0);
 
-                    keylen = EVP_CIPHER_CTX_key_length(loopargs[k].ctx);
+                    keylen = EVP_CIPHER_CTX_get_key_length(loopargs[k].ctx);
                     loopargs[k].key = app_malloc(keylen, "evp_cipher key");
                     EVP_CIPHER_CTX_rand_key(loopargs[k].ctx, loopargs[k].key);
                     if (!EVP_CipherInit_ex(loopargs[k].ctx, NULL, NULL,
@@ -2259,9 +2268,9 @@ int speed_main(int argc, char **argv)
                     OPENSSL_clear_free(loopargs[k].key, keylen);
 
                     /* SIV mode only allows for a single Update operation */
-                    if (EVP_CIPHER_mode(evp_cipher) == EVP_CIPH_SIV_MODE)
-                        EVP_CIPHER_CTX_ctrl(loopargs[k].ctx, EVP_CTRL_SET_SPEED,
-                                            1, NULL);
+                    if (EVP_CIPHER_get_mode(evp_cipher) == EVP_CIPH_SIV_MODE)
+                        (void)EVP_CIPHER_CTX_ctrl(loopargs[k].ctx,
+                                                  EVP_CTRL_SET_SPEED, 1, NULL);
                 }
 
                 Time_F(START);
@@ -2288,19 +2297,17 @@ int speed_main(int argc, char **argv)
     }
 
     if (doit[D_EVP_CMAC]) {
-        EVP_MAC *mac = EVP_MAC_fetch(NULL, "CMAC", NULL);
         OSSL_PARAM params[3];
-        EVP_CIPHER *cipher;
-        int fetched = 0;
+        EVP_CIPHER *cipher = NULL;
 
+        mac = EVP_MAC_fetch(app_get0_libctx(), "CMAC", app_get0_propq());
         if (mac == NULL || evp_mac_ciphername == NULL)
             goto end;
-        if ((cipher = obtain_cipher(evp_mac_ciphername, &fetched)) == NULL)
+        if (!opt_cipher(evp_mac_ciphername, &cipher))
             goto end;
 
-        keylen = EVP_CIPHER_key_length(cipher);
-        if (fetched)
-            EVP_CIPHER_free(cipher);
+        keylen = EVP_CIPHER_get_key_length(cipher);
+        EVP_CIPHER_free(cipher);
         if (keylen <= 0 || keylen > (int)sizeof(key32)) {
             BIO_printf(bio_err, "\nRequested CMAC cipher with unsupported key length.\n");
             goto end;
@@ -2338,6 +2345,7 @@ int speed_main(int argc, char **argv)
         for (i = 0; i < loopargs_len; i++)
             EVP_MAC_CTX_free(loopargs[i].mctx);
         EVP_MAC_free(mac);
+        mac = NULL;
     }
 
     for (i = 0; i < loopargs_len; i++)
@@ -2374,6 +2382,7 @@ int speed_main(int argc, char **argv)
 
         for (i = 0; st && i < loopargs_len; i++) {
             loopargs[i].rsa_sign_ctx[testnum] = EVP_PKEY_CTX_new(rsa_key, NULL);
+            loopargs[i].sigsize = loopargs[i].buflen;
             if (loopargs[i].rsa_sign_ctx[testnum] == NULL
                 || EVP_PKEY_sign_init(loopargs[i].rsa_sign_ctx[testnum]) <= 0
                 || EVP_PKEY_sign(loopargs[i].rsa_sign_ctx[testnum],
@@ -2452,6 +2461,7 @@ int speed_main(int argc, char **argv)
         for (i = 0; st && i < loopargs_len; i++) {
             loopargs[i].dsa_sign_ctx[testnum] = EVP_PKEY_CTX_new(dsa_key,
                                                                  NULL);
+            loopargs[i].sigsize = loopargs[i].buflen;
             if (loopargs[i].dsa_sign_ctx[testnum] == NULL
                 || EVP_PKEY_sign_init(loopargs[i].dsa_sign_ctx[testnum]) <= 0
 
@@ -2530,6 +2540,7 @@ int speed_main(int argc, char **argv)
         for (i = 0; st && i < loopargs_len; i++) {
             loopargs[i].ecdsa_sign_ctx[testnum] = EVP_PKEY_CTX_new(ecdsa_key,
                                                                    NULL);
+            loopargs[i].sigsize = loopargs[i].buflen;
             if (loopargs[i].ecdsa_sign_ctx[testnum] == NULL
                 || EVP_PKEY_sign_init(loopargs[i].ecdsa_sign_ctx[testnum]) <= 0
 
@@ -2631,11 +2642,11 @@ int speed_main(int argc, char **argv)
              * code, for maximum performance.
              */
             if ((test_ctx = EVP_PKEY_CTX_new(key_B, NULL)) == NULL /* test ctx from skeyB */
-                || !EVP_PKEY_derive_init(test_ctx) /* init derivation test_ctx */
-                || !EVP_PKEY_derive_set_peer(test_ctx, key_A) /* set peer pubkey in test_ctx */
-                || !EVP_PKEY_derive(test_ctx, NULL, &test_outlen) /* determine max length */
-                || !EVP_PKEY_derive(ctx, loopargs[i].secret_a, &outlen) /* compute a*B */
-                || !EVP_PKEY_derive(test_ctx, loopargs[i].secret_b, &test_outlen) /* compute b*A */
+                || EVP_PKEY_derive_init(test_ctx) <= 0 /* init derivation test_ctx */
+                || EVP_PKEY_derive_set_peer(test_ctx, key_A) <= 0 /* set peer pubkey in test_ctx */
+                || EVP_PKEY_derive(test_ctx, NULL, &test_outlen) <= 0 /* determine max length */
+                || EVP_PKEY_derive(ctx, loopargs[i].secret_a, &outlen) <= 0 /* compute a*B */
+                || EVP_PKEY_derive(test_ctx, loopargs[i].secret_b, &test_outlen) <= 0 /* compute b*A */
                 || test_outlen != outlen /* compare output length */) {
                 ecdh_checks = 0;
                 BIO_printf(bio_err, "ECDH computation failure.\n");
@@ -2833,7 +2844,7 @@ int speed_main(int argc, char **argv)
             st = 0; /* set back to zero */
             /* attach it sooner to rely on main final cleanup */
             loopargs[i].sm2_pkey[testnum] = sm2_pkey;
-            loopargs[i].sigsize = EVP_PKEY_size(sm2_pkey);
+            loopargs[i].sigsize = EVP_PKEY_get_size(sm2_pkey);
 
             sm2_pctx = EVP_PKEY_CTX_new(sm2_pkey, NULL);
             sm2_vfy_pctx = EVP_PKEY_CTX_new(sm2_pkey, NULL);
@@ -3066,10 +3077,10 @@ int speed_main(int argc, char **argv)
                 ffdh_checks = 0;
                 break;
             }
-            if (!EVP_PKEY_derive_init(test_ctx) ||
-                !EVP_PKEY_derive_set_peer(test_ctx, pkey_A) ||
-                !EVP_PKEY_derive(test_ctx, NULL, &test_out) ||
-                !EVP_PKEY_derive(test_ctx, loopargs[i].secret_ff_b, &test_out) ||
+            if (EVP_PKEY_derive_init(test_ctx) <= 0 ||
+                EVP_PKEY_derive_set_peer(test_ctx, pkey_A) <= 0 ||
+                EVP_PKEY_derive(test_ctx, NULL, &test_out) <= 0 ||
+                EVP_PKEY_derive(test_ctx, loopargs[i].secret_ff_b, &test_out) <= 0 ||
                 test_out != secret_size) {
                 BIO_printf(bio_err, "FFDH computation failure.\n");
                 op_count = 1;
@@ -3121,10 +3132,9 @@ int speed_main(int argc, char **argv)
 #endif
     if (!mr) {
         printf("version: %s\n", OpenSSL_version(OPENSSL_FULL_VERSION_STRING));
-        printf("built on: %s\n", OpenSSL_version(OPENSSL_BUILT_ON));
-        printf("options:");
-        printf("%s ", BN_options());
-        printf("\n%s\n", OpenSSL_version(OPENSSL_CFLAGS));
+        printf("%s\n", OpenSSL_version(OPENSSL_BUILT_ON));
+        printf("options: %s\n", BN_options());
+        printf("%s\n", OpenSSL_version(OPENSSL_CFLAGS));
         printf("%s\n", OpenSSL_version(OPENSSL_CPU_INFO));
     }
 
@@ -3141,12 +3151,22 @@ int speed_main(int argc, char **argv)
     }
 
     for (k = 0; k < ALGOR_NUM; k++) {
+        const char *alg_name = names[k];
+
         if (!doit[k])
             continue;
+
+        if (k == D_EVP) {
+            if (evp_cipher == NULL)
+                alg_name = evp_md_name;
+            else if ((alg_name = EVP_CIPHER_get0_name(evp_cipher)) == NULL)
+                app_bail_out("failed to get name of cipher '%s'\n", evp_cipher);
+        }
+
         if (mr)
-            printf("+F:%u:%s", k, names[k]);
+            printf("+F:%u:%s", k, alg_name);
         else
-            printf("%-13s", names[k]);
+            printf("%-13s", alg_name);
         for (testnum = 0; testnum < size_num; testnum++) {
             if (results[k][testnum] > 10000 && !mr)
                 printf(" %11.2fk", results[k][testnum] / 1e3);
@@ -3328,12 +3348,12 @@ int speed_main(int argc, char **argv)
 
             /* free signing ctx */
             if (loopargs[i].sm2_ctx[k] != NULL
-                    && (pctx = EVP_MD_CTX_pkey_ctx(loopargs[i].sm2_ctx[k])) != NULL)
+                && (pctx = EVP_MD_CTX_get_pkey_ctx(loopargs[i].sm2_ctx[k])) != NULL)
                 EVP_PKEY_CTX_free(pctx);
             EVP_MD_CTX_free(loopargs[i].sm2_ctx[k]);
             /* free verification ctx */
             if (loopargs[i].sm2_vfy_ctx[k] != NULL
-                    && (pctx = EVP_MD_CTX_pkey_ctx(loopargs[i].sm2_vfy_ctx[k])) != NULL)
+                && (pctx = EVP_MD_CTX_get_pkey_ctx(loopargs[i].sm2_vfy_ctx[k])) != NULL)
                 EVP_PKEY_CTX_free(pctx);
             EVP_MD_CTX_free(loopargs[i].sm2_vfy_ctx[k]);
             /* free pkey */
@@ -3356,9 +3376,8 @@ int speed_main(int argc, char **argv)
     }
     OPENSSL_free(loopargs);
     release_engine(e);
-    if (fetched_cipher) {
-        EVP_CIPHER_free(evp_cipher);
-    }
+    EVP_CIPHER_free(evp_cipher);
+    EVP_MAC_free(mac);
     return ret;
 }
 
@@ -3429,6 +3448,7 @@ static int do_multi(int multi, int size_num)
     int n;
     int fd[2];
     int *fds;
+    int status;
     static char sep[] = ":";
 
     fds = app_malloc(sizeof(*fds) * multi, "fd buffer for do_multi");
@@ -3464,7 +3484,12 @@ static int do_multi(int multi, int size_num)
         char buf[1024];
         char *p;
 
-        f = fdopen(fds[n], "r");
+        if ((f = fdopen(fds[n], "r")) == NULL) {
+            BIO_printf(bio_err, "fdopen failure with 0x%x\n",
+                       errno);
+            OPENSSL_free(fds);
+            return 1;
+        }
         while (fgets(buf, sizeof(buf), f)) {
             p = strchr(buf, '\n');
             if (p)
@@ -3587,6 +3612,20 @@ static int do_multi(int multi, int size_num)
         fclose(f);
     }
     OPENSSL_free(fds);
+    for (n = 0; n < multi; ++n) {
+        while (wait(&status) == -1)
+            if (errno != EINTR) {
+                BIO_printf(bio_err, "Waitng for child failed with 0x%x\n",
+                           errno);
+                return 1;
+            }
+        if (WIFEXITED(status) && WEXITSTATUS(status)) {
+            BIO_printf(bio_err, "Child exited with %d\n", WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            BIO_printf(bio_err, "Child terminated by signal %d\n",
+                       WTERMSIG(status));
+        }
+    }
     return 1;
 }
 #endif
@@ -3599,8 +3638,8 @@ static void multiblock_speed(const EVP_CIPHER *evp_cipher, int lengths_single,
     const int *mblengths = mblengths_list;
     int j, count, keylen, num = OSSL_NELEM(mblengths_list);
     const char *alg_name;
-    unsigned char *inp, *out, *key, no_key[32], no_iv[16];
-    EVP_CIPHER_CTX *ctx;
+    unsigned char *inp = NULL, *out = NULL, *key, no_key[32], no_iv[16];
+    EVP_CIPHER_CTX *ctx = NULL;
     double d = 0.0;
 
     if (lengths_single) {
@@ -3610,22 +3649,32 @@ static void multiblock_speed(const EVP_CIPHER *evp_cipher, int lengths_single,
 
     inp = app_malloc(mblengths[num - 1], "multiblock input buffer");
     out = app_malloc(mblengths[num - 1] + 1024, "multiblock output buffer");
-    ctx = EVP_CIPHER_CTX_new();
-    EVP_EncryptInit_ex(ctx, evp_cipher, NULL, NULL, no_iv);
+    if ((ctx = EVP_CIPHER_CTX_new()) == NULL)
+        app_bail_out("failed to allocate cipher context\n");
+    if (!EVP_EncryptInit_ex(ctx, evp_cipher, NULL, NULL, no_iv))
+        app_bail_out("failed to initialise cipher context\n");
 
-    keylen = EVP_CIPHER_CTX_key_length(ctx);
+    if ((keylen = EVP_CIPHER_CTX_get_key_length(ctx)) < 0) {
+        BIO_printf(bio_err, "Impossible negative key length: %d\n", keylen);
+        goto err;
+    }
     key = app_malloc(keylen, "evp_cipher key");
-    EVP_CIPHER_CTX_rand_key(ctx, key);
-    EVP_EncryptInit_ex(ctx, NULL, NULL, key, NULL);
+    if (EVP_CIPHER_CTX_rand_key(ctx, key) <= 0)
+        app_bail_out("failed to generate random cipher key\n");
+    if (!EVP_EncryptInit_ex(ctx, NULL, NULL, key, NULL))
+        app_bail_out("failed to set cipher key\n");
     OPENSSL_clear_free(key, keylen);
 
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_MAC_KEY, sizeof(no_key), no_key);
-    alg_name = OBJ_nid2ln(EVP_CIPHER_nid(evp_cipher));
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_MAC_KEY,
+                             sizeof(no_key), no_key) <= 0)
+        app_bail_out("failed to set AEAD key\n");
+    if ((alg_name = EVP_CIPHER_get0_name(evp_cipher)) == NULL)
+        app_bail_out("failed to get cipher name\n");
 
     for (j = 0; j < num; j++) {
         print_message(alg_name, 0, mblengths[j], seconds->sym);
         Time_F(START);
-        for (count = 0; run && count < 0x7fffffff; count++) {
+        for (count = 0; run && count < INT_MAX; count++) {
             unsigned char aad[EVP_AEAD_TLS1_AAD_LEN];
             EVP_CTRL_TLS1_1_MULTIBLOCK_PARAM mb_param;
             size_t len = mblengths[j];
@@ -3649,12 +3698,14 @@ static void multiblock_speed(const EVP_CIPHER *evp_cipher, int lengths_single,
                 mb_param.out = out;
                 mb_param.inp = inp;
                 mb_param.len = len;
-                EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_TLS1_1_MULTIBLOCK_ENCRYPT,
-                                    sizeof(mb_param), &mb_param);
+                (void)EVP_CIPHER_CTX_ctrl(ctx,
+                                          EVP_CTRL_TLS1_1_MULTIBLOCK_ENCRYPT,
+                                          sizeof(mb_param), &mb_param);
             } else {
                 int pad;
 
-                RAND_bytes(out, 16);
+                if (RAND_bytes(inp, 16) <= 0)
+                    app_bail_out("error setting random bytes\n");
                 len += 16;
                 aad[11] = (unsigned char)(len >> 8);
                 aad[12] = (unsigned char)(len);
@@ -3696,6 +3747,7 @@ static void multiblock_speed(const EVP_CIPHER *evp_cipher, int lengths_single,
         fprintf(stdout, "\n");
     }
 
+ err:
     OPENSSL_free(inp);
     OPENSSL_free(out);
     EVP_CIPHER_CTX_free(ctx);

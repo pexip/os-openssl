@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2012-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -24,12 +24,12 @@ typedef struct {
     const char *name;
     int namelen;
     unsigned int name_flags;
-    unsigned long option_value;
+    uint64_t option_value;
 } ssl_flag_tbl;
 
 /* Switch table: use for single command line switches like no_tls2 */
 typedef struct {
-    unsigned long option_value;
+    uint64_t option_value;
     unsigned int name_flags;
 } ssl_switch_tbl;
 
@@ -84,7 +84,7 @@ struct ssl_conf_ctx_st {
     SSL_CTX *ctx;
     SSL *ssl;
     /* Pointer to SSL or SSL_CTX options field or NULL if none */
-    uint32_t *poptions;
+    uint64_t *poptions;
     /* Certificate filenames for each type */
     char *cert_filename[SSL_PKEY_NUM];
     /* Pointer to SSL or SSL_CTX cert_flags or NULL if none */
@@ -104,9 +104,10 @@ struct ssl_conf_ctx_st {
 };
 
 static void ssl_set_option(SSL_CONF_CTX *cctx, unsigned int name_flags,
-                           unsigned long option_value, int onoff)
+                           uint64_t option_value, int onoff)
 {
     uint32_t *pflags;
+
     if (cctx->poptions == NULL)
         return;
     if (name_flags & SSL_TFLAG_INV)
@@ -122,8 +123,11 @@ static void ssl_set_option(SSL_CONF_CTX *cctx, unsigned int name_flags,
         break;
 
     case SSL_TFLAG_OPTION:
-        pflags = cctx->poptions;
-        break;
+        if (onoff)
+            *cctx->poptions |= option_value;
+        else
+            *cctx->poptions &= ~option_value;
+        return;
 
     default:
         return;
@@ -144,7 +148,8 @@ static int ssl_match_option(SSL_CONF_CTX *cctx, const ssl_flag_tbl *tbl,
     if (namelen == -1) {
         if (strcmp(tbl->name, name))
             return 0;
-    } else if (tbl->namelen != namelen || strncasecmp(tbl->name, name, namelen))
+    } else if (tbl->namelen != namelen
+               || OPENSSL_strncasecmp(tbl->name, name, namelen))
         return 0;
     ssl_set_option(cctx, tbl->name_flags, tbl->option_value, onoff);
     return 1;
@@ -228,8 +233,8 @@ static int cmd_ECDHParameters(SSL_CONF_CTX *cctx, const char *value)
 
     /* Ignore values supported by 1.0.2 for the automatic selection */
     if ((cctx->flags & SSL_CONF_FLAG_FILE)
-            && (strcasecmp(value, "+automatic") == 0
-                || strcasecmp(value, "automatic") == 0))
+            && (OPENSSL_strcasecmp(value, "+automatic") == 0
+                || OPENSSL_strcasecmp(value, "automatic") == 0))
         return 1;
     if ((cctx->flags & SSL_CONF_FLAG_CMDLINE) &&
         strcmp(value, "auto") == 0)
@@ -379,6 +384,10 @@ static int cmd_Options(SSL_CONF_CTX *cctx, const char *value)
         SSL_FLAG_TBL_SRV("ECDHSingle", SSL_OP_SINGLE_ECDH_USE),
         SSL_FLAG_TBL("UnsafeLegacyRenegotiation",
                      SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION),
+        SSL_FLAG_TBL("UnsafeLegacyServerConnect",
+                     SSL_OP_LEGACY_SERVER_CONNECT),
+        SSL_FLAG_TBL("ClientRenegotiation",
+                     SSL_OP_ALLOW_CLIENT_RENEGOTIATION),
         SSL_FLAG_TBL_INV("EncryptThenMac", SSL_OP_NO_ENCRYPT_THEN_MAC),
         SSL_FLAG_TBL("NoRenegotiation", SSL_OP_NO_RENEGOTIATION),
         SSL_FLAG_TBL("AllowNoDHEKEX", SSL_OP_ALLOW_NO_DHE_KEX),
@@ -386,7 +395,8 @@ static int cmd_Options(SSL_CONF_CTX *cctx, const char *value)
         SSL_FLAG_TBL("MiddleboxCompat", SSL_OP_ENABLE_MIDDLEBOX_COMPAT),
         SSL_FLAG_TBL_INV("AntiReplay", SSL_OP_NO_ANTI_REPLAY),
         SSL_FLAG_TBL_INV("ExtendedMasterSecret", SSL_OP_NO_EXTENDED_MASTER_SECRET),
-        SSL_FLAG_TBL_INV("CANames", SSL_OP_DISABLE_TLSEXT_CA_NAMES)
+        SSL_FLAG_TBL_INV("CANames", SSL_OP_DISABLE_TLSEXT_CA_NAMES),
+        SSL_FLAG_TBL("KTLS", SSL_OP_ENABLE_KTLS)
     };
     if (value == NULL)
         return -3;
@@ -590,15 +600,19 @@ static int cmd_DHParameters(SSL_CONF_CTX *cctx, const char *value)
             = OSSL_DECODER_CTX_new_for_pkey(&dhpkey, "PEM", NULL, "DH",
                                             OSSL_KEYMGMT_SELECT_DOMAIN_PARAMETERS,
                                             sslctx->libctx, sslctx->propq);
-        if (decoderctx == NULL
-                || !OSSL_DECODER_from_bio(decoderctx, in)) {
-            OSSL_DECODER_CTX_free(decoderctx);
+        if (decoderctx == NULL)
             goto end;
-        }
+        ERR_set_mark();
+        while (!OSSL_DECODER_from_bio(decoderctx, in)
+               && dhpkey == NULL
+               && !BIO_eof(in));
         OSSL_DECODER_CTX_free(decoderctx);
 
-        if (dhpkey == NULL)
+        if (dhpkey == NULL) {
+            ERR_clear_last_mark();
             goto end;
+        }
+        ERR_pop_to_mark();
     } else {
         return 1;
     }
@@ -669,7 +683,8 @@ typedef struct {
 #define SSL_CONF_CMD_SWITCH(name, flags) \
         {0, NULL, name, flags, SSL_CONF_TYPE_NONE}
 
-/* See apps/apps.h if you change this table. */
+/* See apps/include/opt.h if you change this table. */
+/* The SSL_CONF_CMD_SWITCH should be the same order as ssl_cmd_switches */
 static const ssl_conf_cmd_tbl ssl_conf_cmds[] = {
     SSL_CONF_CMD_SWITCH("no_ssl3", 0),
     SSL_CONF_CMD_SWITCH("no_tls1", 0),
@@ -683,16 +698,18 @@ static const ssl_conf_cmd_tbl ssl_conf_cmds[] = {
     SSL_CONF_CMD_SWITCH("no_ticket", 0),
     SSL_CONF_CMD_SWITCH("serverpref", SSL_CONF_FLAG_SERVER),
     SSL_CONF_CMD_SWITCH("legacy_renegotiation", 0),
-    SSL_CONF_CMD_SWITCH("legacy_server_connect", SSL_CONF_FLAG_SERVER),
+    SSL_CONF_CMD_SWITCH("client_renegotiation", SSL_CONF_FLAG_SERVER),
+    SSL_CONF_CMD_SWITCH("legacy_server_connect", SSL_CONF_FLAG_CLIENT),
     SSL_CONF_CMD_SWITCH("no_renegotiation", 0),
     SSL_CONF_CMD_SWITCH("no_resumption_on_reneg", SSL_CONF_FLAG_SERVER),
-    SSL_CONF_CMD_SWITCH("no_legacy_server_connect", SSL_CONF_FLAG_SERVER),
+    SSL_CONF_CMD_SWITCH("no_legacy_server_connect", SSL_CONF_FLAG_CLIENT),
     SSL_CONF_CMD_SWITCH("allow_no_dhe_kex", 0),
     SSL_CONF_CMD_SWITCH("prioritize_chacha", SSL_CONF_FLAG_SERVER),
     SSL_CONF_CMD_SWITCH("strict", 0),
     SSL_CONF_CMD_SWITCH("no_middlebox", 0),
     SSL_CONF_CMD_SWITCH("anti_replay", SSL_CONF_FLAG_SERVER),
     SSL_CONF_CMD_SWITCH("no_anti_replay", SSL_CONF_FLAG_SERVER),
+    SSL_CONF_CMD_SWITCH("no_etm", 0),
     SSL_CONF_CMD_STRING(SignatureAlgorithms, "sigalgs", 0),
     SSL_CONF_CMD_STRING(ClientSignatureAlgorithms, "client_sigalgs", 0),
     SSL_CONF_CMD_STRING(Curves, "curves", 0),
@@ -761,6 +778,8 @@ static const ssl_switch_tbl ssl_cmd_switches[] = {
     {SSL_OP_CIPHER_SERVER_PREFERENCE, 0}, /* serverpref */
     /* legacy_renegotiation */
     {SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION, 0},
+    /* Allow client renegotiation */
+    {SSL_OP_ALLOW_CLIENT_RENEGOTIATION, 0},
     /* legacy_server_connect */
     {SSL_OP_LEGACY_SERVER_CONNECT, 0},
     /* no_renegotiation */
@@ -780,6 +799,8 @@ static const ssl_switch_tbl ssl_cmd_switches[] = {
     {SSL_OP_NO_ANTI_REPLAY, SSL_TFLAG_INV},
     /* no_anti_replay */
     {SSL_OP_NO_ANTI_REPLAY, 0},
+    /* no Encrypt-then-Mac */
+    {SSL_OP_NO_ENCRYPT_THEN_MAC, 0},
 };
 
 static int ssl_conf_cmd_skip_prefix(SSL_CONF_CTX *cctx, const char **pcmd)
@@ -794,7 +815,7 @@ static int ssl_conf_cmd_skip_prefix(SSL_CONF_CTX *cctx, const char **pcmd)
             strncmp(*pcmd, cctx->prefix, cctx->prefixlen))
             return 0;
         if (cctx->flags & SSL_CONF_FLAG_FILE &&
-            strncasecmp(*pcmd, cctx->prefix, cctx->prefixlen))
+            OPENSSL_strncasecmp(*pcmd, cctx->prefix, cctx->prefixlen))
             return 0;
         *pcmd += cctx->prefixlen;
     } else if (cctx->flags & SSL_CONF_FLAG_CMDLINE) {
@@ -836,7 +857,7 @@ static const ssl_conf_cmd_tbl *ssl_conf_cmd_lookup(SSL_CONF_CTX *cctx,
                     return t;
             }
             if (cctx->flags & SSL_CONF_FLAG_FILE) {
-                if (t->str_file && strcasecmp(t->str_file, cmd) == 0)
+                if (t->str_file && OPENSSL_strcasecmp(t->str_file, cmd) == 0)
                     return t;
             }
         }
@@ -849,9 +870,12 @@ static int ctrl_switch_option(SSL_CONF_CTX *cctx, const ssl_conf_cmd_tbl * cmd)
     /* Find index of command in table */
     size_t idx = cmd - ssl_conf_cmds;
     const ssl_switch_tbl *scmd;
+
     /* Sanity check index */
-    if (idx >= OSSL_NELEM(ssl_cmd_switches))
+    if (idx >= OSSL_NELEM(ssl_cmd_switches)) {
+        ERR_raise(ERR_LIB_SSL, ERR_R_INTERNAL_ERROR);
         return 0;
+    }
     /* Obtain switches entry with same index */
     scmd = ssl_cmd_switches + idx;
     ssl_set_option(cctx, scmd->name_flags, scmd->option_value, 1);
@@ -867,28 +891,33 @@ int SSL_CONF_cmd(SSL_CONF_CTX *cctx, const char *cmd, const char *value)
     }
 
     if (!ssl_conf_cmd_skip_prefix(cctx, &cmd))
-        return -2;
+        goto unknown_cmd;
 
     runcmd = ssl_conf_cmd_lookup(cctx, cmd);
 
     if (runcmd) {
-        int rv;
+        int rv = -3;
+
         if (runcmd->value_type == SSL_CONF_TYPE_NONE) {
             return ctrl_switch_option(cctx, runcmd);
         }
         if (value == NULL)
-            return -3;
+            goto bad_value;
         rv = runcmd->cmd(cctx, value);
         if (rv > 0)
             return 2;
-        if (rv == -2)
-            return -2;
+        if (rv != -2)
+            rv = 0;
+
+ bad_value:
         if (cctx->flags & SSL_CONF_FLAG_SHOW_ERRORS)
             ERR_raise_data(ERR_LIB_SSL, SSL_R_BAD_VALUE,
-                           "cmd=%s, value=%s", cmd, value);
-        return 0;
+                           "cmd=%s, value=%s", cmd,
+                           value != NULL ? value : "<EMPTY>");
+        return rv;
     }
 
+ unknown_cmd:
     if (cctx->flags & SSL_CONF_FLAG_SHOW_ERRORS)
         ERR_raise_data(ERR_LIB_SSL, SSL_R_UNKNOWN_CMD_NAME, "cmd=%s", cmd);
 

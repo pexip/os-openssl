@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2020-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -12,17 +12,21 @@
 #include <openssl/objects.h>
 #include <openssl/evp.h>
 #include "internal/cryptlib.h"
-#include "crypto/evp.h"
 #include "internal/provider.h"
+#include "internal/core.h"
+#include "crypto/evp.h"
 #include "evp_local.h"
 
-static int evp_kem_init(EVP_PKEY_CTX *ctx, int operation)
+static int evp_kem_init(EVP_PKEY_CTX *ctx, int operation,
+                        const OSSL_PARAM params[])
 {
     int ret = 0;
     EVP_KEM *kem = NULL;
     EVP_KEYMGMT *tmp_keymgmt = NULL;
+    const OSSL_PROVIDER *tmp_prov = NULL;
     void *provkey = NULL;
     const char *supported_kem = NULL;
+    int iter;
 
     if (ctx == NULL || ctx->keytype == NULL) {
         ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
@@ -32,41 +36,107 @@ static int evp_kem_init(EVP_PKEY_CTX *ctx, int operation)
     evp_pkey_ctx_free_old_ops(ctx);
     ctx->operation = operation;
 
+    if (ctx->pkey == NULL) {
+        ERR_raise(ERR_LIB_EVP, EVP_R_NO_KEY_SET);
+        goto err;
+    }
+
     /*
-     * Ensure that the key is provided, either natively, or as a cached export.
+     * Try to derive the supported kem from |ctx->keymgmt|.
      */
-    tmp_keymgmt = ctx->keymgmt;
-    provkey = evp_pkey_export_to_provider(ctx->pkey, ctx->libctx,
-                                          &tmp_keymgmt, ctx->propquery);
-    if (provkey == NULL
-        || !EVP_KEYMGMT_up_ref(tmp_keymgmt)) {
+    if (!ossl_assert(ctx->pkey->keymgmt == NULL
+                     || ctx->pkey->keymgmt == ctx->keymgmt)) {
+        ERR_raise(ERR_LIB_EVP, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
+    supported_kem = evp_keymgmt_util_query_operation_name(ctx->keymgmt,
+                                                          OSSL_OP_KEM);
+    if (supported_kem == NULL) {
         ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
         goto err;
     }
-    EVP_KEYMGMT_free(ctx->keymgmt);
-    ctx->keymgmt = tmp_keymgmt;
-
-    if (ctx->keymgmt->query_operation_name != NULL)
-        supported_kem = ctx->keymgmt->query_operation_name(OSSL_OP_KEM);
 
     /*
-     * If we didn't get a supported kem, assume there is one with the
-     * same name as the key type.
+     * Because we cleared out old ops, we shouldn't need to worry about
+     * checking if kem is already there.
+     * We perform two iterations:
+     *
+     * 1.  Do the normal kem fetch, using the fetching data given by
+     *     the EVP_PKEY_CTX.
+     * 2.  Do the provider specific kem fetch, from the same provider
+     *     as |ctx->keymgmt|
+     *
+     * We then try to fetch the keymgmt from the same provider as the
+     * kem, and try to export |ctx->pkey| to that keymgmt (when this
+     * keymgmt happens to be the same as |ctx->keymgmt|, the export is
+     * a no-op, but we call it anyway to not complicate the code even
+     * more).
+     * If the export call succeeds (returns a non-NULL provider key pointer),
+     * we're done and can perform the operation itself.  If not, we perform
+     * the second iteration, or jump to legacy.
      */
-    if (supported_kem == NULL)
-        supported_kem = ctx->keytype;
+    for (iter = 1, provkey = NULL; iter < 3 && provkey == NULL; iter++) {
+        EVP_KEYMGMT *tmp_keymgmt_tofree = NULL;
 
-    kem = EVP_KEM_fetch(ctx->libctx, supported_kem, ctx->propquery);
-    if (kem == NULL
-        || (EVP_KEYMGMT_provider(ctx->keymgmt) != EVP_KEM_provider(kem))) {
-        ERR_raise(ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
-        ret = -2;
+        /*
+         * If we're on the second iteration, free the results from the first.
+         * They are NULL on the first iteration, so no need to check what
+         * iteration we're on.
+         */
+        EVP_KEM_free(kem);
+        EVP_KEYMGMT_free(tmp_keymgmt);
+
+        switch (iter) {
+        case 1:
+            kem = EVP_KEM_fetch(ctx->libctx, supported_kem, ctx->propquery);
+            if (kem != NULL)
+                tmp_prov = EVP_KEM_get0_provider(kem);
+            break;
+        case 2:
+            tmp_prov = EVP_KEYMGMT_get0_provider(ctx->keymgmt);
+            kem = evp_kem_fetch_from_prov((OSSL_PROVIDER *)tmp_prov,
+                                          supported_kem, ctx->propquery);
+
+            if (kem == NULL) {
+                ERR_raise(ERR_LIB_EVP,
+                          EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
+                ret = -2;
+                goto err;
+            }
+        }
+        if (kem == NULL)
+            continue;
+
+        /*
+         * Ensure that the key is provided, either natively, or as a cached
+         * export.  We start by fetching the keymgmt with the same name as
+         * |ctx->pkey|, but from the provider of the kem method, using the
+         * same property query as when fetching the kem method.
+         * With the keymgmt we found (if we did), we try to export |ctx->pkey|
+         * to it (evp_pkey_export_to_provider() is smart enough to only actually
+
+         * export it if |tmp_keymgmt| is different from |ctx->pkey|'s keymgmt)
+         */
+        tmp_keymgmt_tofree = tmp_keymgmt =
+            evp_keymgmt_fetch_from_prov((OSSL_PROVIDER *)tmp_prov,
+                                        EVP_KEYMGMT_get0_name(ctx->keymgmt),
+                                        ctx->propquery);
+        if (tmp_keymgmt != NULL)
+            provkey = evp_pkey_export_to_provider(ctx->pkey, ctx->libctx,
+                                                  &tmp_keymgmt, ctx->propquery);
+        if (tmp_keymgmt == NULL)
+            EVP_KEYMGMT_free(tmp_keymgmt_tofree);
+    }
+
+    if (provkey == NULL) {
+        EVP_KEM_free(kem);
+        ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
         goto err;
     }
 
     ctx->op.encap.kem = kem;
-    ctx->op.encap.kemprovctx = kem->newctx(ossl_provider_ctx(kem->prov));
-    if (ctx->op.encap.kemprovctx == NULL) {
+    ctx->op.encap.algctx = kem->newctx(ossl_provider_ctx(kem->prov));
+    if (ctx->op.encap.algctx == NULL) {
         /* The provider key can stay in the cache */
         ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
         goto err;
@@ -79,7 +149,7 @@ static int evp_kem_init(EVP_PKEY_CTX *ctx, int operation)
             ret = -2;
             goto err;
         }
-        ret = kem->encapsulate_init(ctx->op.encap.kemprovctx, provkey);
+        ret = kem->encapsulate_init(ctx->op.encap.algctx, provkey, params);
         break;
     case EVP_PKEY_OP_DECAPSULATE:
         if (kem->decapsulate_init == NULL) {
@@ -87,12 +157,15 @@ static int evp_kem_init(EVP_PKEY_CTX *ctx, int operation)
             ret = -2;
             goto err;
         }
-        ret = kem->decapsulate_init(ctx->op.encap.kemprovctx, provkey);
+        ret = kem->decapsulate_init(ctx->op.encap.algctx, provkey, params);
         break;
     default:
         ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
         goto err;
     }
+
+    EVP_KEYMGMT_free(tmp_keymgmt);
+    tmp_keymgmt = NULL;
 
     if (ret > 0)
         return 1;
@@ -101,12 +174,13 @@ static int evp_kem_init(EVP_PKEY_CTX *ctx, int operation)
         evp_pkey_ctx_free_old_ops(ctx);
         ctx->operation = EVP_PKEY_OP_UNDEFINED;
     }
+    EVP_KEYMGMT_free(tmp_keymgmt);
     return ret;
 }
 
-int EVP_PKEY_encapsulate_init(EVP_PKEY_CTX *ctx)
+int EVP_PKEY_encapsulate_init(EVP_PKEY_CTX *ctx, const OSSL_PARAM params[])
 {
-    return evp_kem_init(ctx, EVP_PKEY_OP_ENCAPSULATE);
+    return evp_kem_init(ctx, EVP_PKEY_OP_ENCAPSULATE, params);
 }
 
 int EVP_PKEY_encapsulate(EVP_PKEY_CTX *ctx,
@@ -121,7 +195,7 @@ int EVP_PKEY_encapsulate(EVP_PKEY_CTX *ctx,
         return -1;
     }
 
-    if (ctx->op.encap.kemprovctx == NULL) {
+    if (ctx->op.encap.algctx == NULL) {
         ERR_raise(ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
         return -2;
     }
@@ -129,13 +203,13 @@ int EVP_PKEY_encapsulate(EVP_PKEY_CTX *ctx,
     if (out != NULL && secret == NULL)
         return 0;
 
-    return ctx->op.encap.kem->encapsulate(ctx->op.encap.kemprovctx,
+    return ctx->op.encap.kem->encapsulate(ctx->op.encap.algctx,
                                           out, outlen, secret, secretlen);
 }
 
-int EVP_PKEY_decapsulate_init(EVP_PKEY_CTX *ctx)
+int EVP_PKEY_decapsulate_init(EVP_PKEY_CTX *ctx, const OSSL_PARAM params[])
 {
-    return evp_kem_init(ctx, EVP_PKEY_OP_DECAPSULATE);
+    return evp_kem_init(ctx, EVP_PKEY_OP_DECAPSULATE, params);
 }
 
 int EVP_PKEY_decapsulate(EVP_PKEY_CTX *ctx,
@@ -152,11 +226,11 @@ int EVP_PKEY_decapsulate(EVP_PKEY_CTX *ctx,
         return -1;
     }
 
-    if (ctx->op.encap.kemprovctx == NULL) {
+    if (ctx->op.encap.algctx == NULL) {
         ERR_raise(ERR_LIB_EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
         return -2;
     }
-    return ctx->op.encap.kem->decapsulate(ctx->op.encap.kemprovctx,
+    return ctx->op.encap.kem->decapsulate(ctx->op.encap.algctx,
                                           secret, secretlen, in, inlen);
 }
 
@@ -182,9 +256,10 @@ static EVP_KEM *evp_kem_new(OSSL_PROVIDER *prov)
     return kem;
 }
 
-static void *evp_kem_from_dispatch(int name_id, const OSSL_DISPATCH *fns,
-                                   OSSL_PROVIDER *prov)
+static void *evp_kem_from_algorithm(int name_id, const OSSL_ALGORITHM *algodef,
+                                    OSSL_PROVIDER *prov)
 {
+    const OSSL_DISPATCH *fns = algodef->implementation;
     EVP_KEM *kem = NULL;
     int ctxfncnt = 0, encfncnt = 0, decfncnt = 0;
     int gparamfncnt = 0, sparamfncnt = 0;
@@ -195,6 +270,9 @@ static void *evp_kem_from_dispatch(int name_id, const OSSL_DISPATCH *fns,
     }
 
     kem->name_id = name_id;
+    if ((kem->type_name = ossl_algorithm_get1_first_name(algodef)) == NULL)
+        goto err;
+    kem->description = algodef->algorithm_description;
 
     for (; fns->function_id != 0; fns++) {
         switch (fns->function_id) {
@@ -296,16 +374,18 @@ static void *evp_kem_from_dispatch(int name_id, const OSSL_DISPATCH *fns,
 
 void EVP_KEM_free(EVP_KEM *kem)
 {
-    if (kem != NULL) {
-        int i;
+    int i;
 
-        CRYPTO_DOWN_REF(&kem->refcnt, &i, kem->lock);
-        if (i > 0)
-            return;
-        ossl_provider_free(kem->prov);
-        CRYPTO_THREAD_lock_free(kem->lock);
-        OPENSSL_free(kem);
-    }
+    if (kem == NULL)
+        return;
+
+    CRYPTO_DOWN_REF(&kem->refcnt, &i, kem->lock);
+    if (i > 0)
+        return;
+    OPENSSL_free(kem->type_name);
+    ossl_provider_free(kem->prov);
+    CRYPTO_THREAD_lock_free(kem->lock);
+    OPENSSL_free(kem);
 }
 
 int EVP_KEM_up_ref(EVP_KEM *kem)
@@ -316,7 +396,7 @@ int EVP_KEM_up_ref(EVP_KEM *kem)
     return 1;
 }
 
-OSSL_PROVIDER *EVP_KEM_provider(const EVP_KEM *kem)
+OSSL_PROVIDER *EVP_KEM_get0_provider(const EVP_KEM *kem)
 {
     return kem->prov;
 }
@@ -325,19 +405,38 @@ EVP_KEM *EVP_KEM_fetch(OSSL_LIB_CTX *ctx, const char *algorithm,
                        const char *properties)
 {
     return evp_generic_fetch(ctx, OSSL_OP_KEM, algorithm, properties,
-                             evp_kem_from_dispatch,
+                             evp_kem_from_algorithm,
                              (int (*)(void *))EVP_KEM_up_ref,
                              (void (*)(void *))EVP_KEM_free);
 }
 
-int EVP_KEM_is_a(const EVP_KEM *kem, const char *name)
+EVP_KEM *evp_kem_fetch_from_prov(OSSL_PROVIDER *prov, const char *algorithm,
+                                 const char *properties)
 {
-    return evp_is_a(kem->prov, kem->name_id, NULL, name);
+    return evp_generic_fetch_from_prov(prov, OSSL_OP_KEM, algorithm, properties,
+                                       evp_kem_from_algorithm,
+                                       (int (*)(void *))EVP_KEM_up_ref,
+                                       (void (*)(void *))EVP_KEM_free);
 }
 
-int EVP_KEM_number(const EVP_KEM *kem)
+int EVP_KEM_is_a(const EVP_KEM *kem, const char *name)
+{
+    return kem != NULL && evp_is_a(kem->prov, kem->name_id, NULL, name);
+}
+
+int evp_kem_get_number(const EVP_KEM *kem)
 {
     return kem->name_id;
+}
+
+const char *EVP_KEM_get0_name(const EVP_KEM *kem)
+{
+    return kem->type_name;
+}
+
+const char *EVP_KEM_get0_description(const EVP_KEM *kem)
+{
+    return kem->description;
 }
 
 void EVP_KEM_do_all_provided(OSSL_LIB_CTX *libctx,
@@ -345,7 +444,8 @@ void EVP_KEM_do_all_provided(OSSL_LIB_CTX *libctx,
                              void *arg)
 {
     evp_generic_do_all(libctx, OSSL_OP_KEM, (void (*)(void *, void *))fn, arg,
-                       evp_kem_from_dispatch,
+                       evp_kem_from_algorithm,
+                       (int (*)(void *))EVP_KEM_up_ref,
                        (void (*)(void *))EVP_KEM_free);
 }
 
@@ -366,7 +466,7 @@ const OSSL_PARAM *EVP_KEM_gettable_ctx_params(const EVP_KEM *kem)
     if (kem == NULL || kem->gettable_ctx_params == NULL)
         return NULL;
 
-    provctx = ossl_provider_ctx(EVP_KEM_provider(kem));
+    provctx = ossl_provider_ctx(EVP_KEM_get0_provider(kem));
     return kem->gettable_ctx_params(NULL, provctx);
 }
 
@@ -377,6 +477,6 @@ const OSSL_PARAM *EVP_KEM_settable_ctx_params(const EVP_KEM *kem)
     if (kem == NULL || kem->settable_ctx_params == NULL)
         return NULL;
 
-    provctx = ossl_provider_ctx(EVP_KEM_provider(kem));
+    provctx = ossl_provider_ctx(EVP_KEM_get0_provider(kem));
     return kem->settable_ctx_params(NULL, provctx);
 }

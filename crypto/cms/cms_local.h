@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2008-2023 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -444,6 +444,7 @@ BIO *ossl_cms_EnvelopedData_init_bio(CMS_ContentInfo *cms);
 int ossl_cms_EnvelopedData_final(CMS_ContentInfo *cms, BIO *chain);
 BIO *ossl_cms_AuthEnvelopedData_init_bio(CMS_ContentInfo *cms);
 int ossl_cms_AuthEnvelopedData_final(CMS_ContentInfo *cms, BIO *cmsbio);
+void ossl_cms_env_enc_content_free(const CMS_ContentInfo *cinf);
 CMS_EnvelopedData *ossl_cms_get0_enveloped(CMS_ContentInfo *cms);
 CMS_AuthEnvelopedData *ossl_cms_get0_auth_enveloped(CMS_ContentInfo *cms);
 CMS_EncryptedContentInfo *ossl_cms_get0_env_enc_content(const CMS_ContentInfo *cms);
@@ -468,12 +469,13 @@ int ossl_cms_RecipientInfo_kari_encrypt(const CMS_ContentInfo *cms,
 int ossl_cms_RecipientInfo_pwri_crypt(const CMS_ContentInfo *cms,
                                       CMS_RecipientInfo *ri, int en_de);
 /* SignerInfo routines */
-int CMS_si_check_attributes(const CMS_SignerInfo *si);
+int ossl_cms_si_check_attributes(const CMS_SignerInfo *si);
 void ossl_cms_SignerInfos_set_cmsctx(CMS_ContentInfo *cms);
 
 
 /* ESS routines */
-int ossl_ess_check_signing_certs(CMS_SignerInfo *si, STACK_OF(X509) *chain);
+int ossl_cms_check_signing_certs(const CMS_SignerInfo *si,
+                                 const STACK_OF(X509) *chain);
 
 int ossl_cms_dh_envelope(CMS_RecipientInfo *ri, int decrypt);
 int ossl_cms_ecdh_envelope(CMS_RecipientInfo *ri, int decrypt);
