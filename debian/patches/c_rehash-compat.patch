@@ -1,13 +1,13 @@
 From: Ludwig Nussel <ludwig.nussel@suse.de>
 Date: Wed, 21 Apr 2010 15:52:10 +0200
-Subject: [PATCH] also create old hash for compatibility
+Subject: also create old hash for compatibility
 
 ---
- tools/c_rehash.in | 20 ++++++++++++++------
- 1 file changed, 14 insertions(+), 6 deletions(-)
+ tools/c_rehash.in | 19 ++++++++-----------
+ 1 file changed, 8 insertions(+), 11 deletions(-)
 
 diff --git a/tools/c_rehash.in b/tools/c_rehash.in
-index 1566d141d3b0..7ef840ab9f31 100644
+index 343cdc1e7575..229a37f3b608 100644
 --- a/tools/c_rehash.in
 +++ b/tools/c_rehash.in
 @@ -17,8 +17,6 @@ my $prefix = {- quotify1($config{prefix}) -};
@@ -31,22 +31,13 @@ index 1566d141d3b0..7ef840ab9f31 100644
          help();
      } elsif ( $flag eq '-n' ) {
          $removelinks = 0;
-@@ -151,7 +146,9 @@ sub hash_dir {
-             next;
-         }
-         link_hash_cert($fname) if ($cert);
-+        link_hash_cert_old($fname) if ($cert);
-         link_hash_crl($fname) if ($crl);
-+        link_hash_crl_old($fname) if ($crl);
-     }
-
-     chdir $pwd;
-@@ -203,22 +200,30 @@ sub check_file {
+@@ -203,22 +198,24 @@ sub compute_hash {
  # certificate fingerprints
  
  sub link_hash_cert {
 -    link_hash($_[0], 'cert');
 +    link_hash($_[0], 'cert', '-subject_hash');
++    link_hash($_[0], 'cert', '-subject_hash_old');
  }
  
  # Same as above except for a CRL. CRL links are of the form <hash>.r<n>
@@ -54,25 +45,19 @@ index 1566d141d3b0..7ef840ab9f31 100644
  sub link_hash_crl {
 -    link_hash($_[0], 'crl');
 +    link_hash($_[0], 'crl', '-hash');
-+}
-+
-+sub link_hash_cert_old {
-+    link_hash($_[0], 'cert', '-subject_hash_old');
-+}
-+
-+sub link_hash_crl_old {
 +    link_hash($_[0], 'crl', '-hash_old');
  }
  
  sub link_hash {
 -    my ($fname, $type) = @_;
-+    my ($fname, $type, $hasharg) = @_;
-     my $is_cert = $type eq 'cert';
+-    my $is_cert = $type eq 'cert';
++    my ($fname, $type, $hash_name) = @_;
++    my $is_cert = $type eq 'cert' or $type eq 'cert_old';
  
      my ($hash, $fprint) = compute_hash($openssl,
                                         $is_cert ? "x509" : "crl",
 -                                       $is_cert ? $x509hash : $crlhash,
-+                                       $hasharg,
++                                       $hash_name,
                                         "-fingerprint", "-noout",
                                         "-in", $fname);
      chomp $hash;

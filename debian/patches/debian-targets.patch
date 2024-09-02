@@ -3,19 +3,19 @@ Date: Sun, 5 Nov 2017 15:09:09 +0100
 Subject: debian-targets
 
 ---
- Configurations/20-debian.conf | 214 ++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 214 insertions(+)
+ Configurations/20-debian.conf | 169 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 169 insertions(+)
  create mode 100644 Configurations/20-debian.conf
 
 diff --git a/Configurations/20-debian.conf b/Configurations/20-debian.conf
 new file mode 100644
-index 000000000000..76f0fa8778ca
+index 000000000000..c6860ed4b7d7
 --- /dev/null
 +++ b/Configurations/20-debian.conf
-@@ -0,0 +1,214 @@
+@@ -0,0 +1,169 @@
 +my %targets = (
 +	"debian" => {
-+		cflags => add("-Wa,--noexecstack -Wall"),
++		cflags => add("-Wa,--noexecstack -Wall -fzero-call-used-regs=used-gpr -DOPENSSL_TLS_SECURITY_LEVEL=2"),
 +	},
 +	"debian-alpha" => {
 +		inherit_from => [ "linux-alpha-gcc", "debian" ],
@@ -27,6 +27,9 @@ index 000000000000..76f0fa8778ca
 +	"debian-alpha-ev5" => {
 +		inherit_from => [ "debian-alpha" ],
 +		cflags => add("-mcpu=ev5"),
++	},
++	"debian-arc" => {
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-arm64" => {
 +		inherit_from => [ "linux-aarch64", "debian" ],
@@ -66,9 +69,13 @@ index 000000000000..76f0fa8778ca
 +	},
 +	"debian-ia64" => {
 +		inherit_from => [ "linux-ia64", "debian" ],
++		cflags => add("-fzero-call-used-regs=skip"),
++	},
++	"debian-loong64" => {
++		inherit_from => [ "linux64-loongarch64", "debian" ],
 +	},
 +	"debian-m68k" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +		cflags => add("-DB_ENDIAN"),
 +	},
 +	"debian-mips" => {
@@ -96,59 +103,6 @@ index 000000000000..76f0fa8778ca
 +		cflags => add("-DL_ENDIAN"),
 +	},
 +
-+	# Temporary MIPS R6 targets. Those will vanish approx in 1.1.1 because
-+	# aes-mips.pl creates proper R6 ASM code. After that, we can inherit from
-+	# the linux*-mips* targets.
-+	"linux-mips32r6" => {
-+	# Configure script adds minimally required -march for assembly
-+	# support, if no -march was specified at command line.
-+		inherit_from     => [ "linux-generic32"],
-+		cflags           => add("-mabi=32"),
-+		perlasm_scheme   => "o32",
-+		shared_ldflag    => add("-mabi=32"),
-+	},
-+	# mips32 and mips64 below refer to contemporary MIPS Architecture
-+	# specifications, MIPS32 and MIPS64, rather than to kernel bitness.
-+	"linux-mips64r6" => {
-+		inherit_from     => [ "linux-generic32"],
-+		cflags           => add("-mabi=n32"),
-+		bn_ops           => "SIXTY_FOUR_BIT RC4_CHAR",
-+		perlasm_scheme   => "n32",
-+		shared_ldflag    => add("-mabi=n32"),
-+		multilib         => "32",
-+	},
-+	"linux64-mips64r6" => {
-+		inherit_from     => [ "linux-generic64"],
-+		cflags           => add("-mabi=64"),
-+		perlasm_scheme   => "64",
-+		shared_ldflag    => add("-mabi=64"),
-+		multilib         => "64",
-+	},
-+	"debian-mipsr6" => {
-+		inherit_from => [ "linux-mips32r6", "debian" ],
-+		cflags => add("-DB_ENDIAN"),
-+	},
-+	"debian-mipsr6el" => {
-+		inherit_from => [ "linux-mips32r6", "debian" ],
-+		cflags => add("-DL_ENDIAN"),
-+	},
-+	"debian-mipsn32r6" => {
-+		inherit_from => [ "linux-mips64r6", "debian" ],
-+		cflags => add("-DB_ENDIAN"),
-+	},
-+	"debian-mipsn32r6el" => {
-+		inherit_from => [ "linux-mips64r6", "debian" ],
-+		cflags => add("-DL_ENDIAN"),
-+	},
-+	"debian-mips64r6" => {
-+		inherit_from => [ "linux64-mips64r6", "debian" ],
-+		cflags => add("-DB_ENDIAN"),
-+	},
-+	"debian-mips64r6el" => {
-+		inherit_from => [ "linux64-mips64r6", "debian" ],
-+		cflags => add("-DL_ENDIAN"),
-+	},
-+
 +	"debian-musl-linux-arm64" => {
 +		inherit_from => [ "linux-aarch64", "debian" ],
 +	},
@@ -168,7 +122,7 @@ index 000000000000..76f0fa8778ca
 +	},
 +
 +	"debian-nios2" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-powerpc" => {
 +		inherit_from => [ "linux-ppc", "debian" ],
@@ -178,9 +132,9 @@ index 000000000000..76f0fa8778ca
 +	},
 +	"debian-ppc64" => {
 +		inherit_from => [ "linux-generic64", "debian", ],
-+ 		asm_arch         => 'ppc64',
++		asm_arch         => 'ppc64',
 +		cflags => add("-DB_ENDIAN"),
-+ 		perlasm_scheme => "linux64",
++		perlasm_scheme => "linux64",
 +	},
 +	"debian-ppc64el" => {
 +		inherit_from => [ "linux-ppc64le", "debian" ],
@@ -195,22 +149,22 @@ index 000000000000..76f0fa8778ca
 +		inherit_from => [ "linux64-s390x", "debian" ],
 +	},
 +	"debian-sh3" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-sh3eb" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-sh4" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-sh4eb" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-m32r" => {
-+		inherit_from => [ "linux-generic32", "debian" ],
++		inherit_from => [ "linux-latomic", "debian" ],
 +	},
 +	"debian-sparc" => {
-+		inherit_from => [ "linux-generic32", "debian", ],
++		inherit_from => [ "linux-latomic", "debian", ],
 +		asm_arch         => 'sparcv9',
 +		cflags => add("-DB_ENDIAN -DBN_DIV2W"),
 +	},
@@ -219,6 +173,7 @@ index 000000000000..76f0fa8778ca
 +		asm_arch         => 'sparcv9',
 +	        cflags => add("-m64 -mcpu=ultrasparc -DB_ENDIAN"),
 +		bn_ops => "BN_LLONG RC4_CHAR",
++		ex_libs => add("-latomic"),
 +	},
 +	"debian-tilegx" => {
 +		inherit_from => [ "linux-generic64", "debian" ],

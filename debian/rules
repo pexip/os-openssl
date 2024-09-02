@@ -12,7 +12,6 @@ include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/pkg-info.mk
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all future=+lfs
-export DEB_CPPFLAGS_MAINT_APPEND = -DOPENSSL_TLS_SECURITY_LEVEL=2
 
 SHELL=/bin/bash
 
@@ -30,8 +29,8 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 	MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) --api=3.0 no-deprecated no-idea no-mdc2 no-rc5 no-zlib no-ssl3 enable-unit-test no-ssl3-method enable-rfc3779 enable-cms no-capieng
-OPT_alpha = ev4 ev5
+CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) --api=3.0 no-deprecated no-idea no-mdc2 no-rc5 no-zlib no-ssl3 enable-unit-test no-ssl3-method enable-rfc3779 enable-cms no-capieng no-rdrand
+#OPT_alpha = ev4 ev5
 ARCHOPTS  = OPT_$(DEB_HOST_ARCH)
 OPTS      = $($(ARCHOPTS))
 
@@ -120,11 +119,14 @@ override_dh_auto_install-arch:
 	mv debian/tmp/usr/lib/ssl/{certs,private} debian/tmp/etc/ssl/
 	ln -s /etc/ssl/{certs,private} debian/tmp/usr/lib/ssl/
 	ln -s /usr/lib/ssl/openssl.cnf debian/tmp/etc/ssl
+	ln -s /etc/ssl/certs/ca-certificates.crt debian/tmp/usr/lib/ssl/cert.pem
+ifeq (,$(filter noudeb,$(DEB_BUILD_PROFILES)))
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.so.* debian/libcrypto3-udeb/usr/lib/
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/ossl-modules/*.so debian/libcrypto3-udeb/usr/lib/ossl-modules
 	cp -pf debian/tmp/usr/lib/ssl/openssl.cnf debian/libcrypto3-udeb/usr/lib/ssl/openssl.cnf
-	sed -i -e 's/^# .include fipsmodule.cnf/.include \/usr\/lib\/ssl\/fipsmodule.cnf/' -e 's/^# fips = fips_sect/fips = fips_sect/' debian/tmp/usr/lib/ssl/openssl.cnf
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.so.* debian/libssl3-udeb/usr/lib/
+endif
+	sed -i -e 's/^# .include fipsmodule.cnf/.include \/usr\/lib\/ssl\/fipsmodule.cnf/' -e 's/^# fips = fips_sect/fips = fips_sect/' debian/tmp/usr/lib/ssl/openssl.cnf
 	cp -auv build_shared/lib*.so* debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/
 	for opt in $(OPTS); \
 		do set -xe; \

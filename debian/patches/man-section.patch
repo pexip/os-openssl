@@ -6,10 +6,10 @@ Subject: man-section
  Configurations/unix-Makefile.tmpl | 5 +++--
  1 file changed, 3 insertions(+), 2 deletions(-)
 
-Index: os-openssl/Configurations/unix-Makefile.tmpl
-===================================================================
---- os-openssl.orig/Configurations/unix-Makefile.tmpl
-+++ os-openssl/Configurations/unix-Makefile.tmpl
+diff --git a/Configurations/unix-Makefile.tmpl b/Configurations/unix-Makefile.tmpl
+index 644540397de5..d91c6302d639 100644
+--- a/Configurations/unix-Makefile.tmpl
++++ b/Configurations/unix-Makefile.tmpl
 @@ -318,7 +318,8 @@ HTMLDIR=$(DOCDIR)/html
  # MANSUFFIX is for the benefit of anyone who may want to have a suffix
  # appended after the manpage file section number.  "ssl" is popular,

@@ -22,10 +22,10 @@ Signed-off-by: Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
  Configure                   | 2 +-
  2 files changed, 2 insertions(+), 2 deletions(-)
 
-Index: os-openssl/Configurations/10-main.conf
-===================================================================
---- os-openssl.orig/Configurations/10-main.conf
-+++ os-openssl/Configurations/10-main.conf
+diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
+index 1155d9859c56..4c12034643f8 100644
+--- a/Configurations/10-main.conf
++++ b/Configurations/10-main.conf
 @@ -700,7 +700,7 @@ my %targets = (
          shared_target    => "linux-shared",
          shared_cflag     => "-fPIC",
@@ -35,10 +35,10 @@ Index: os-openssl/Configurations/10-main.conf
      },
      "linux-latomic" => {
          inherit_from     => [ "linux-generic32" ],
-Index: os-openssl/Configure
-===================================================================
---- os-openssl.orig/Configure
-+++ os-openssl/Configure
+diff --git a/Configure b/Configure
+index 40c03ad0af32..76df19ef40d2 100755
+--- a/Configure
++++ b/Configure
 @@ -1716,7 +1716,7 @@ unless ($disabled{devcryptoeng}) {
  unless ($disabled{ktls}) {
      $config{ktls}="";
