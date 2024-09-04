@@ -1,3 +1,10 @@
+openssl (3.0.15-0+pexip24u1) pexip; urgency=medium
+
+  * New upstream release
+  * d/p/pexip_add_octet_string.patch: Drop; fixed upstream
+
+ -- John-Mark Bell <jmb@pexip.com>  Wed, 04 Sep 2024 12:21:36 +0100
+
 openssl (3.0.14-1~deb12u1+pexip24u1) pexip; urgency=medium
 
   * Resync with Debian
