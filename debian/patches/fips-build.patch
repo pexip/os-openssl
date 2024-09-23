@@ -1,8 +1,8 @@
-diff --git a/crypto/o_init.c b/crypto/o_init.c
-index a0b4256f..4ac15e4d 100644
---- a/crypto/o_init.c
-+++ b/crypto/o_init.c
-@@ -9,6 +9,59 @@
+Index: os-openssl/crypto/o_init.c
+===================================================================
+--- os-openssl.orig/crypto/o_init.c
++++ os-openssl/crypto/o_init.c
+@@ -9,6 +9,61 @@
  
  #include "e_os.h"
  #include <openssl/err.h>
@@ -41,12 +41,14 @@ index a0b4256f..4ac15e4d 100644
 +    if (want_fips) {
 +        fips = OSSL_PROVIDER_load(NULL, "fips");
 +        if (fips == NULL) {
++            ERR_print_errors_fp(stderr);
 +            abort();
 +        }
 +
 +        base = OSSL_PROVIDER_load(NULL, "base");
 +        if (base == NULL) {
 +            OSSL_PROVIDER_unload(fips);
++            ERR_print_errors_fp(stderr);
 +            abort();
 +        }
 +
@@ -62,3 +64,77 @@ index a0b4256f..4ac15e4d 100644
  
  /*
   * Perform any essential OpenSSL initialization operations. Currently does
+diff --git a/crypto/provider.c b/crypto/provider.c
+index 114b426929..91cd80b81d 100644
+--- a/crypto/provider.c
++++ b/crypto/provider.c
+@@ -35,6 +35,8 @@ OSSL_PROVIDER *OSSL_PROVIDER_try_load(OSSL_LIB_CTX *libctx, const char *name,
+ 
+     actual = prov;
+     if (isnew && !ossl_provider_add_to_store(prov, &actual, retain_fallbacks)) {
++        ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
++                       "failed to add provider to store (%d)", __LINE__);
+         ossl_provider_deactivate(prov, 1);
+         ossl_provider_free(prov);
+         return NULL;
+diff --git a/crypto/provider_core.c b/crypto/provider_core.c
+index cb4233eb52..2cb589de32 100644
+--- a/crypto/provider_core.c
++++ b/crypto/provider_core.c
+@@ -872,8 +872,11 @@ static int provider_init(OSSL_PROVIDER *prov)
+             }
+ 
+             if ((store = get_provider_store(prov->libctx)) == NULL
+-                    || !CRYPTO_THREAD_read_lock(store->default_path_lock))
++                    || !CRYPTO_THREAD_read_lock(store->default_path_lock)) {
++                    ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
++                                   "failed to get/lock provider store");
+                 goto end;
++            }
+ 
+             if (store->default_path != NULL) {
+                 allocated_load_dir = OPENSSL_strdup(store->default_path);
+@@ -1001,8 +1004,11 @@ static int provider_init(OSSL_PROVIDER *prov)
+          */
+         cnt = 0;
+         while (reasonstrings[cnt].id != 0) {
+-            if (ERR_GET_LIB(reasonstrings[cnt].id) != 0)
++            if (ERR_GET_LIB(reasonstrings[cnt].id) != 0) {
++                ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
++                               "ERR_GET_LIB failed");
+                 goto end;
++            }
+             cnt++;
+         }
+         cnt++;                   /* One for the terminating item */
+@@ -1139,8 +1145,11 @@ static int provider_activate(OSSL_PROVIDER *prov, int lock, int upcalls)
+     }
+ 
+ #ifndef FIPS_MODULE
+-    if (prov->ischild && upcalls && !ossl_provider_up_ref_parent(prov, 1))
++    if (prov->ischild && upcalls && !ossl_provider_up_ref_parent(prov, 1)) {
++        ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
++                       "failed to upref parent (%d)", __LINE__);
+         return -1;
++    }
+ #endif
+ 
+     if (lock && !CRYPTO_THREAD_read_lock(store->lock)) {
+@@ -1148,6 +1157,8 @@ static int provider_activate(OSSL_PROVIDER *prov, int lock, int upcalls)
+         if (prov->ischild && upcalls)
+             ossl_provider_free_parent(prov, 1);
+ #endif
++        ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
++                       "failed to get read lock (%d)", __LINE__);
+         return -1;
+     }
+ 
+@@ -1157,6 +1168,8 @@ static int provider_activate(OSSL_PROVIDER *prov, int lock, int upcalls)
+         if (prov->ischild && upcalls)
+             ossl_provider_free_parent(prov, 1);
+ #endif
++        ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
++                       "failed to get write lock (%d)", __LINE__);
+         return -1;
+     }
+ 

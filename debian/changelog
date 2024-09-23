@@ -1,3 +1,9 @@
+openssl (3.0.15-0+pexip24u2) pexip; urgency=medium
+
+  * fips initialisation: add more debug
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Mon, 23 Sep 2024 14:49:19 +0100
+
 openssl (3.0.15-0+pexip24u1) pexip; urgency=medium
 
   * New upstream release
