@@ -1,3 +1,19 @@
+openssl (3.0.15-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.15
+    - CVE-2024-5535 (SSL_select_next_proto buffer overread)
+      (Closes: #1074487).
+    - CVE-2024-9143 (Low-level invalid GF(2^m) parameters lead to OOB memory
+      access) (Closes: #1085378).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 27 Oct 2024 15:16:28 +0100
+
+openssl (3.0.14-1~deb12u2) bookworm-security; urgency=medium
+
+  * CVE-2024-6119 (Possible denial of service in X.509 name checks).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 01 Sep 2024 16:59:10 +0200
+
 openssl (3.0.14-1~deb12u1) bookworm; urgency=medium
 
   * Import 3.0.14
