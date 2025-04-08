@@ -1,13 +1,13 @@
 Source: openssl
-Build-Depends: debhelper-compat (= 13), m4, bc, dpkg-dev (>= 1.15.7)
+Build-Depends: debhelper-compat (= 13), dpkg-dev (>= 1.22.5), libzstd-dev, zlib1g-dev
 Section: utils
 Priority: optional
 Maintainer: Debian OpenSSL Team <pkg-openssl-devel@alioth-lists.debian.net>
 Uploaders: Christoph Martin <christoph.martin@uni-mainz.de>, Kurt Roeckx <kurt@roeckx.be>, Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
-Standards-Version: 4.6.2
+Standards-Version: 4.7.2
 Vcs-Browser: https://salsa.debian.org/debian/openssl
 Vcs-Git: https://salsa.debian.org/debian/openssl.git
-Homepage: https://www.openssl.org/
+Homepage: https://openssl-library.org
 Rules-Requires-Root: no
 
 Package: openssl
@@ -29,12 +29,48 @@ Description: Secure Sockets Layer toolkit - cryptographic utility
   * testing SSL/TLS clients and servers;
   * handling S/MIME signed or encrypted mail.
 
-Package: libssl3
+Package: openssl-provider-legacy
+Architecture: any
+Multi-Arch: foreign
+Breaks: libssl3t64 (<<3.3.1-5), libssl3 (<<3.3.1-5)
+Replaces: libssl3t64 (<<3.3.1-5), libssl3 (<<3.3.1-5)
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Secure Sockets Layer toolkit - cryptographic utility
+ This package is part of the OpenSSL project's implementation of the SSL
+ and TLS cryptographic protocols for secure communication over the
+ Internet.
+ .
+ This package contains the legacy provider. The OpenSSL legacy provider
+ supplies OpenSSL implementations of algorithms that have been deemed legacy.
+ Such algorithms have commonly fallen out of use, have been deemed insecure by
+ the cryptography community, or something similar.
+ For details see OSSL_PROVIDER-legacy man page.
+
+Package: openssl-provider-fips
+Architecture: any
+Multi-Arch: foreign
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Secure Sockets Layer toolkit - cryptographic utility
+ This package is part of the OpenSSL project's implementation of the SSL
+ and TLS cryptographic protocols for secure communication over the
+ Internet.
+ .
+ This package contains the FIPS provider. The OpenSSL FIPS provider is a
+ special provider that conforms to the Federal Information Processing Standards
+ (FIPS) specified in FIPS 140-2. This 'module' contains an approved set of
+ cryptographic algorithms that is validated by an accredited testing
+ laboratory.
+ For details see OSSL_PROVIDER-fips and fips_module man page.
+
+Package: libssl3t64
+Provides: ${t64:Provides}
+Replaces: libssl3
 Section: libs
 Architecture: any
 Multi-Arch: same
+Breaks: libssl3 (<< ${source:Version}), openssh-client (<< 1:9.4p1), openssh-server (<< 1:9.4p1), python3-m2crypto (<< 0.38.0-4)
 Pre-Depends: ${misc:Pre-Depends}
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, openssl-provider-legacy
 Description: Secure Sockets Layer toolkit - shared libraries
  This package is part of the OpenSSL project's implementation of the SSL
  and TLS cryptographic protocols for secure communication over the
@@ -72,7 +108,7 @@ Section: libdevel
 Architecture: any
 Multi-Arch: same
 Suggests: libssl-doc
-Depends: libssl3 (= ${binary:Version}), ${misc:Depends}
+Depends: libssl3t64 (= ${binary:Version}), ${misc:Depends}
 Description: Secure Sockets Layer toolkit - development files
  This package is part of the OpenSSL project's implementation of the SSL
  and TLS cryptographic protocols for secure communication over the

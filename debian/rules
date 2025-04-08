@@ -29,7 +29,8 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 	MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) no-idea no-mdc2 no-rc5 no-zlib no-ssl3 enable-unit-test no-ssl3-method enable-rfc3779 enable-cms no-capieng no-rdrand
+CONFARGS  = --prefix=/usr --openssldir=/usr/lib/ssl --libdir=lib/$(DEB_HOST_MULTIARCH) no-idea no-mdc2 no-rc5 no-ssl3 enable-unit-test no-ssl3-method enable-rfc3779 enable-cms no-capieng no-rdrand \
+	    enable-tfo enable-zstd enable-zlib enable-fips
 #OPT_alpha = ev4 ev5
 ARCHOPTS  = OPT_$(DEB_HOST_ARCH)
 OPTS      = $($(ARCHOPTS))
@@ -40,8 +41,12 @@ else
 	TESTSUITE_FLAGS =
 endif
 
-ifeq ($(DEB_HOST_ARCH_CPU), amd64)
+ifneq ($(filter amd64 arm64 ppc64el riscv64,$(DEB_HOST_ARCH_CPU)),)
 	CONFARGS += enable-ec_nistp_64_gcc_128
+endif
+
+ifeq ($(filter amd64 i386,$(DEB_HOST_ARCH_CPU)),)
+	CONFARGS += no-padlockeng
 endif
 
 %:
@@ -57,7 +62,6 @@ override_dh_auto_configure:
 		perl configdata.pm -d; \
 		cd .. ;\
 	done
-	mkdir build_static; cd build_static; ../Configure no-shared $(CONFARGS) debian-$(DEB_HOST_ARCH) ;perl configdata.pm -d
 	# Debian Perl policy 5.1 (Script Magic)
 	mkdir build_shared; cd build_shared; HASHBANGPERL=/usr/bin/perl ../Configure shared $(CONFARGS) debian-$(DEB_HOST_ARCH) ;perl configdata.pm -d
 
@@ -65,7 +69,6 @@ override_dh_auto_build-indep:
 	$(MAKE) -C build_shared all
 
 override_dh_auto_build-arch:
-	$(MAKE) -C build_static all
 	test -z "$(OPTS)" || for opt in $(OPTS); \
 	do \
 		set -xe; \
@@ -85,12 +88,11 @@ else
 		set -xe; \
 		$(MAKE) -C build_$$opt test $(TESTSUITE_FLAGS); \
 	done
-	$(MAKE) -C build_static test $(TESTSUITE_FLAGS)
 	$(MAKE) -C build_shared test $(TESTSUITE_FLAGS)
 endif
 
 override_dh_auto_clean:
-	rm -rf build_static build_shared
+	rm -rf build_shared
 	test -z "$(OPTS)" || for opt in $(OPTS); \
 	do \
 		set -xe; \
@@ -113,8 +115,8 @@ override_dh_auto_install-indep:
 override_dh_auto_install-arch:
 	$(MAKE) -C build_shared install DESTDIR=`pwd`/debian/tmp
 	# pic static libraries, nobody should need them
-	cp -pf build_static/libcrypto.a debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.a
-	cp -pf build_static/libssl.a debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.a
+	cp -pf build_shared/libcrypto.a debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.a
+	cp -pf build_shared/libssl.a debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.a
 	mkdir -p debian/tmp/etc/ssl
 	mv debian/tmp/usr/lib/ssl/{certs,openssl.cnf,private} debian/tmp/etc/ssl/
 	ln -s /etc/ssl/{certs,openssl.cnf,private} debian/tmp/usr/lib/ssl/
@@ -151,5 +153,5 @@ override_dh_makeshlibs:
 	dh_makeshlibs -a -V --add-udeb="libcrypto3-udeb" -Xengines -Xossl-modules -- -c4
 
 override_dh_shlibdeps:
-	sed -i '/^udeb: libssl/s/libcrypto3-udeb/libssl3-udeb/' debian/libssl3/DEBIAN/shlibs
-	dh_shlibdeps -a -L libssl3
+	sed -i '/^udeb: libssl/s/libcrypto3-udeb/libssl3-udeb/' debian/libssl3t64/DEBIAN/shlibs
+	dh_shlibdeps -a -L libssl3t64
