@@ -1,8 +1,6 @@
-Index: os-openssl/crypto/x509/x_x509.c
-===================================================================
---- os-openssl.orig/crypto/x509/x_x509.c
-+++ os-openssl/crypto/x509/x_x509.c
-@@ -356,6 +356,11 @@ int i2d_re_X509_tbs(X509 *x, unsigned ch
+--- openssl.orig/crypto/x509/x_x509.c
++++ openssl/crypto/x509/x_x509.c
+@@ -354,6 +354,11 @@ int i2d_re_X509_tbs(X509 *x, unsigned ch
      return i2d_X509_CINF(&x->cert_info, pp);
  }
  
@@ -14,11 +12,9 @@ Index: os-openssl/crypto/x509/x_x509.c
  void X509_get0_signature(const ASN1_BIT_STRING **psig,
                           const X509_ALGOR **palg, const X509 *x)
  {
-Index: os-openssl/include/openssl/x509.h.in
-===================================================================
---- os-openssl.orig/include/openssl/x509.h.in
-+++ os-openssl/include/openssl/x509.h.in
-@@ -559,6 +559,7 @@ int X509_set_ex_data(X509 *r, int idx, v
+--- openssl.orig/include/openssl/x509.h.in
++++ openssl/include/openssl/x509.h.in
+@@ -579,6 +579,7 @@ int X509_set_ex_data(X509 *r, int idx, v
  void *X509_get_ex_data(const X509 *r, int idx);
  DECLARE_ASN1_ENCODE_FUNCTIONS_only(X509,X509_AUX)
  
@@ -26,12 +22,10 @@ Index: os-openssl/include/openssl/x509.h.in
  int i2d_re_X509_tbs(X509 *x, unsigned char **pp);
  
  int X509_SIG_INFO_get(const X509_SIG_INFO *siginf, int *mdnid, int *pknid,
-Index: os-openssl/util/libcrypto.num
-===================================================================
---- os-openssl.orig/util/libcrypto.num
-+++ os-openssl/util/libcrypto.num
-@@ -5429,3 +5429,4 @@ OPENSSL_strcasecmp
- OPENSSL_strncasecmp                     5557	3_0_3	EXIST::FUNCTION:
- OSSL_CMP_CTX_reset_geninfo_ITAVs        5558	3_0_8	EXIST::FUNCTION:CMP
- OSSL_CMP_MSG_update_recipNonce          5559	3_0_9	EXIST::FUNCTION:CMP
-+i2d_X509_tbs                            5560	3_0_8	EXIST::FUNCTION:
+--- openssl.orig/util/libcrypto.num
++++ openssl/util/libcrypto.num
+@@ -5924,3 +5924,4 @@ OSSL_AA_DIST_POINT_free
+ OSSL_AA_DIST_POINT_new                  6052	3_5_0	EXIST::FUNCTION:
+ OSSL_AA_DIST_POINT_it                   6053	3_5_0	EXIST::FUNCTION:
+ PEM_ASN1_write_bio_ctx                  6054	3_5_0	EXIST::FUNCTION:
++i2d_X509_tbs                            6055    3_0_8   EXIST::FUNCTION:
