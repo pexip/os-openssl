@@ -128,7 +128,7 @@ ifeq (,$(filter noudeb,$(DEB_BUILD_PROFILES)))
 	cp -pf debian/tmp/usr/lib/ssl/openssl.cnf debian/libcrypto3-udeb/usr/lib/ssl/openssl.cnf
 	cp -pf debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.so.* debian/libssl3-udeb/usr/lib/
 endif
-	sed -i -e 's/^# .include fipsmodule.cnf/.include \/usr\/lib\/ssl\/fipsmodule.cnf/' -e 's/^# fips = fips_sect/fips = fips_sect/' debian/tmp/usr/lib/ssl/openssl.cnf
+	# sed -i -e 's/^# .include fipsmodule.cnf/.include \/usr\/lib\/ssl\/fipsmodule.cnf/' -e 's/^# fips = fips_sect/fips = fips_sect/' debian/tmp/usr/lib/ssl/openssl.cnf
 	cp -auv build_shared/lib*.so* debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/
 	for opt in $(OPTS); \
 		do set -xe; \

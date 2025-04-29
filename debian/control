@@ -48,22 +48,6 @@ Description: Secure Sockets Layer toolkit - cryptographic utility
  the cryptography community, or something similar.
  For details see OSSL_PROVIDER-legacy man page.
 
-Package: openssl-provider-fips
-Architecture: any
-Multi-Arch: foreign
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Secure Sockets Layer toolkit - cryptographic utility
- This package is part of the OpenSSL project's implementation of the SSL
- and TLS cryptographic protocols for secure communication over the
- Internet.
- .
- This package contains the FIPS provider. The OpenSSL FIPS provider is a
- special provider that conforms to the Federal Information Processing Standards
- (FIPS) specified in FIPS 140-2. This 'module' contains an approved set of
- cryptographic algorithms that is validated by an accredited testing
- laboratory.
- For details see OSSL_PROVIDER-fips and fips_module man page.
-
 Package: libssl3t64
 Provides: ${t64:Provides}
 Replaces: libssl3
