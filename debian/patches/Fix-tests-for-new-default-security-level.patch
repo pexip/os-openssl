@@ -1407,7 +1407,7 @@ index 69a2e7f80101..0b8f010b76c0 100644
          },
          test => {
 diff --git a/test/sslapitest.c b/test/sslapitest.c
-index 97cf0f3ef092..d8486e1fac19 100644
+index a26b78907424..61f308297400 100644
 --- a/test/sslapitest.c
 +++ b/test/sslapitest.c
 @@ -9762,7 +9762,8 @@ static int test_set_tmp_dh(int idx)

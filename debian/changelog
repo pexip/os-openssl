@@ -1,3 +1,17 @@
+openssl (3.0.17-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.17
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 13 Jul 2025 14:39:08 +0200
+
+openssl (3.0.16-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.16
+    - CVE-2024-13176 (Timing side-channel in ECDSA signature computation)
+      (Closes: #1094027).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 15 Apr 2025 21:59:18 +0200
+
 openssl (3.0.15-1~deb12u1) bookworm; urgency=medium
 
   * Import 3.0.15
