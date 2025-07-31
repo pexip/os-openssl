@@ -1,3 +1,17 @@
+openssl (3.5.1-1) unstable; urgency=medium
+
+  * Import 3.5.1
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 12 Jul 2025 18:49:06 +0200
+
+openssl (3.5.0-2) unstable; urgency=medium
+
+  * Fix P-384 curve on lower-than-P9 PPC64 targets Closes: #1106516).
+  * CVE-2025-4575 ("The x509 application adds trusted use instead of
+    rejected use") (Closes: #1106322).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Wed, 28 May 2025 22:13:00 +0200
+
 openssl (3.5.0-1+pexip25u1) pexip-trixie; urgency=medium
 
   * Initial trixie build
