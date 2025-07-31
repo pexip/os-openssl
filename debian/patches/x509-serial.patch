@@ -82,8 +82,8 @@
  
  setup("test_x509");
  
--plan tests => 134;
-+plan tests => 136;
+-plan tests => 138;
++plan tests => 140;
  
  # Prevent MSys2 filename munging for arguments that look like file paths but
  # aren't
