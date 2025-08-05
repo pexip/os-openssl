@@ -1,3 +1,33 @@
+openssl (3.0.17-1~deb12u1+pexip24u1) pexip; urgency=medium
+
+  * New upstream release containing the fix for CVE-2024-13176
+  * Rebase back on the Debian release.
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Tue, 05 Aug 2025 11:15:10 +0100
+
+openssl (3.0.17-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.17
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 13 Jul 2025 14:39:08 +0200
+
+openssl (3.0.16-1+pexip24u1) pexip; urgency=medium
+
+  * New upstream release.
+    - CVE-2024-13176: Fixed timing side-channel in ECDSA signature computation.
+    - Retire debian/patches/Harden-BN_GF2m_poly2arr-against-misuse.patch:
+        Fix for CVE-2024-9143 which is now merged upstream
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Mon, 17 Feb 2025 14:57:09 +0000
+
+openssl (3.0.16-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.16
+    - CVE-2024-13176 (Timing side-channel in ECDSA signature computation)
+      (Closes: #1094027).
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 15 Apr 2025 21:59:18 +0200
+
 openssl (3.0.15-1+pexip24u1+deb12u1) pexip; urgency=medium
 
   * New upstream release with security fixes
