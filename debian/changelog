@@ -1,12 +1,3 @@
-openssl (3.0.16-1+pexip24u1) pexip; urgency=medium
-
-  * New upstream release.
-    - CVE-2024-13176: Fixed timing side-channel in ECDSA signature computation.
-    - Retire debian/patches/Harden-BN_GF2m_poly2arr-against-misuse.patch:
-        Fix for CVE-2024-9143 which is now merged upstream
-
- -- Mark Hymers <mark.hymers@pexip.com>  Mon, 17 Feb 2025 14:57:09 +0000
-
 openssl (3.0.15-1+pexip24u1+deb12u1) pexip; urgency=medium
 
   * New upstream release with security fixes
