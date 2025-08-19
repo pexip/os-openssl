@@ -1,3 +1,20 @@
+openssl (3.0.17-1~deb12u2+pexip24u1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Tue, 19 Aug 2025 12:50:30 +0100
+
+openssl (3.0.17-1~deb12u2) bookworm; urgency=medium
+
+  * Revert the following upstream changes to avoid crashes in downstream
+    software:
+    - 7141330fb98ce ("Drop "by store"'s by_store_subject_ex()")
+    - 340383f5f49f8 ("Rework the "by store" X509_LOOKUP method to open the given URI early")
+    - a468bdb02531e ("Add test_verify tests")
+    Closes: #1110254
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Tue, 05 Aug 2025 09:09:41 +0200
+
 openssl (3.0.17-1~deb12u1+pexip24u1) pexip; urgency=medium
 
   * New upstream release containing the fix for CVE-2024-13176

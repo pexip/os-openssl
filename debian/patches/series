@@ -7,6 +7,9 @@ Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch
 #Remove-the-provider-section.patch
 conf-Serialize-allocation-free-of-ssl_names.patch
 Fix-tests-for-new-default-security-level.patch
+Revert-Drop-by-store-s-by_store_subject_ex.patch
+Revert-Rework-the-by-store-X509_LOOKUP-method-to-open-the.patch
+Revert-Add-test_verify-tests.patch
 Set-systemwide-default-settings-for-libssl-users.patch
 TEST-Provide-a-default-openssl.cnf-for-tests.patch
 fips-build.patch
