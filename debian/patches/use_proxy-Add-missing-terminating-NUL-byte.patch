@@ -1,0 +1,24 @@
+From: Tomas Mraz <tomas@openssl.org>
+Date: Thu, 11 Sep 2025 18:43:55 +0200
+Subject: use_proxy(): Add missing terminating NUL byte
+
+Fixes CVE-2025-9232
+
+There is a missing terminating NUL byte after strncpy() call.
+Issue and a proposed fix reported by Stanislav Fort (Aisle Research).
+---
+ crypto/http/http_lib.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/crypto/http/http_lib.c b/crypto/http/http_lib.c
+index 9c41f57541d7..614fd200b7c0 100644
+--- a/crypto/http/http_lib.c
++++ b/crypto/http/http_lib.c
+@@ -267,6 +267,7 @@ static int use_proxy(const char *no_proxy, const char *server)
+         /* strip leading '[' and trailing ']' from escaped IPv6 address */
+         sl -= 2;
+         strncpy(host, server + 1, sl);
++        host[sl] = '\0';
+         server = host;
+     }
+ 

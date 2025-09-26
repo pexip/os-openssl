@@ -1,3 +1,10 @@
+openssl (3.0.17-1~deb12u3) bookworm-security; urgency=medium
+
+  * CVE-2025-9230 (Out-of-bounds read & write in RFC 3211 KEK Unwrap)
+  * CVE-2025-9232 (Out-of-bounds read in HTTP client no_proxy handling)
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 26 Sep 2025 20:59:22 +0200
+
 openssl (3.0.17-1~deb12u2) bookworm; urgency=medium
 
   * Revert the following upstream changes to avoid crashes in downstream
