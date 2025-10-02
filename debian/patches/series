@@ -10,6 +10,8 @@ Fix-tests-for-new-default-security-level.patch
 Revert-Drop-by-store-s-by_store_subject_ex.patch
 Revert-Rework-the-by-store-X509_LOOKUP-method-to-open-the.patch
 Revert-Add-test_verify-tests.patch
+use_proxy-Add-missing-terminating-NUL-byte.patch
+kek_unwrap_key-Fix-incorrect-check-of-unwrapped-key-size.patch
 Set-systemwide-default-settings-for-libssl-users.patch
 TEST-Provide-a-default-openssl.cnf-for-tests.patch
 fips-build.patch

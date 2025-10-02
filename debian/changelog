@@ -1,3 +1,16 @@
+openssl (3.0.17-1~deb12u3+pexip24u1) pexip; urgency=medium
+
+  * New upstream release with security fixes
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Thu, 02 Oct 2025 11:08:06 +0100
+
+openssl (3.0.17-1~deb12u3) bookworm-security; urgency=medium
+
+  * CVE-2025-9230 (Out-of-bounds read & write in RFC 3211 KEK Unwrap)
+  * CVE-2025-9232 (Out-of-bounds read in HTTP client no_proxy handling)
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 26 Sep 2025 20:59:22 +0200
+
 openssl (3.0.17-1~deb12u2+pexip24u1) pexip; urgency=medium
 
   * New upstream release
