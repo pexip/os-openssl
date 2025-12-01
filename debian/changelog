@@ -1,8 +1,22 @@
+openssl (3.5.4-1~deb13u1) trixie; urgency=medium
+
+  * Import 3.5.4
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 01 Nov 2025 12:22:59 +0100
+
 openssl (3.5.1-1+pexip25u1) pexip-trixie; urgency=medium
 
   * New upstream release
 
  -- Mark Hymers <mark.hymers@pexip.com>  Thu, 31 Jul 2025 14:08:15 +0100
+
+openssl (3.5.1-1+deb13u1) trixie-security; urgency=medium
+
+  * CVE-2025-9230 (Out-of-bounds read & write in RFC 3211 KEK Unwrap)
+  * CVE-2025-9231 (Timing side-channel in SM2 algorithm on 64 bit ARM)
+  * CVE-2025-9232 (Out-of-bounds read in HTTP client no_proxy handling)
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Fri, 26 Sep 2025 21:18:35 +0200
 
 openssl (3.5.1-1) unstable; urgency=medium
 
