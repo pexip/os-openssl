@@ -1,3 +1,11 @@
+openssl (3.5.4-1~deb13u1+pexip25u4) UNRELEASED; urgency=medium
+
+  * Backport ec_point_format change from 3.6
+    Patch is from commit 03541d7302d016aa28d436364d72d58baa3e2114
+    upstream.  Updates: pexip/mcu#46803
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Mon, 15 Dec 2025 15:29:06 +0000
+
 openssl (3.5.4-1~deb13u1+pexip25u3) pexip-trixie; urgency=medium
 
   * Rebuild to move openssl-provider-legacy to main.

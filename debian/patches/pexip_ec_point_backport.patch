@@ -1,0 +1,270 @@
+Backported from OpenSSL 3.6 to deal with pexip/mcu#46803
+
+Patch has been refreshed against OpenSSL 3.5 to remove fuzz
+and offsets.
+
+commit 03541d7302d016aa28d436364d72d58baa3e2114
+Author: Tim Perry <pimterry@gmail.com>
+Date:   Thu Mar 6 14:33:17 2025 +0100
+
+    Add SSL_CTX_set_ec_point_formats() and SSL_set_ec_point_formats()
+    
+    The internal fields and implementation for configuration of this
+    parameter already existed, but was not exposed. This change adds simple
+    setters to allow configuration of this field.
+    
+    Reviewed-by: Tomas Mraz <tomas@openssl.org>
+    Reviewed-by: Matt Caswell <matt@openssl.org>
+    (Merged from https://github.com/openssl/openssl/pull/26990)
+
+Index: openssl/CHANGES.md
+===================================================================
+--- openssl.orig/CHANGES.md
++++ openssl/CHANGES.md
+@@ -25,6 +25,12 @@ OpenSSL Releases
+  - [OpenSSL 1.0.0](#openssl-100)
+  - [OpenSSL 0.9.x](#openssl-09x)
+ 
++ * Change default EC point formats configuration to support only 'uncompressed'
++   format, and add SSL_OP_LEGACY_EC_POINT_FORMATS flag and options to re-enable
++   previous default if required.
++
++   *Tim Perry*
++
+ OpenSSL 3.5
+ -----------
+ 
+Index: openssl/doc/man3/SSL_CTX_set_options.pod
+===================================================================
+--- openssl.orig/doc/man3/SSL_CTX_set_options.pod
++++ openssl/doc/man3/SSL_CTX_set_options.pod
+@@ -228,6 +228,12 @@ For more information on shutting down a
+ Allow legacy insecure renegotiation between OpenSSL and unpatched servers
+ B<only>. See the B<SECURE RENEGOTIATION> section for more details.
+ 
++=item SSL_OP_LEGACY_EC_POINT_FORMATS
++
++Enable use of the legacy point formats for elliptic curves. This option enables
++support for the deprecated ANSI X9.62 prime and char2 compressed point formats,
++in addition to the uncompressed format that is enabled by default.
++
+ =item SSL_OP_NO_ANTI_REPLAY
+ 
+ By default, when a server is configured for early data (i.e., max_early_data > 0),
+Index: openssl/include/openssl/ssl.h.in
+===================================================================
+--- openssl.orig/include/openssl/ssl.h.in
++++ openssl/include/openssl/ssl.h.in
+@@ -423,8 +423,8 @@ typedef int (*SSL_async_callback_fn)(SSL
+ # define SSL_OP_NO_RX_CERTIFICATE_COMPRESSION            SSL_OP_BIT(33)
+     /* Enable KTLS TX zerocopy on Linux */
+ # define SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE         SSL_OP_BIT(34)
+-
+-#define SSL_OP_PREFER_NO_DHE_KEX                         SSL_OP_BIT(35)
++# define SSL_OP_PREFER_NO_DHE_KEX                        SSL_OP_BIT(35)
++# define SSL_OP_LEGACY_EC_POINT_FORMATS                  SSL_OP_BIT(36)
+ 
+ /*
+  * Option "collections."
+Index: openssl/ssl/ssl_conf.c
+===================================================================
+--- openssl.orig/ssl/ssl_conf.c
++++ openssl/ssl/ssl_conf.c
+@@ -408,6 +408,7 @@ static int cmd_Options(SSL_CONF_CTX *cct
+         SSL_FLAG_TBL_INV("RxCertificateCompression", SSL_OP_NO_RX_CERTIFICATE_COMPRESSION),
+         SSL_FLAG_TBL("KTLSTxZerocopySendfile", SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE),
+         SSL_FLAG_TBL("IgnoreUnexpectedEOF", SSL_OP_IGNORE_UNEXPECTED_EOF),
++        SSL_FLAG_TBL("LegacyECPointFormats", SSL_OP_LEGACY_EC_POINT_FORMATS),
+     };
+     if (value == NULL)
+         return -3;
+@@ -771,6 +772,7 @@ static const ssl_conf_cmd_tbl ssl_conf_c
+     SSL_CONF_CMD_SWITCH("no_anti_replay", SSL_CONF_FLAG_SERVER),
+     SSL_CONF_CMD_SWITCH("no_etm", 0),
+     SSL_CONF_CMD_SWITCH("no_ems", 0),
++    SSL_CONF_CMD_SWITCH("legacy_ec_point_formats", 0),
+     SSL_CONF_CMD_STRING(SignatureAlgorithms, "sigalgs", 0),
+     SSL_CONF_CMD_STRING(ClientSignatureAlgorithms, "client_sigalgs", 0),
+     SSL_CONF_CMD_STRING(Curves, "curves", 0),
+@@ -870,6 +872,8 @@ static const ssl_switch_tbl ssl_cmd_swit
+     {SSL_OP_NO_ENCRYPT_THEN_MAC, 0},
+     /* no Extended master secret */
+     {SSL_OP_NO_EXTENDED_MASTER_SECRET, 0},
++    /* enable legacy EC point formats */
++    {SSL_OP_LEGACY_EC_POINT_FORMATS, 0}
+ };
+ 
+ static int ssl_conf_cmd_skip_prefix(SSL_CONF_CTX *cctx, const char **pcmd)
+Index: openssl/ssl/t1_lib.c
+===================================================================
+--- openssl.orig/ssl/t1_lib.c
++++ openssl/ssl/t1_lib.c
+@@ -194,6 +194,10 @@ static const struct {
+ };
+ 
+ static const unsigned char ecformats_default[] = {
++    TLSEXT_ECPOINTFORMAT_uncompressed
++};
++
++static const unsigned char ecformats_all[] = {
+     TLSEXT_ECPOINTFORMAT_uncompressed,
+     TLSEXT_ECPOINTFORMAT_ansiX962_compressed_prime,
+     TLSEXT_ECPOINTFORMAT_ansiX962_compressed_char2
+@@ -1769,13 +1773,16 @@ void tls1_get_formatlist(SSL_CONNECTION
+     if (s->ext.ecpointformats) {
+         *pformats = s->ext.ecpointformats;
+         *num_formats = s->ext.ecpointformats_len;
+-    } else {
+-        *pformats = ecformats_default;
++    } else if ((s->options & SSL_OP_LEGACY_EC_POINT_FORMATS) != 0) {
++        *pformats = ecformats_all;
+         /* For Suite B we don't support char2 fields */
+         if (tls1_suiteb(s))
+-            *num_formats = sizeof(ecformats_default) - 1;
++            *num_formats = sizeof(ecformats_all) - 1;
+         else
+-            *num_formats = sizeof(ecformats_default);
++            *num_formats = sizeof(ecformats_all);
++    } else {
++        *pformats = ecformats_default;
++        *num_formats = sizeof(ecformats_default);
+     }
+ }
+ 
+Index: openssl/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
+===================================================================
+--- openssl.orig/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
++++ openssl/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
+@@ -19,10 +19,8 @@ Header:
+           000f - 01 02 04 04 80 0c 00 00-05 04 80 08 00 00 06   ...............
+           001e - 04 80 08 00 00 07 04 80-08 00 00 08 02 40 64   .............@d
+           002d - 09 02 40 64                                    ..@d
+-        extension_type=ec_point_formats(11), length=4
++        extension_type=ec_point_formats(11), length=2
+           uncompressed (0)
+-          ansiX962_compressed_prime (1)
+-          ansiX962_compressed_char2 (2)
+         extension_type=supported_groups(10), length=18
+           X25519MLKEM768 (4588)
+           ecdh_x25519 (29)
+Index: openssl/test/recipes/75-test_quicapi_data/ssltraceref.txt
+===================================================================
+--- openssl.orig/test/recipes/75-test_quicapi_data/ssltraceref.txt
++++ openssl/test/recipes/75-test_quicapi_data/ssltraceref.txt
+@@ -19,10 +19,8 @@ Header:
+           000f - 01 02 04 04 80 0c 00 00-05 04 80 08 00 00 06   ...............
+           001e - 04 80 08 00 00 07 04 80-08 00 00 08 02 40 64   .............@d
+           002d - 09 02 40 64                                    ..@d
+-        extension_type=ec_point_formats(11), length=4
++        extension_type=ec_point_formats(11), length=2
+           uncompressed (0)
+-          ansiX962_compressed_prime (1)
+-          ansiX962_compressed_char2 (2)
+         extension_type=supported_groups(10), length=18
+           X25519MLKEM768 (4588)
+           ecdh_x25519 (29)
+Index: openssl/test/ssl-tests/20-cert-select.cnf
+===================================================================
+--- openssl.orig/test/ssl-tests/20-cert-select.cnf
++++ openssl/test/ssl-tests/20-cert-select.cnf
+@@ -334,10 +334,12 @@ CipherString = DEFAULT
+ ECDSA.Certificate = ${ENV::TEST_CERTS_DIR}/server-cecdsa-cert.pem
+ ECDSA.PrivateKey = ${ENV::TEST_CERTS_DIR}/server-cecdsa-key.pem
+ MaxProtocol = TLSv1.2
++Options = LegacyECPointFormats
+ PrivateKey = ${ENV::TEST_CERTS_DIR}/serverkey.pem
+ 
+ [8-ECDSA Signature Algorithm Selection compressed point-client]
+ CipherString = DEFAULT
++Options = LegacyECPointFormats
+ SignatureAlgorithms = EcDsA+SHA256
+ VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
+ VerifyMode = Peer
+Index: openssl/test/ssl-tests/20-cert-select.cnf.in
+===================================================================
+--- openssl.orig/test/ssl-tests/20-cert-select.cnf.in
++++ openssl/test/ssl-tests/20-cert-select.cnf.in
+@@ -207,10 +207,12 @@ our @tests = (
+         server => {
+             "ECDSA.Certificate" => test_pem("server-cecdsa-cert.pem"),
+             "ECDSA.PrivateKey" => test_pem("server-cecdsa-key.pem"),
+-            "MaxProtocol" => "TLSv1.2"
++            "MaxProtocol" => "TLSv1.2",
++            "Options" => "LegacyECPointFormats"
+         },
+         client => {
+             "SignatureAlgorithms" => randcase("ECDSA+SHA256"),
++            "Options" => "LegacyECPointFormats"
+         },
+         test   => {
+             "ExpectedServerCertType" => "P-256",
+Index: openssl/test/sslapitest.c
+===================================================================
+--- openssl.orig/test/sslapitest.c
++++ openssl/test/sslapitest.c
+@@ -10993,6 +10993,55 @@ end:
+     return testresult;
+ }
+ 
++#if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_TLS1_2)
++/*
++ * Complete a connection with legacy EC point format configuration
++ */
++static int test_legacy_ec_point_formats(void)
++{
++    SSL_CTX *cctx = NULL, *sctx = NULL;
++    SSL *clientssl = NULL, *serverssl = NULL;
++    const char *pformats = NULL;
++    int nformats;
++    int testresult = 0;
++
++    if (!TEST_true(create_ssl_ctx_pair(libctx, TLS_server_method(), TLS_client_method(),
++                                       TLS1_2_VERSION, TLS1_2_VERSION, &sctx, &cctx, cert,
++                                       privkey)))
++        goto end;
++
++    if (!TEST_true(SSL_CTX_set_options(sctx, SSL_OP_LEGACY_EC_POINT_FORMATS)))
++        goto end;
++
++    if (!TEST_true(SSL_CTX_set_options(cctx, SSL_OP_LEGACY_EC_POINT_FORMATS)))
++        goto end;
++
++    if (!TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl, NULL, NULL)))
++        goto end;
++
++    if (!TEST_true(create_ssl_connection(serverssl, clientssl, SSL_ERROR_NONE)))
++        goto end;
++
++    /* Check server received all 3 point formats */
++    nformats = SSL_get0_ec_point_formats(serverssl, &pformats);
++    if (!TEST_int_eq(nformats, 3))
++        goto end;
++    if (!TEST_int_eq(pformats[0], TLSEXT_ECPOINTFORMAT_uncompressed) ||
++        !TEST_int_eq(pformats[1], TLSEXT_ECPOINTFORMAT_ansiX962_compressed_prime) ||
++        !TEST_int_eq(pformats[2], TLSEXT_ECPOINTFORMAT_ansiX962_compressed_char2))
++        goto end;
++
++    testresult = 1;
++
++end:
++    SSL_free(serverssl);
++    SSL_free(clientssl);
++    SSL_CTX_free(sctx);
++    SSL_CTX_free(cctx);
++    return testresult;
++}
++#endif
++
+ /*
+  * Test SSL_CTX_set1_verify/chain_cert_store and SSL_CTX_get_verify/chain_cert_store.
+  */
+@@ -13649,6 +13698,9 @@ int setup_tests(void)
+ #endif
+     ADD_TEST(test_inherit_verify_param);
+     ADD_TEST(test_set_alpn);
++#if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_TLS1_2)
++    ADD_TEST(test_legacy_ec_point_formats);
++#endif
+     ADD_TEST(test_set_verify_cert_store_ssl_ctx);
+     ADD_TEST(test_set_verify_cert_store_ssl);
+     ADD_ALL_TESTS(test_session_timeout, 1);
