@@ -15,7 +15,7 @@ XS-Pexip-Upstream: http://deb.debian.org/debian/ trixie
 Package: openssl
 Architecture: any
 Multi-Arch: foreign
-Depends: ${shlibs:Depends}, ${perl:Depends}, ${misc:Depends}, libssl3 (>= 3.0.8-0pexip2)
+Depends: ${shlibs:Depends}, ${perl:Depends}, ${misc:Depends}, libssl3 (>= 3.0.8-0pexip2), libssl3-fips
 Suggests: ca-certificates
 Description: Secure Sockets Layer toolkit - cryptographic utility
  This package is part of the OpenSSL project's implementation of the SSL
