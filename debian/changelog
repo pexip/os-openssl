@@ -1,3 +1,15 @@
+openssl (3.0.18-1~deb12u1+pexip24u1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Tue, 20 Jan 2026 11:50:28 +0000
+
+openssl (3.0.18-1~deb12u1) bookworm; urgency=medium
+
+  * Import 3.0.18
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 01 Nov 2025 12:54:37 +0100
+
 openssl (3.0.17-1~deb12u3+pexip24u1) pexip; urgency=medium
 
   * New upstream release with security fixes
