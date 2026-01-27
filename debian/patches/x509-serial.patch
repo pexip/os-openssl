@@ -1,7 +1,7 @@
-Index: os-openssl/crypto/x509/x_x509.c
+Index: openssl/crypto/x509/x_x509.c
 ===================================================================
---- os-openssl.orig/crypto/x509/x_x509.c
-+++ os-openssl/crypto/x509/x_x509.c
+--- openssl.orig/crypto/x509/x_x509.c
++++ openssl/crypto/x509/x_x509.c
 @@ -14,10 +14,74 @@
  #include <openssl/x509.h>
  #include <openssl/x509v3.h>
@@ -72,16 +72,16 @@ Index: os-openssl/crypto/x509/x_x509.c
 +ASN1_ITEM_end(tolerant_ASN1_INTEGER)
  
  ASN1_SEQUENCE_enc(X509_CINF, enc, 0) = {
-         ASN1_EXP_OPT(X509_CINF, version, ASN1_INTEGER, 0),
--        ASN1_EMBED(X509_CINF, serialNumber, ASN1_INTEGER),
-+        ASN1_EMBED(X509_CINF, serialNumber, tolerant_ASN1_INTEGER),
-         ASN1_EMBED(X509_CINF, signature, X509_ALGOR),
-         ASN1_SIMPLE(X509_CINF, issuer, X509_NAME),
-         ASN1_EMBED(X509_CINF, validity, X509_VAL),
-Index: os-openssl/test/recipes/25-test_x509.t
+     ASN1_EXP_OPT(X509_CINF, version, ASN1_INTEGER, 0),
+-    ASN1_EMBED(X509_CINF, serialNumber, ASN1_INTEGER),
++    ASN1_EMBED(X509_CINF, serialNumber, tolerant_ASN1_INTEGER),
+     ASN1_EMBED(X509_CINF, signature, X509_ALGOR),
+     ASN1_SIMPLE(X509_CINF, issuer, X509_NAME),
+     ASN1_EMBED(X509_CINF, validity, X509_VAL),
+Index: openssl/test/recipes/25-test_x509.t
 ===================================================================
---- os-openssl.orig/test/recipes/25-test_x509.t
-+++ os-openssl/test/recipes/25-test_x509.t
+--- openssl.orig/test/recipes/25-test_x509.t
++++ openssl/test/recipes/25-test_x509.t
 @@ -16,7 +16,7 @@ use OpenSSL::Test qw/:DEFAULT srctop_fil
  
  setup("test_x509");
@@ -102,10 +102,10 @@ Index: os-openssl/test/recipes/25-test_x509.t
 +ok(run(app(["openssl", "x509", "-text",
 +           "-in", srctop_file("test/certs", "x509-bad-serial-negative.pem")])),
 +   "X.509 bad serial negative");
-Index: os-openssl/test/certs/x509-bad-serial-negative.pem
+Index: openssl/test/certs/x509-bad-serial-negative.pem
 ===================================================================
 --- /dev/null
-+++ os-openssl/test/certs/x509-bad-serial-negative.pem
++++ openssl/test/certs/x509-bad-serial-negative.pem
 @@ -0,0 +1,36 @@
 +-----BEGIN CERTIFICATE-----
 +MIIGMjCCBRqgAwIBAgIQ/9XVRT0yTpWLf8XQR3fbvjANBgkqhkiG9w0BAQUFADBc
@@ -143,10 +143,10 @@ Index: os-openssl/test/certs/x509-bad-serial-negative.pem
 +mY85PtCUkxsWO2I7+hbLpLzHQhlxZbwD1gM7UNhpY+weF+e0vrtoSUwxQVbv4QkM
 +z9Vk7OKe
 +-----END CERTIFICATE-----
-Index: os-openssl/test/certs/x509-bad-serial-positive.pem
+Index: openssl/test/certs/x509-bad-serial-positive.pem
 ===================================================================
 --- /dev/null
-+++ os-openssl/test/certs/x509-bad-serial-positive.pem
++++ openssl/test/certs/x509-bad-serial-positive.pem
 @@ -0,0 +1,32 @@
 +-----BEGIN CERTIFICATE-----
 +MIIFcDCCA1igAwIBAgIIACA7Rwn+4n0wDQYJKoZIhvcNAQEMBQAwVjELMAkGA1UE

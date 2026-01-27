@@ -35,11 +35,11 @@ Reviewed-by: Tomas Mraz <tomas@openssl.org>
  util/missingcrypto.txt                |  2 --
  15 files changed, 194 insertions(+), 36 deletions(-)
 
-diff --git a/crypto/asn1/asn_pack.c b/crypto/asn1/asn_pack.c
-index 0744e7b4348f..0d1f3406db81 100644
---- a/crypto/asn1/asn_pack.c
-+++ b/crypto/asn1/asn_pack.c
-@@ -60,3 +60,16 @@ void *ASN1_item_unpack(const ASN1_STRING *oct, const ASN1_ITEM *it)
+Index: openssl/crypto/asn1/asn_pack.c
+===================================================================
+--- openssl.orig/crypto/asn1/asn_pack.c
++++ openssl/crypto/asn1/asn_pack.c
+@@ -60,3 +60,16 @@ void *ASN1_item_unpack(const ASN1_STRING
          ERR_raise(ERR_LIB_ASN1, ASN1_R_DECODE_ERROR);
      return ret;
  }
@@ -56,11 +56,11 @@ index 0744e7b4348f..0d1f3406db81 100644
 +        ERR_raise(ERR_LIB_ASN1, ASN1_R_DECODE_ERROR);
 +    return ret;
 +}
-diff --git a/crypto/pkcs12/p12_add.c b/crypto/pkcs12/p12_add.c
-index 8a56644368d3..aaef5874f158 100644
---- a/crypto/pkcs12/p12_add.c
-+++ b/crypto/pkcs12/p12_add.c
-@@ -83,8 +83,9 @@ STACK_OF(PKCS12_SAFEBAG) *PKCS12_unpack_p7data(PKCS7 *p7)
+Index: openssl/crypto/pkcs12/p12_add.c
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_add.c
++++ openssl/crypto/pkcs12/p12_add.c
+@@ -83,8 +83,9 @@ STACK_OF(PKCS12_SAFEBAG) *PKCS12_unpack_
          ERR_raise(ERR_LIB_PKCS12, PKCS12_R_DECODE_ERROR);
          return NULL;
      }
@@ -72,7 +72,7 @@ index 8a56644368d3..aaef5874f158 100644
  }
  
  /* Turn a stack of SAFEBAGS into a PKCS#7 encrypted data ContentInfo */
-@@ -193,6 +194,7 @@ int PKCS12_pack_authsafes(PKCS12 *p12, STACK_OF(PKCS7) *safes)
+@@ -192,6 +193,7 @@ int PKCS12_pack_authsafes(PKCS12 *p12, S
  STACK_OF(PKCS7) *PKCS12_unpack_authsafes(const PKCS12 *p12)
  {
      STACK_OF(PKCS7) *p7s;
@@ -80,25 +80,24 @@ index 8a56644368d3..aaef5874f158 100644
      PKCS7 *p7;
      int i;
  
-@@ -205,9 +207,11 @@ STACK_OF(PKCS7) *PKCS12_unpack_authsafes(const PKCS12 *p12)
-         ERR_raise(ERR_LIB_PKCS12, PKCS12_R_DECODE_ERROR);
+@@ -205,8 +207,11 @@ STACK_OF(PKCS7) *PKCS12_unpack_authsafes
          return NULL;
      }
--
+ 
 -    p7s = ASN1_item_unpack(p12->authsafes->d.data,
--                           ASN1_ITEM_rptr(PKCS12_AUTHSAFES));
+-        ASN1_ITEM_rptr(PKCS12_AUTHSAFES));
 +    p7ctx = &p12->authsafes->ctx;
 +    p7s = ASN1_item_unpack_ex(p12->authsafes->d.data,
-+                              ASN1_ITEM_rptr(PKCS12_AUTHSAFES),
-+                              ossl_pkcs7_ctx_get0_libctx(p7ctx),
-+                              ossl_pkcs7_ctx_get0_propq(p7ctx));
++        ASN1_ITEM_rptr(PKCS12_AUTHSAFES),
++        ossl_pkcs7_ctx_get0_libctx(p7ctx),
++        ossl_pkcs7_ctx_get0_propq(p7ctx));
      if (p7s != NULL) {
          for (i = 0; i < sk_PKCS7_num(p7s); i++) {
              p7 = sk_PKCS7_value(p7s, i);
-diff --git a/crypto/pkcs12/p12_asn.c b/crypto/pkcs12/p12_asn.c
-index aabbd38eefbe..caae639f8835 100644
---- a/crypto/pkcs12/p12_asn.c
-+++ b/crypto/pkcs12/p12_asn.c
+Index: openssl/crypto/pkcs12/p12_asn.c
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_asn.c
++++ openssl/crypto/pkcs12/p12_asn.c
 @@ -12,6 +12,7 @@
  #include <openssl/asn1t.h>
  #include <openssl/pkcs12.h>
@@ -108,7 +107,7 @@ index aabbd38eefbe..caae639f8835 100644
  /* PKCS#12 ASN1 module */
  
 @@ -21,7 +22,21 @@ ASN1_SEQUENCE(PKCS12) = {
-         ASN1_OPT(PKCS12, mac, PKCS12_MAC_DATA)
+     ASN1_OPT(PKCS12, mac, PKCS12_MAC_DATA)
  } ASN1_SEQUENCE_END(PKCS12)
  
 -IMPLEMENT_ASN1_FUNCTIONS(PKCS12)
@@ -129,41 +128,42 @@ index aabbd38eefbe..caae639f8835 100644
 +}
  
  ASN1_SEQUENCE(PKCS12_MAC_DATA) = {
-         ASN1_SIMPLE(PKCS12_MAC_DATA, dinfo, X509_SIG),
-diff --git a/crypto/pkcs12/p12_init.c b/crypto/pkcs12/p12_init.c
-index dd469b5c5c35..1d6c74b8c438 100644
---- a/crypto/pkcs12/p12_init.c
-+++ b/crypto/pkcs12/p12_init.c
-@@ -56,3 +56,9 @@ PKCS12 *PKCS12_init(int mode)
+     ASN1_SIMPLE(PKCS12_MAC_DATA, dinfo, X509_SIG),
+Index: openssl/crypto/pkcs12/p12_init.c
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_init.c
++++ openssl/crypto/pkcs12/p12_init.c
+@@ -55,3 +55,10 @@ PKCS12 *PKCS12_init(int mode)
+ {
      return PKCS12_init_ex(mode, NULL, NULL);
  }
- 
++
 +const PKCS7_CTX *ossl_pkcs12_get0_pkcs7ctx(const PKCS12 *p12)
 +{
 +    if (p12 == NULL || p12->authsafes == NULL)
 +        return NULL;
 +    return &p12->authsafes->ctx;
 +}
-diff --git a/crypto/pkcs12/p12_kiss.c b/crypto/pkcs12/p12_kiss.c
-index 0f7a437a28d7..f172e8b96d39 100644
---- a/crypto/pkcs12/p12_kiss.c
-+++ b/crypto/pkcs12/p12_kiss.c
-@@ -18,10 +18,12 @@ static int parse_pk12(PKCS12 *p12, const char *pass, int passlen,
-                       EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
+Index: openssl/crypto/pkcs12/p12_kiss.c
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_kiss.c
++++ openssl/crypto/pkcs12/p12_kiss.c
+@@ -18,10 +18,12 @@ static int parse_pk12(PKCS12 *p12, const
+     EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
  
  static int parse_bags(const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pass,
--                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
-+                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
-+                      OSSL_LIB_CTX *libctx, const char *propq);
+-    int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
++    int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++    OSSL_LIB_CTX *libctx, const char *propq);
  
  static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
--                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
-+                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
-+                     OSSL_LIB_CTX *libctx, const char *propq);
+-    EVP_PKEY **pkey, STACK_OF(X509) *ocerts);
++    EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++    OSSL_LIB_CTX *libctx, const char *propq);
  
  /*
   * Parse and decrypt a PKCS#12 structure returning user key, user cert and
-@@ -156,7 +158,8 @@ static int parse_pk12(PKCS12 *p12, const char *pass, int passlen,
+@@ -155,7 +157,8 @@ static int parse_pk12(PKCS12 *p12, const
              sk_PKCS7_pop_free(asafes, PKCS7_free);
              return 0;
          }
@@ -173,34 +173,34 @@ index 0f7a437a28d7..f172e8b96d39 100644
              sk_PKCS12_SAFEBAG_pop_free(bags, PKCS12_SAFEBAG_free);
              sk_PKCS7_pop_free(asafes, PKCS7_free);
              return 0;
-@@ -169,12 +172,14 @@ static int parse_pk12(PKCS12 *p12, const char *pass, int passlen,
+@@ -168,12 +171,14 @@ static int parse_pk12(PKCS12 *p12, const
  
  /* pkey and/or ocerts may be NULL */
  static int parse_bags(const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pass,
--                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts)
-+                      int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
-+                      OSSL_LIB_CTX *libctx, const char *propq)
+-    int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts)
++    int passlen, EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++    OSSL_LIB_CTX *libctx, const char *propq)
  {
      int i;
      for (i = 0; i < sk_PKCS12_SAFEBAG_num(bags); i++) {
          if (!parse_bag(sk_PKCS12_SAFEBAG_value(bags, i),
--                       pass, passlen, pkey, ocerts))
+-                pass, passlen, pkey, ocerts))
 +                       pass, passlen, pkey, ocerts,
 +                       libctx, propq))
              return 0;
      }
      return 1;
-@@ -182,7 +187,8 @@ static int parse_bags(const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pass,
+@@ -181,7 +186,8 @@ static int parse_bags(const STACK_OF(PKC
  
  /* pkey and/or ocerts may be NULL */
  static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
--                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts)
-+                     EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
-+                     OSSL_LIB_CTX *libctx, const char *propq)
+-    EVP_PKEY **pkey, STACK_OF(X509) *ocerts)
++    EVP_PKEY **pkey, STACK_OF(X509) *ocerts,
++    OSSL_LIB_CTX *libctx, const char *propq)
  {
      PKCS8_PRIV_KEY_INFO *p8;
      X509 *x509;
-@@ -200,7 +206,8 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+@@ -205,7 +211,8 @@ static int parse_bag(PKCS12_SAFEBAG *bag
      case NID_keyBag:
          if (pkey == NULL || *pkey != NULL)
              return 1;
@@ -210,7 +210,7 @@ index 0f7a437a28d7..f172e8b96d39 100644
          if (*pkey == NULL)
              return 0;
          break;
-@@ -208,9 +215,10 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+@@ -213,9 +220,10 @@ static int parse_bag(PKCS12_SAFEBAG *bag
      case NID_pkcs8ShroudedKeyBag:
          if (pkey == NULL || *pkey != NULL)
              return 1;
@@ -223,38 +223,38 @@ index 0f7a437a28d7..f172e8b96d39 100644
          PKCS8_PRIV_KEY_INFO_free(p8);
          if (!(*pkey))
              return 0;
-@@ -220,7 +228,7 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+@@ -225,7 +233,7 @@ static int parse_bag(PKCS12_SAFEBAG *bag
          if (ocerts == NULL
-                 || PKCS12_SAFEBAG_get_bag_nid(bag) != NID_x509Certificate)
+             || PKCS12_SAFEBAG_get_bag_nid(bag) != NID_x509Certificate)
              return 1;
 -        if ((x509 = PKCS12_SAFEBAG_get1_cert(bag)) == NULL)
 +        if ((x509 = PKCS12_SAFEBAG_get1_cert_ex(bag, libctx, propq)) == NULL)
              return 0;
          if (lkid && !X509_keyid_set1(x509, lkid->data, lkid->length)) {
              X509_free(x509);
-@@ -250,7 +258,7 @@ static int parse_bag(PKCS12_SAFEBAG *bag, const char *pass, int passlen,
+@@ -255,7 +263,7 @@ static int parse_bag(PKCS12_SAFEBAG *bag
  
      case NID_safeContentsBag:
          return parse_bags(PKCS12_SAFEBAG_get0_safes(bag), pass, passlen, pkey,
--                          ocerts);
-+                          ocerts, libctx, propq);
+-            ocerts);
++            ocerts, libctx, propq);
  
      default:
          return 1;
-diff --git a/crypto/pkcs12/p12_local.h b/crypto/pkcs12/p12_local.h
-index acaa27b193fa..97697922bd72 100644
---- a/crypto/pkcs12/p12_local.h
-+++ b/crypto/pkcs12/p12_local.h
+Index: openssl/crypto/pkcs12/p12_local.h
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_local.h
++++ openssl/crypto/pkcs12/p12_local.h
 @@ -41,3 +41,5 @@ struct pkcs12_bag_st {
-         ASN1_TYPE *other;       /* Secret or other bag */
+         ASN1_TYPE *other; /* Secret or other bag */
      } value;
  };
 +
 +const PKCS7_CTX *ossl_pkcs12_get0_pkcs7ctx(const PKCS12 *p12);
-diff --git a/crypto/pkcs12/p12_sbag.c b/crypto/pkcs12/p12_sbag.c
-index 7106936c62cc..73e55461eb18 100644
---- a/crypto/pkcs12/p12_sbag.c
-+++ b/crypto/pkcs12/p12_sbag.c
+Index: openssl/crypto/pkcs12/p12_sbag.c
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_sbag.c
++++ openssl/crypto/pkcs12/p12_sbag.c
 @@ -11,6 +11,7 @@
  #include "internal/cryptlib.h"
  #include <openssl/pkcs12.h>
@@ -263,8 +263,8 @@ index 7106936c62cc..73e55461eb18 100644
  
  #ifndef OPENSSL_NO_DEPRECATED_1_1_0
  ASN1_TYPE *PKCS12_get_attr(const PKCS12_SAFEBAG *bag, int attr_nid)
-@@ -101,6 +102,42 @@ X509_CRL *PKCS12_SAFEBAG_get1_crl(const PKCS12_SAFEBAG *bag)
-                             ASN1_ITEM_rptr(X509_CRL));
+@@ -110,6 +111,42 @@ X509_CRL *PKCS12_SAFEBAG_get1_crl(const
+         ASN1_ITEM_rptr(X509_CRL));
  }
  
 +X509 *PKCS12_SAFEBAG_get1_cert_ex(const PKCS12_SAFEBAG *bag,
@@ -306,10 +306,10 @@ index 7106936c62cc..73e55461eb18 100644
  PKCS12_SAFEBAG *PKCS12_SAFEBAG_create_cert(X509 *x509)
  {
      return PKCS12_item_pack_safebag(x509, ASN1_ITEM_rptr(X509),
-diff --git a/crypto/pkcs12/p12_utl.c b/crypto/pkcs12/p12_utl.c
-index 6046b70886c0..59e0cda814c8 100644
---- a/crypto/pkcs12/p12_utl.c
-+++ b/crypto/pkcs12/p12_utl.c
+Index: openssl/crypto/pkcs12/p12_utl.c
+===================================================================
+--- openssl.orig/crypto/pkcs12/p12_utl.c
++++ openssl/crypto/pkcs12/p12_utl.c
 @@ -10,6 +10,8 @@
  #include <stdio.h>
  #include "internal/cryptlib.h"
@@ -319,7 +319,7 @@ index 6046b70886c0..59e0cda814c8 100644
  
  /* Cheap and nasty Unicode stuff */
  
-@@ -238,12 +240,34 @@ int i2d_PKCS12_fp(FILE *fp, const PKCS12 *p12)
+@@ -252,12 +254,34 @@ int i2d_PKCS12_fp(FILE *fp, const PKCS12
  
  PKCS12 *d2i_PKCS12_bio(BIO *bp, PKCS12 **p12)
  {
@@ -356,10 +356,10 @@ index 6046b70886c0..59e0cda814c8 100644
 +    return ASN1_item_d2i_fp_ex(ASN1_ITEM_rptr(PKCS12), fp, p12, libctx, propq);
  }
  #endif
-diff --git a/doc/man3/ASN1_item_d2i_bio.pod b/doc/man3/ASN1_item_d2i_bio.pod
-index bdf5c48096ab..0f391440cee8 100644
---- a/doc/man3/ASN1_item_d2i_bio.pod
-+++ b/doc/man3/ASN1_item_d2i_bio.pod
+Index: openssl/doc/man3/ASN1_item_d2i_bio.pod
+===================================================================
+--- openssl.orig/doc/man3/ASN1_item_d2i_bio.pod
++++ openssl/doc/man3/ASN1_item_d2i_bio.pod
 @@ -3,7 +3,8 @@
  =head1 NAME
  
@@ -370,7 +370,7 @@ index bdf5c48096ab..0f391440cee8 100644
  - decode and encode DER-encoded ASN.1 structures
  
  =head1 SYNOPSIS
-@@ -26,6 +27,13 @@ ASN1_item_d2i_fp_ex, ASN1_item_d2i_fp, ASN1_item_i2d_mem_bio
+@@ -26,6 +27,13 @@ ASN1_item_d2i_fp_ex, ASN1_item_d2i_fp, A
  
   BIO *ASN1_item_i2d_mem_bio(const ASN1_ITEM *it, const ASN1_VALUE *val);
  
@@ -426,10 +426,10 @@ index bdf5c48096ab..0f391440cee8 100644
  
  Licensed under the Apache License 2.0 (the "License").  You may not use
  this file except in compliance with the License.  You can obtain a copy
-diff --git a/doc/man3/PKCS12_SAFEBAG_get1_cert.pod b/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
-index 13f1263fe667..25338c4ac70b 100644
---- a/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
-+++ b/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
+Index: openssl/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
+===================================================================
+--- openssl.orig/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
++++ openssl/doc/man3/PKCS12_SAFEBAG_get1_cert.pod
 @@ -5,7 +5,8 @@
  PKCS12_SAFEBAG_get0_attr, PKCS12_SAFEBAG_get0_type,
  PKCS12_SAFEBAG_get_nid, PKCS12_SAFEBAG_get_bag_nid,
@@ -440,7 +440,7 @@ index 13f1263fe667..25338c4ac70b 100644
  PKCS12_SAFEBAG_get0_safes, PKCS12_SAFEBAG_get0_p8inf,
  PKCS12_SAFEBAG_get0_pkcs8 - Get objects from a PKCS#12 safeBag
  
-@@ -20,7 +21,11 @@ PKCS12_SAFEBAG_get0_pkcs8 - Get objects from a PKCS#12 safeBag
+@@ -20,7 +21,11 @@ PKCS12_SAFEBAG_get0_pkcs8 - Get objects
   int PKCS12_SAFEBAG_get_bag_nid(const PKCS12_SAFEBAG *bag);
   const ASN1_TYPE *PKCS12_SAFEBAG_get0_bag_obj(const PKCS12_SAFEBAG *bag);
   const ASN1_OBJECT *PKCS12_SAFEBAG_get0_bag_type(const PKCS12_SAFEBAG *bag);
@@ -452,7 +452,7 @@ index 13f1263fe667..25338c4ac70b 100644
   X509_CRL *PKCS12_SAFEBAG_get1_crl(const PKCS12_SAFEBAG *bag);
   const STACK_OF(PKCS12_SAFEBAG) *PKCS12_SAFEBAG_get0_safes(const PKCS12_SAFEBAG *bag);
   const PKCS8_PRIV_KEY_INFO *PKCS12_SAFEBAG_get0_p8inf(const PKCS12_SAFEBAG *bag);
-@@ -41,8 +46,13 @@ arbitrary for B<secretBag>s. PKCS12_SAFEBAG_get0_bag_type() gets this type as an
+@@ -41,8 +46,13 @@ arbitrary for B<secretBag>s. PKCS12_SAFE
  
  PKCS12_SAFEBAG_get0_bag_obj() retrieves the object contained within the safeBag.
  
@@ -484,24 +484,24 @@ index 13f1263fe667..25338c4ac70b 100644
  
  Licensed under the Apache License 2.0 (the "License").  You may not use
  this file except in compliance with the License.  You can obtain a copy
-diff --git a/include/openssl/asn1.h.in b/include/openssl/asn1.h.in
-index a6001d2b03b7..beeac1b37f6f 100644
---- a/include/openssl/asn1.h.in
-+++ b/include/openssl/asn1.h.in
-@@ -829,6 +829,8 @@ int ASN1_TYPE_get_int_octetstring(const ASN1_TYPE *a, long *num,
-                                   unsigned char *data, int max_len);
+Index: openssl/include/openssl/asn1.h.in
+===================================================================
+--- openssl.orig/include/openssl/asn1.h.in
++++ openssl/include/openssl/asn1.h.in
+@@ -820,6 +820,8 @@ int ASN1_TYPE_get_int_octetstring(const
+     unsigned char *data, int max_len);
  
  void *ASN1_item_unpack(const ASN1_STRING *oct, const ASN1_ITEM *it);
 +void *ASN1_item_unpack_ex(const ASN1_STRING *oct, const ASN1_ITEM *it,
 +                          OSSL_LIB_CTX *libctx, const char *propq);
  
  ASN1_STRING *ASN1_item_pack(void *obj, const ASN1_ITEM *it,
-                             ASN1_OCTET_STRING **oct);
-diff --git a/include/openssl/pkcs12.h.in b/include/openssl/pkcs12.h.in
-index 990fb84e3252..ad235391e06c 100644
---- a/include/openssl/pkcs12.h.in
-+++ b/include/openssl/pkcs12.h.in
-@@ -107,7 +107,9 @@ int PKCS12_SAFEBAG_get_bag_nid(const PKCS12_SAFEBAG *bag);
+     ASN1_OCTET_STRING **oct);
+Index: openssl/include/openssl/pkcs12.h.in
+===================================================================
+--- openssl.orig/include/openssl/pkcs12.h.in
++++ openssl/include/openssl/pkcs12.h.in
+@@ -111,7 +111,9 @@ int PKCS12_SAFEBAG_get_bag_nid(const PKC
  const ASN1_TYPE *PKCS12_SAFEBAG_get0_bag_obj(const PKCS12_SAFEBAG *bag);
  const ASN1_OBJECT *PKCS12_SAFEBAG_get0_bag_type(const PKCS12_SAFEBAG *bag);
  
@@ -511,21 +511,21 @@ index 990fb84e3252..ad235391e06c 100644
  X509_CRL *PKCS12_SAFEBAG_get1_crl(const PKCS12_SAFEBAG *bag);
  const STACK_OF(PKCS12_SAFEBAG) *
  PKCS12_SAFEBAG_get0_safes(const PKCS12_SAFEBAG *bag);
-diff --git a/util/libcrypto.num b/util/libcrypto.num
-index f195c5f7199b..905272f7e020 100644
---- a/util/libcrypto.num
-+++ b/util/libcrypto.num
-@@ -5430,3 +5430,6 @@ OSSL_HPKE_get_recommended_ikmelen       ?	3_2_0	EXIST::FUNCTION:
+Index: openssl/util/libcrypto.num
+===================================================================
+--- openssl.orig/util/libcrypto.num
++++ openssl/util/libcrypto.num
+@@ -5430,3 +5430,6 @@ OPENSSL_strncasecmp
  OSSL_CMP_CTX_reset_geninfo_ITAVs        5558	3_0_8	EXIST::FUNCTION:CMP
  OSSL_CMP_MSG_update_recipNonce          5559	3_0_9	EXIST::FUNCTION:CMP
  i2d_X509_tbs                            5560	3_0_8	EXIST::FUNCTION:
 +ASN1_item_unpack_ex                     5561	3_0_8	EXIST::FUNCTION:
 +PKCS12_SAFEBAG_get1_cert_ex             5562	3_0_8	EXIST::FUNCTION:
 +PKCS12_SAFEBAG_get1_crl_ex              5563	3_0_8	EXIST::FUNCTION:
-diff --git a/util/missingcrypto.txt b/util/missingcrypto.txt
-index 3090d5047367..98052f0cb1c6 100644
---- a/util/missingcrypto.txt
-+++ b/util/missingcrypto.txt
+Index: openssl/util/missingcrypto.txt
+===================================================================
+--- openssl.orig/util/missingcrypto.txt
++++ openssl/util/missingcrypto.txt
 @@ -148,9 +148,7 @@ ASN1_item_i2d(3)
  ASN1_item_i2d_bio(3)
  ASN1_item_i2d_fp(3)

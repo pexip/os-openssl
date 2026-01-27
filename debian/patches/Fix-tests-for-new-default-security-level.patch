@@ -17,11 +17,11 @@ Reviewed-by: Dmitry Belyavskiy <beldmit@gmail.com>
  test/sslapitest.c                    |  24 +++-
  7 files changed, 199 insertions(+), 158 deletions(-)
 
-diff --git a/test/ssl-tests/12-ct.cnf b/test/ssl-tests/12-ct.cnf
-index 2e6e9dea6757..369c5d4e8eef 100644
---- a/test/ssl-tests/12-ct.cnf
-+++ b/test/ssl-tests/12-ct.cnf
-@@ -19,11 +19,11 @@ client = 0-ct-permissive-without-scts-client
+Index: openssl/test/ssl-tests/12-ct.cnf
+===================================================================
+--- openssl.orig/test/ssl-tests/12-ct.cnf
++++ openssl/test/ssl-tests/12-ct.cnf
+@@ -19,11 +19,11 @@ client = 0-ct-permissive-without-scts-cl
  
  [0-ct-permissive-without-scts-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -35,7 +35,7 @@ index 2e6e9dea6757..369c5d4e8eef 100644
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
  
-@@ -46,11 +46,11 @@ client = 1-ct-permissive-with-scts-client
+@@ -46,11 +46,11 @@ client = 1-ct-permissive-with-scts-clien
  
  [1-ct-permissive-with-scts-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/embeddedSCTs1.pem
@@ -77,7 +77,7 @@ index 2e6e9dea6757..369c5d4e8eef 100644
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/embeddedSCTs1_issuer.pem
  VerifyMode = Peer
  
-@@ -130,11 +130,11 @@ resume-client = 4-ct-permissive-resumption-client
+@@ -130,11 +130,11 @@ resume-client = 4-ct-permissive-resumpti
  
  [4-ct-permissive-resumption-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/embeddedSCTs1.pem
@@ -91,7 +91,7 @@ index 2e6e9dea6757..369c5d4e8eef 100644
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/embeddedSCTs1_issuer.pem
  VerifyMode = Peer
  
-@@ -162,11 +162,11 @@ resume-client = 5-ct-strict-resumption-resume-client
+@@ -162,11 +162,11 @@ resume-client = 5-ct-strict-resumption-r
  
  [5-ct-strict-resumption-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/embeddedSCTs1.pem
@@ -105,10 +105,10 @@ index 2e6e9dea6757..369c5d4e8eef 100644
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/embeddedSCTs1_issuer.pem
  VerifyMode = Peer
  
-diff --git a/test/ssl-tests/12-ct.cnf.in b/test/ssl-tests/12-ct.cnf.in
-index ddafd3fc4cda..c11bcc9c0958 100644
---- a/test/ssl-tests/12-ct.cnf.in
-+++ b/test/ssl-tests/12-ct.cnf.in
+Index: openssl/test/ssl-tests/12-ct.cnf.in
+===================================================================
+--- openssl.orig/test/ssl-tests/12-ct.cnf.in
++++ openssl/test/ssl-tests/12-ct.cnf.in
 @@ -19,8 +19,10 @@ our @tests = (
      {
          name => "ct-permissive-without-scts",
@@ -183,10 +183,10 @@ index ddafd3fc4cda..c11bcc9c0958 100644
              "VerifyCAFile" => test_pem("embeddedSCTs1_issuer.pem"),
              extra => {
                  "CTValidation" => "Strict",
-diff --git a/test/ssl-tests/14-curves.cnf b/test/ssl-tests/14-curves.cnf
-index 75635d29bd0f..ad62e28935ae 100644
---- a/test/ssl-tests/14-curves.cnf
-+++ b/test/ssl-tests/14-curves.cnf
+Index: openssl/test/ssl-tests/14-curves.cnf
+===================================================================
+--- openssl.orig/test/ssl-tests/14-curves.cnf
++++ openssl/test/ssl-tests/14-curves.cnf
 @@ -108,13 +108,13 @@ client = 0-curve-prime256v1-client
  
  [0-curve-prime256v1-server]
@@ -923,7 +923,7 @@ index 75635d29bd0f..ad62e28935ae 100644
  Curves = sect163r2
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2170,13 +2170,13 @@ client = 71-curve-prime192v1-tls13-client
+@@ -2170,13 +2170,13 @@ client = 71-curve-prime192v1-tls13-clien
  
  [71-curve-prime192v1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1099,7 +1099,7 @@ index 75635d29bd0f..ad62e28935ae 100644
  Curves = secp256k1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2467,13 +2467,13 @@ client = 82-curve-brainpoolP256r1-tls13-client
+@@ -2467,13 +2467,13 @@ client = 82-curve-brainpoolP256r1-tls13-
  
  [82-curve-brainpoolP256r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1115,7 +1115,7 @@ index 75635d29bd0f..ad62e28935ae 100644
  Curves = brainpoolP256r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2494,13 +2494,13 @@ client = 83-curve-brainpoolP384r1-tls13-client
+@@ -2494,13 +2494,13 @@ client = 83-curve-brainpoolP384r1-tls13-
  
  [83-curve-brainpoolP384r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1131,7 +1131,7 @@ index 75635d29bd0f..ad62e28935ae 100644
  Curves = brainpoolP384r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -2521,13 +2521,13 @@ client = 84-curve-brainpoolP512r1-tls13-client
+@@ -2521,13 +2521,13 @@ client = 84-curve-brainpoolP512r1-tls13-
  
  [84-curve-brainpoolP512r1-tls13-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1147,10 +1147,10 @@ index 75635d29bd0f..ad62e28935ae 100644
  Curves = brainpoolP512r1
  MinProtocol = TLSv1.3
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-diff --git a/test/ssl-tests/14-curves.cnf.in b/test/ssl-tests/14-curves.cnf.in
-index 33201df281f7..1c048bc09978 100644
---- a/test/ssl-tests/14-curves.cnf.in
-+++ b/test/ssl-tests/14-curves.cnf.in
+Index: openssl/test/ssl-tests/14-curves.cnf.in
+===================================================================
+--- openssl.orig/test/ssl-tests/14-curves.cnf.in
++++ openssl/test/ssl-tests/14-curves.cnf.in
 @@ -58,10 +58,11 @@ sub generate_tests() {
              name => "curve-${curve}",
              server => {
@@ -1190,10 +1190,10 @@ index 33201df281f7..1c048bc09978 100644
                  "MinProtocol" => "TLSv1.3",
                  "Curves" => $curve
              },
-diff --git a/test/ssl-tests/22-compression.cnf b/test/ssl-tests/22-compression.cnf
-index c85d3129abbb..a70f01b7af96 100644
---- a/test/ssl-tests/22-compression.cnf
-+++ b/test/ssl-tests/22-compression.cnf
+Index: openssl/test/ssl-tests/22-compression.cnf
+===================================================================
+--- openssl.orig/test/ssl-tests/22-compression.cnf
++++ openssl/test/ssl-tests/22-compression.cnf
 @@ -21,12 +21,12 @@ client = 0-tlsv1_3-both-compress-client
  
  [0-tlsv1_3-both-compress-server]
@@ -1209,7 +1209,7 @@ index c85d3129abbb..a70f01b7af96 100644
  Options = Compression
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
-@@ -47,11 +47,11 @@ client = 1-tlsv1_3-client-compress-client
+@@ -47,11 +47,11 @@ client = 1-tlsv1_3-client-compress-clien
  
  [1-tlsv1_3-client-compress-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1223,7 +1223,7 @@ index c85d3129abbb..a70f01b7af96 100644
  Options = Compression
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
-@@ -72,12 +72,12 @@ client = 2-tlsv1_3-server-compress-client
+@@ -72,12 +72,12 @@ client = 2-tlsv1_3-server-compress-clien
  
  [2-tlsv1_3-server-compress-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1238,7 +1238,7 @@ index c85d3129abbb..a70f01b7af96 100644
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
  
-@@ -97,11 +97,11 @@ client = 3-tlsv1_3-neither-compress-client
+@@ -97,11 +97,11 @@ client = 3-tlsv1_3-neither-compress-clie
  
  [3-tlsv1_3-neither-compress-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1267,7 +1267,7 @@ index c85d3129abbb..a70f01b7af96 100644
  MaxProtocol = TLSv1.2
  Options = Compression
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -148,11 +148,11 @@ client = 5-tlsv1_2-client-compress-client
+@@ -148,11 +148,11 @@ client = 5-tlsv1_2-client-compress-clien
  
  [5-tlsv1_2-client-compress-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1281,7 +1281,7 @@ index c85d3129abbb..a70f01b7af96 100644
  MaxProtocol = TLSv1.2
  Options = Compression
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
-@@ -174,12 +174,12 @@ client = 6-tlsv1_2-server-compress-client
+@@ -174,12 +174,12 @@ client = 6-tlsv1_2-server-compress-clien
  
  [6-tlsv1_2-server-compress-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1296,7 +1296,7 @@ index c85d3129abbb..a70f01b7af96 100644
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
-@@ -200,11 +200,11 @@ client = 7-tlsv1_2-neither-compress-client
+@@ -200,11 +200,11 @@ client = 7-tlsv1_2-neither-compress-clie
  
  [7-tlsv1_2-neither-compress-server]
  Certificate = ${ENV::TEST_CERTS_DIR}/servercert.pem
@@ -1310,10 +1310,10 @@ index c85d3129abbb..a70f01b7af96 100644
  MaxProtocol = TLSv1.2
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
-diff --git a/test/ssl-tests/22-compression.cnf.in b/test/ssl-tests/22-compression.cnf.in
-index 69a2e7f80101..0b8f010b76c0 100644
---- a/test/ssl-tests/22-compression.cnf.in
-+++ b/test/ssl-tests/22-compression.cnf.in
+Index: openssl/test/ssl-tests/22-compression.cnf.in
+===================================================================
+--- openssl.orig/test/ssl-tests/22-compression.cnf.in
++++ openssl/test/ssl-tests/22-compression.cnf.in
 @@ -21,9 +21,11 @@ our @tests_tls1_3 = (
      {
          name => "tlsv1_3-both-compress",
@@ -1406,11 +1406,11 @@ index 69a2e7f80101..0b8f010b76c0 100644
              "MaxProtocol" => "TLSv1.2"
          },
          test => {
-diff --git a/test/sslapitest.c b/test/sslapitest.c
-index a26b78907424..61f308297400 100644
---- a/test/sslapitest.c
-+++ b/test/sslapitest.c
-@@ -9762,7 +9762,8 @@ static int test_set_tmp_dh(int idx)
+Index: openssl/test/sslapitest.c
+===================================================================
+--- openssl.orig/test/sslapitest.c
++++ openssl/test/sslapitest.c
+@@ -9864,7 +9864,8 @@ end:
   */
  static int test_dh_auto(int idx)
  {
@@ -1420,7 +1420,7 @@ index a26b78907424..61f308297400 100644
      SSL *clientssl = NULL, *serverssl = NULL;
      int testresult = 0;
      EVP_PKEY *tmpkey = NULL;
-@@ -9770,14 +9771,21 @@ static int test_dh_auto(int idx)
+@@ -9872,14 +9873,21 @@ static int test_dh_auto(int idx)
      size_t expdhsize = 0;
      const char *ciphersuite = "DHE-RSA-AES128-SHA";
  
@@ -1444,7 +1444,7 @@ index a26b78907424..61f308297400 100644
          break;
      case 1:
          /* 2048 bit prime */
-@@ -9803,8 +9811,10 @@ static int test_dh_auto(int idx)
+@@ -9905,8 +9913,10 @@ static int test_dh_auto(int idx)
      /* No certificate cases */
      case 5:
          /* The FIPS provider doesn't support this DH size - so we ignore it */
@@ -1457,14 +1457,14 @@ index a26b78907424..61f308297400 100644
          ciphersuite = "ADH-AES128-SHA256:@SECLEVEL=0";
          expdhsize = 1024;
          break;
-@@ -9817,8 +9827,8 @@ static int test_dh_auto(int idx)
+@@ -9919,8 +9929,8 @@ static int test_dh_auto(int idx)
          goto end;
      }
  
 -    if (!TEST_true(create_ssl_ctx_pair(libctx, TLS_server_method(),
--                                       TLS_client_method(),
+-            TLS_client_method(),
 +    if (!TEST_true(create_ssl_ctx_pair(libctx, NULL,
-+                                       NULL,
-                                        0,
-                                        0,
-                                        &sctx, &cctx, thiscert, thiskey)))
++            NULL,
+             0,
+             0,
+             &sctx, &cctx, thiscert, thiskey)))
