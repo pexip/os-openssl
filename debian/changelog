@@ -1,3 +1,9 @@
+openssl (3.0.19-0+pexip24u1) pexip; urgency=medium
+
+  * New upstream release
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 27 Jan 2026 16:08:51 +0000
+
 openssl (3.0.18-1~deb12u1+pexip24u1) pexip; urgency=medium
 
   * New upstream release
