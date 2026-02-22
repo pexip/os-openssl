@@ -1,3 +1,9 @@
+openssl (3.5.5-1~deb13u1) trixie; urgency=medium
+
+  * Import 3.5.5
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 22 Feb 2026 13:03:11 +0100
+
 openssl (3.5.4-1~deb13u2) trixie-security; urgency=medium
 
   * CVE-2025-11187 (Improper validation of PBMAC1 parameters in PKCS#12 MAC
