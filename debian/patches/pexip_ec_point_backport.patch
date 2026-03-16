@@ -55,14 +55,11 @@ Index: openssl/include/openssl/ssl.h.in
 ===================================================================
 --- openssl.orig/include/openssl/ssl.h.in
 +++ openssl/include/openssl/ssl.h.in
-@@ -423,8 +423,8 @@ typedef int (*SSL_async_callback_fn)(SSL
- # define SSL_OP_NO_RX_CERTIFICATE_COMPRESSION            SSL_OP_BIT(33)
-     /* Enable KTLS TX zerocopy on Linux */
- # define SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE         SSL_OP_BIT(34)
--
--#define SSL_OP_PREFER_NO_DHE_KEX                         SSL_OP_BIT(35)
-+# define SSL_OP_PREFER_NO_DHE_KEX                        SSL_OP_BIT(35)
-+# define SSL_OP_LEGACY_EC_POINT_FORMATS                  SSL_OP_BIT(36)
+@@ -427,6 +427,7 @@ typedef int (*SSL_async_callback_fn)(SSL
+ #define SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE SSL_OP_BIT(34)
+ 
+ #define SSL_OP_PREFER_NO_DHE_KEX SSL_OP_BIT(35)
++#define SSL_OP_LEGACY_EC_POINT_FORMATS  SSL_OP_BIT(36)
  
  /*
   * Option "collections."
@@ -70,7 +67,7 @@ Index: openssl/ssl/ssl_conf.c
 ===================================================================
 --- openssl.orig/ssl/ssl_conf.c
 +++ openssl/ssl/ssl_conf.c
-@@ -408,6 +408,7 @@ static int cmd_Options(SSL_CONF_CTX *cct
+@@ -406,6 +406,7 @@ static int cmd_Options(SSL_CONF_CTX *cct
          SSL_FLAG_TBL_INV("RxCertificateCompression", SSL_OP_NO_RX_CERTIFICATE_COMPRESSION),
          SSL_FLAG_TBL("KTLSTxZerocopySendfile", SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE),
          SSL_FLAG_TBL("IgnoreUnexpectedEOF", SSL_OP_IGNORE_UNEXPECTED_EOF),
@@ -78,7 +75,7 @@ Index: openssl/ssl/ssl_conf.c
      };
      if (value == NULL)
          return -3;
-@@ -771,6 +772,7 @@ static const ssl_conf_cmd_tbl ssl_conf_c
+@@ -785,6 +786,7 @@ static const ssl_conf_cmd_tbl ssl_conf_c
      SSL_CONF_CMD_SWITCH("no_anti_replay", SSL_CONF_FLAG_SERVER),
      SSL_CONF_CMD_SWITCH("no_etm", 0),
      SSL_CONF_CMD_SWITCH("no_ems", 0),
@@ -86,12 +83,12 @@ Index: openssl/ssl/ssl_conf.c
      SSL_CONF_CMD_STRING(SignatureAlgorithms, "sigalgs", 0),
      SSL_CONF_CMD_STRING(ClientSignatureAlgorithms, "client_sigalgs", 0),
      SSL_CONF_CMD_STRING(Curves, "curves", 0),
-@@ -870,6 +872,8 @@ static const ssl_switch_tbl ssl_cmd_swit
-     {SSL_OP_NO_ENCRYPT_THEN_MAC, 0},
+@@ -884,6 +886,8 @@ static const ssl_switch_tbl ssl_cmd_swit
+     { SSL_OP_NO_ENCRYPT_THEN_MAC, 0 },
      /* no Extended master secret */
-     {SSL_OP_NO_EXTENDED_MASTER_SECRET, 0},
+     { SSL_OP_NO_EXTENDED_MASTER_SECRET, 0 },
 +    /* enable legacy EC point formats */
-+    {SSL_OP_LEGACY_EC_POINT_FORMATS, 0}
++    { SSL_OP_LEGACY_EC_POINT_FORMATS, 0 }
  };
  
  static int ssl_conf_cmd_skip_prefix(SSL_CONF_CTX *cctx, const char **pcmd)
@@ -110,7 +107,7 @@ Index: openssl/ssl/t1_lib.c
      TLSEXT_ECPOINTFORMAT_uncompressed,
      TLSEXT_ECPOINTFORMAT_ansiX962_compressed_prime,
      TLSEXT_ECPOINTFORMAT_ansiX962_compressed_char2
-@@ -1769,13 +1773,16 @@ void tls1_get_formatlist(SSL_CONNECTION
+@@ -1768,13 +1772,16 @@ void tls1_get_formatlist(SSL_CONNECTION
      if (s->ext.ecpointformats) {
          *pformats = s->ext.ecpointformats;
          *num_formats = s->ext.ecpointformats_len;
@@ -202,7 +199,7 @@ Index: openssl/test/sslapitest.c
 ===================================================================
 --- openssl.orig/test/sslapitest.c
 +++ openssl/test/sslapitest.c
-@@ -10993,6 +10993,55 @@ end:
+@@ -11144,6 +11144,55 @@ end:
      return testresult;
  }
  
@@ -258,7 +255,7 @@ Index: openssl/test/sslapitest.c
  /*
   * Test SSL_CTX_set1_verify/chain_cert_store and SSL_CTX_get_verify/chain_cert_store.
   */
-@@ -13649,6 +13698,9 @@ int setup_tests(void)
+@@ -13803,6 +13852,9 @@ int setup_tests(void)
  #endif
      ADD_TEST(test_inherit_verify_param);
      ADD_TEST(test_set_alpn);

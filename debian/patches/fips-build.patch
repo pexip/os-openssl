@@ -1,3 +1,9 @@
+Add support for using the FIPS provider
+
+And add more debug logging on failure at init.
+
+Index: openssl/crypto/o_init.c
+===================================================================
 --- openssl.orig/crypto/o_init.c
 +++ openssl/crypto/o_init.c
 @@ -9,6 +9,61 @@
@@ -62,6 +68,8 @@
  
  /*
   * Perform any essential OpenSSL initialization operations. Currently does
+Index: openssl/crypto/provider.c
+===================================================================
 --- openssl.orig/crypto/provider.c
 +++ openssl/crypto/provider.c
 @@ -35,6 +35,8 @@ OSSL_PROVIDER *OSSL_PROVIDER_try_load_ex
@@ -73,14 +81,16 @@
          ossl_provider_deactivate(prov, 1);
          ossl_provider_free(prov);
          return NULL;
+Index: openssl/crypto/provider_core.c
+===================================================================
 --- openssl.orig/crypto/provider_core.c
 +++ openssl/crypto/provider_core.c
-@@ -974,8 +974,11 @@ static int provider_init(OSSL_PROVIDER *
+@@ -982,8 +982,11 @@ static int provider_init(OSSL_PROVIDER *
              }
  
              if ((store = get_provider_store(prov->libctx)) == NULL
--                    || !CRYPTO_THREAD_read_lock(store->default_path_lock))
-+                    || !CRYPTO_THREAD_read_lock(store->default_path_lock)) {
+-                || !CRYPTO_THREAD_read_lock(store->default_path_lock))
++                || !CRYPTO_THREAD_read_lock(store->default_path_lock)) {
 +                    ERR_raise_data(ERR_LIB_CRYPTO, ERR_R_DSO_LIB,
 +                                   "failed to get/lock provider store");
                  goto end;
@@ -100,9 +110,9 @@
 +            }
              cnt++;
          }
-         cnt++;                   /* One for the terminating item */
-@@ -1275,8 +1281,11 @@ static int provider_activate(OSSL_PROVID
-             && !ossl_rand_check_random_provider_on_load(prov->libctx, prov))
+         cnt++; /* One for the terminating item */
+@@ -1274,8 +1280,11 @@ static int provider_activate(OSSL_PROVID
+         && !ossl_rand_check_random_provider_on_load(prov->libctx, prov))
          return -1;
  
 -    if (prov->ischild && upcalls && !ossl_provider_up_ref_parent(prov, 1))
@@ -114,7 +124,7 @@
  #endif
  
      if (lock && !CRYPTO_THREAD_read_lock(store->lock)) {
-@@ -1284,6 +1293,8 @@ static int provider_activate(OSSL_PROVID
+@@ -1283,6 +1292,8 @@ static int provider_activate(OSSL_PROVID
          if (prov->ischild && upcalls)
              ossl_provider_free_parent(prov, 1);
  #endif
@@ -123,7 +133,7 @@
          return -1;
      }
  
-@@ -1293,6 +1304,8 @@ static int provider_activate(OSSL_PROVID
+@@ -1292,6 +1303,8 @@ static int provider_activate(OSSL_PROVID
          if (prov->ischild && upcalls)
              ossl_provider_free_parent(prov, 1);
  #endif

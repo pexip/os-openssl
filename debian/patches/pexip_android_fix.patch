@@ -47,6 +47,6 @@ Date:   Thu Dec 14 14:30:59 2023 +0100
          }
      }
 +  }
-  finish:
+ finish:
      /* If we changed anything, resort the objects for faster lookup */
      if (X509_STORE_lock(xl->store_ctx)) {

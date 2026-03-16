@@ -1,6 +1,10 @@
+Expose verbatim TBS encoding
+
+Index: openssl/crypto/x509/x_x509.c
+===================================================================
 --- openssl.orig/crypto/x509/x_x509.c
 +++ openssl/crypto/x509/x_x509.c
-@@ -354,6 +354,11 @@ int i2d_re_X509_tbs(X509 *x, unsigned ch
+@@ -348,6 +348,11 @@ int i2d_re_X509_tbs(X509 *x, unsigned ch
      return i2d_X509_CINF(&x->cert_info, pp);
  }
  
@@ -10,18 +14,22 @@
 +}
 +
  void X509_get0_signature(const ASN1_BIT_STRING **psig,
-                          const X509_ALGOR **palg, const X509 *x)
+     const X509_ALGOR **palg, const X509 *x)
  {
+Index: openssl/include/openssl/x509.h.in
+===================================================================
 --- openssl.orig/include/openssl/x509.h.in
 +++ openssl/include/openssl/x509.h.in
-@@ -579,6 +579,7 @@ int X509_set_ex_data(X509 *r, int idx, v
+@@ -576,6 +576,7 @@ int X509_set_ex_data(X509 *r, int idx, v
  void *X509_get_ex_data(const X509 *r, int idx);
- DECLARE_ASN1_ENCODE_FUNCTIONS_only(X509,X509_AUX)
+ DECLARE_ASN1_ENCODE_FUNCTIONS_only(X509, X509_AUX)
  
 +int i2d_X509_tbs(X509 *x, unsigned char **pp);
  int i2d_re_X509_tbs(X509 *x, unsigned char **pp);
  
  int X509_SIG_INFO_get(const X509_SIG_INFO *siginf, int *mdnid, int *pknid,
+Index: openssl/util/libcrypto.num
+===================================================================
 --- openssl.orig/util/libcrypto.num
 +++ openssl/util/libcrypto.num
 @@ -5924,3 +5924,4 @@ OSSL_AA_DIST_POINT_free
