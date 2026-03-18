@@ -1,0 +1,24 @@
+Description: Skip missing files in util/copy.pl instead of dying
+ When building OpenSSL as a static library without debug symbols on Windows,
+ .pdb files may not be generated. The install targets still try to copy them
+ via copy.pl, which dies on missing files. This patch makes copy.pl warn and
+ skip missing files instead of aborting the build.
+Author: Camilo Celis <camilo-celis@users.noreply.github.com>
+Forwarded: not-needed
+Last-Update: 2026-03-18
+---
+--- a/util/copy.pl
++++ b/util/copy.pl
+@@ -53,6 +53,12 @@ if ($fnum > 2 && ! -d $dest)
+ 
+ foreach (@filelist)
+ 	{
++	unless (-e $_)
++		{
++		warn "Skipping missing file: $_\n";
++		next;
++		}
++
+ 	if (-d $dest)
+ 		{
+ 		$dfile = $_;
