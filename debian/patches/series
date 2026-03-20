@@ -17,3 +17,4 @@ x509-tbs.patch
 PKCS12-Add-additional-libctx-and-propq-support.patch
 evp-q-mac-nokey.patch
 pexip_android_fix.patch
+pexip-added-relocate-prefix-support-in-pkgconfig-file.patch
