@@ -5,3 +5,14 @@ pic.patch
 c_rehash-compat.patch
 Configure-allow-to-enable-ktls-if-target-does-not-start-w.patch
 conf-Serialize-allocation-free-of-ssl_names.patch
+Fix-group-tuple-handling-in-DEFAULT-expansion.patch
+dane_match_cert-should-X509_free-on-mcert-instead.patch
+Fix-NULL-Dereference-When-Delta-CRL-Lacks-CRL-Number-Exte.patch
+Added-test-for-CVE-2026-28388.patch
+Fix-NULL-deref-in-ec-dh_cms_set_shared_info.patch
+Test-for-DH-ECDH-CMS-KARI-processing-NULL-pointer-derefer.patch
+Fix-NULL-deref-in-rsa_cms_decrypt.patch
+Add-test-for-CMS-decryption-with-RSA-keys.patch
+Avoid-possible-buffer-overflow-in-buf2hex-conversion.patch
+rsa_kem-validate-RSA_public_encrypt-result-in-RSASVE.patch
+rsa_kem-test-RSA_public_encrypt-result-in-RSASVE.patch

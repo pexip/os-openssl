@@ -53,6 +53,7 @@ endif
 	dh $@ --without autoreconf
 
 override_dh_auto_configure:
+	tar xf debian/binary.tar
 	test -z "$(OPTS)" || for opt in $(OPTS); \
 	do \
 		set -xe; \
