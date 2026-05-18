@@ -88,12 +88,12 @@ Index: openssl/test/recipes/25-test_x509.t
  
  setup("test_x509");
  
--plan tests => 138;
-+plan tests => 140;
+-plan tests => 139;
++plan tests => 141;
  
  # Prevent MSys2 filename munging for arguments that look like file paths but
  # aren't
-@@ -543,7 +543,12 @@ ok(run(app(["openssl", "x509", "-req", "
+@@ -549,7 +549,12 @@ ok(run(app(["openssl", "x509", "-req", "
              "-in", $b_csr, "-out", $b_cert])));
  # Verify issuer is CA
  ok(get_issuer($b_cert) =~ /CN=ca.example.com/);
