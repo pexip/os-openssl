@@ -1,0 +1,90 @@
+From 9d8245c44c1cf19d4b03a54e3f2e6e0dd1a9701e Mon Sep 17 00:00:00 2001
+From: Tulio Beloqui <tulio@pexip.com>
+Date: Fri, 29 May 2026 16:10:55 +0200
+Subject: [PATCH] windows-makefile: add pkgconfig (.pc) file generation and
+ installation
+
+On Windows, the generated Makefile does not define INSTALL_EXPORTERS_PKGCONFIG
+or PKGCONFIGDIR, and install_dev does not install the .pc files. The unix-Makefile
+template has all of this. The .pc files themselves are already generated (they're
+registered in exporters/build.info via GENERATE[] and appear in GENERATED), but
+they're never installed on Windows.
+
+This patch adds the missing pieces to Configurations/windows-makefile.tmpl:
+1. Define INSTALL_EXPORTERS_PKGCONFIG variable (mirrors the cmake exporter list).
+2. Define PKGCONFIGDIR variable (mirrors the cmake config dir pattern).
+3. In install_dev, create the pkgconfig directory and copy the .pc files into it.
+---
+ Configurations/windows-makefile.tmpl | 10 ++++++++--
+ exporters/pkg-config/libcrypto.pc.in |  5 +++--
+ exporters/pkg-config/libssl.pc.in    |  5 +++--
+ 3 files changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/Configurations/windows-makefile.tmpl b/Configurations/windows-makefile.tmpl
+index 894834cfb7..5102608754 100644
+--- a/Configurations/windows-makefile.tmpl
++++ b/Configurations/windows-makefile.tmpl
+@@ -160,6 +160,11 @@ INSTALL_EXPORTERS_CMAKE={-
+                   grep { $unified_info{attributes}->{generate}->{$_}->{exporter} eq 'cmake'}
+                   sort keys %{$unified_info{generate}})
+ -}
++INSTALL_EXPORTERS_PKGCONFIG={-
++        join(" ", map { quotify1($_) }
++                  grep { $unified_info{attributes}->{generate}->{$_}->{exporter} eq 'pkg-config'}
++                  sort keys %{$unified_info{generate}})
++-}
+ IMAGEDOCS1={- our @IMAGEDOCS1 = @{$unified_info{imagedocs}->{man1}};
+              join(" ", @IMAGEDOCS1) -}
+ IMAGEDOCS3={- our @IMAGEDOCS3 = @{$unified_info{imagedocs}->{man3}};
+@@ -253,7 +258,7 @@ MODULESDIR=$(MODULESDIR_dev)$(MODULESDIR_dir)
+ # $(libdir) is chosen to be compatible with the GNU coding standards
+ libdir={- file_name_is_absolute($libdir)
+           ? $libdir : '$(INSTALLTOP)\$(LIBDIR)' -}
+-
++PKGCONFIGDIR=$(libdir)\pkgconfig
+ CMAKECONFIGDIR=$(libdir)\cmake\OpenSSL
+ 
+ ##### User defined commands and flags ################################
+@@ -568,7 +573,8 @@ install_dev: install_runtime_libs
+ 	 "$(PERL)" "$(SRCDIR)\util\copy.pl" ossl_static.pdb "$(libdir)"
+ 	@"$(PERL)" "$(SRCDIR)\util\mkdir-p.pl" "$(CMAKECONFIGDIR)"
+ 	@"$(PERL)" "$(SRCDIR)\util\copy.pl" $(INSTALL_EXPORTERS_CMAKE) "$(CMAKECONFIGDIR)"
+-
++    @"$(PERL)" "$(SRCDIR)\util\mkdir-p.pl" "$(PKGCONFIGDIR)"
++    @"$(PERL)" "$(SRCDIR)\util\copy.pl" $(INSTALL_EXPORTERS_PKGCONFIG) "$(PKGCONFIGDIR)"
+ uninstall_dev:
+ 
+ _install_modules_deps: install_runtime_libs build_modules
+diff --git a/exporters/pkg-config/libcrypto.pc.in b/exporters/pkg-config/libcrypto.pc.in
+index 3d56e97418..92803f9572 100644
+--- a/exporters/pkg-config/libcrypto.pc.in
++++ b/exporters/pkg-config/libcrypto.pc.in
+@@ -17,7 +17,9 @@ modulesdir=${libdir}/{- $OpenSSL::safe::installdata::MODULESDIR_REL_LIBDIR[0] -}
+ Name: OpenSSL-libcrypto
+ Description: OpenSSL cryptography library
+ Version: {- $OpenSSL::safe::installdata::VERSION -}
+-Libs: -L${libdir} -lcrypto
++Libs: -L${libdir} {- $^O eq 'MSWin32'
++    ? "-llibcrypto " . join(' ', @OpenSSL::safe::installdata::LDLIBS)
++    : "-lcrypto" -}
+ Libs.private: {- join(' ', @OpenSSL::safe::installdata::LDLIBS) -}
+ Cflags:{- $OUT = ' -I${includedir}';
+           if (scalar @OpenSSL::safe::installdata::INCLUDEDIR_REL_PREFIX > 1) {
+diff --git a/exporters/pkg-config/libssl.pc.in b/exporters/pkg-config/libssl.pc.in
+index 162db65c99..19b39d0c4e 100644
+--- a/exporters/pkg-config/libssl.pc.in
++++ b/exporters/pkg-config/libssl.pc.in
+@@ -16,7 +16,9 @@ Name: OpenSSL-libssl
+ Description: Secure Sockets Layer and cryptography libraries
+ Version: {- $OpenSSL::safe::installdata::VERSION -}
+ Requires.private: libcrypto
+-Libs: -L${libdir} -lssl
++Libs: -L${libdir} {- $^O eq 'MSWin32'
++    ? "-llibssl"
++    : "-lssl" -}
+ Cflags:{- $OUT = ' -I${includedir}';
+           if (scalar @OpenSSL::safe::installdata::INCLUDEDIR_REL_PREFIX > 1) {
+               $OUT = '';
+-- 
+2.49.0.windows.1
+
