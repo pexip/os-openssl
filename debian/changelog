@@ -1,3 +1,32 @@
+openssl (3.5.7-0~pexip25u1) pexip-trixie; urgency=medium
+
+  * New upstream release.
+  * CVE-2026-45447: Fixed heap use-after-free in `PKCS7_verify()
+  * CVE-2026-34182: Fixed CMS `AuthEnvelopedData` processing may accept forged
+    messages.
+  * CVE-2026-34183: Fixed unbounded memory growth in the QUIC `PATH_CHALLENGE`
+    handler.
+  * CVE-2026-45445: Fixed AES-OCB IV ignored on `EVP_Cipher()` path.
+  * CVE-2026-7383: Fixed possible heap buffer overflow in ASN.1 multibyte
+    string conversion.
+  * CVE-2026-9076: Fixed out-of-bounds read in CMS password-based decryption.
+  * CVE-2026-34180: Fixed heap buffer over-read in ASN.1 content parsing.
+  * CVE-2026-34181: Fixed PKCS#12 files with PBMAC1 are accepted with short
+    HMAC keys.
+  * CVE-2026-42766: Fixed possible NULL dereference in password-dased CMS
+    decryption.
+  * CVE-2026-42767: Fixed NULL pointer dereference in CRMF `EncryptedValue`
+    decryption.
+  * CVE-2026-42768: Fixed multi-`RecipientInfo` Bleichenbacher Oracle in
+    `CMS_decrypt()` and `PKCS7_decrypt()`.
+  * CVE-2026-42769: Fixed trust anchor substitution via `cert`/`issuer` typo in CMP
+   `rootCaKeyUpdate`.
+  * CVE-2026-42770: Fixed FFC-DH peer validation uses attacker-supplied `q`.
+  * CVE-2026-45446 Fixed incorrect tag processing for empty messages in
+    AES-GCM-SIV and AES-SIV modes.
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 09 Jun 2026 16:49:44 +0100
+
 openssl (3.5.6-1~deb13u1+pexip25u1) pexip-trixie; urgency=medium
 
   * New upstream release
