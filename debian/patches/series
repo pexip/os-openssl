@@ -18,3 +18,4 @@ pexip_android_fix.patch
 pexip_ec_point_backport.patch
 util-copy-skip-missing.patch
 pexip_windows_pc_file.patch
+pexip_reproducible_build.patch
