@@ -1,16 +1,16 @@
-Description: Ensure reproducible builds by evaluating directory paths at configure time
- OPENSSLDIR, ENGINESDIR and MODULESDIR are passed to the compiler as -D flags
- referencing Make variables (e.g. $(OPENSSLDIR)). These Make variables can
- potentially be overridden at build time, breaking reproducibility. Fix this by
- resolving the paths at configure time using the Perl variables that are already
- available, embedding fixed literal strings in the generated Makefile.
+Description: Allow clearing OPENSSLDIR/ENGINESDIR/MODULESDIR from final binary
+ When building with OPENSSL_CLEAR_DIRINFO=1, the directory path defines
+ (OPENSSLDIR, ENGINESDIR, MODULESDIR) are set to empty strings, preventing
+ build-time path information from being embedded in the final binary.
+ Additionally, -I include paths are stripped from the recorded compiler flags
+ in buildinf.h.
 Author: Pexip AS <packaging@pexip.com>
 Forwarded: not-needed
 Last-Update: 2026-08-06
 
 --- a/Configurations/unix-Makefile.tmpl
 +++ b/Configurations/unix-Makefile.tmpl
-@@ -449,10 +449,15 @@
+@@ -449,10 +449,14 @@
                            @{$config{lib_cppflags}},
                            @{$config{shared_cppflag}});
                  join(' ', $lib_cppflags,
@@ -19,14 +19,13 @@ Last-Update: 2026-08-06
 -                               'ENGINESDIR="\"$(ENGINESDIR)\""',
 -                               'MODULESDIR="\"$(MODULESDIR)\""'),
 +                          (map { '-D'.$_ } do {
-+                               use File::Spec::Functions;
-+                               my $resolved_libdir = file_name_is_absolute($libdir)
-+                                   ? $libdir : catdir($prefix, $libdir);
-+                               my $engdir = $config{enginesdir} || catdir($resolved_libdir, "engines-$sover_dirname");
-+                               my $moddir = $config{modulesdir} || catdir($resolved_libdir, "ossl-modules");
-+                               ("OPENSSLDIR=\"\\\"$openssldir\\\"\"",
-+                                "ENGINESDIR=\"\\\"$engdir\\\"\"",
-+                                "MODULESDIR=\"\\\"$moddir\\\"\"") }),
++                               my $clear = $ENV{OPENSSL_CLEAR_DIRINFO};
++                               my $odir = $clear ? "" : '$(OPENSSLDIR)';
++                               my $edir = $clear ? "" : '$(ENGINESDIR)';
++                               my $mdir = $clear ? "" : '$(MODULESDIR)';
++                               ("OPENSSLDIR=\"\\\"$odir\\\"\"",
++                                "ENGINESDIR=\"\\\"$edir\\\"\"",
++                                "MODULESDIR=\"\\\"$mdir\\\"\"") }),
                            '$(CNF_CPPFLAGS)', '$(CPPFLAGS)') -}
  LIB_CFLAGS={- join(' ', $target{lib_cflags} || (),
                          $target{shared_cflag} || (),
@@ -37,9 +36,20 @@ Last-Update: 2026-08-06
  my $cflags = join(' ', @ARGV);
  $cflags =~ s(\\)(\\\\)g;
 +
-+# Strip include paths and directory defines that may contain build-tree paths
++# Strip include paths that may contain build-tree paths
 +$cflags =~ s/\s*-I\S+//g;
 +
  $cflags = "compiler: $cflags";
  
  # Use the value of the envvar SOURCE_DATE_EPOCH, even if it's
+--- a/debian/rules
++++ b/debian/rules
+@@ -53,6 +53,8 @@
+ %:
+ 	dh $@ --without autoreconf
+ 
++export OPENSSL_CLEAR_DIRINFO=1
++
+ override_dh_auto_configure:
+ 	tar xf debian/binary.tar
+ 	test -z "$(OPTS)" || for opt in $(OPTS); \
