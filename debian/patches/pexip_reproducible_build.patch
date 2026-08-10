@@ -1,0 +1,57 @@
+Description: Allow clearing OPENSSLDIR/ENGINESDIR/MODULESDIR from final binary
+ When building with OPENSSL_CLEAR_DIRINFO=1, the directory path defines
+ (OPENSSLDIR, ENGINESDIR, MODULESDIR) are set to empty strings, preventing
+ build-time path information from being embedded in the final binary.
+ Additionally, -I include paths and non-deterministic compiler flags
+ (-ffile-prefix-map, -fdebug-prefix-map, -fmacro-prefix-map) are stripped
+ from the recorded compiler flags in buildinf.h.
+Author: Pexip AS <packaging@pexip.com>
+Forwarded: not-needed
+Last-Update: 2026-08-06
+
+--- a/Configurations/unix-Makefile.tmpl
++++ b/Configurations/unix-Makefile.tmpl
+@@ -449,10 +449,14 @@
+                           @{$config{lib_cppflags}},
+                           @{$config{shared_cppflag}});
+                 join(' ', $lib_cppflags,
+-                          (map { '-D'.$_ }
+-                               'OPENSSLDIR="\"$(OPENSSLDIR)\""',
+-                               'ENGINESDIR="\"$(ENGINESDIR)\""',
+-                               'MODULESDIR="\"$(MODULESDIR)\""'),
++                          (map { '-D'.$_ } do {
++                               my $clear = $ENV{OPENSSL_CLEAR_DIRINFO};
++                               my $odir = $clear ? "" : '$(OPENSSLDIR)';
++                               my $edir = $clear ? "" : '$(ENGINESDIR)';
++                               my $mdir = $clear ? "" : '$(MODULESDIR)';
++                               ("OPENSSLDIR=\"\\\"$odir\\\"\"",
++                                "ENGINESDIR=\"\\\"$edir\\\"\"",
++                                "MODULESDIR=\"\\\"$mdir\\\"\"") }),
+                           '$(CNF_CPPFLAGS)', '$(CPPFLAGS)') -}
+ LIB_CFLAGS={- join(' ', $target{lib_cflags} || (),
+                         $target{shared_cflag} || (),
+--- a/util/mkbuildinf.pl
++++ b/util/mkbuildinf.pl
+@@ -13,6 +13,11 @@
+ my $platform = pop @ARGV;
+ my $cflags = join(' ', @ARGV);
+ $cflags =~ s(\\)(\\\\)g;
++
++# Strip include paths and non-deterministic prefix-map flags
++$cflags =~ s/\s*-I\S+//g;
++$cflags =~ s/\s*-f(?:file|debug|macro)-prefix-map=\S+//g;
++
+ $cflags = "compiler: $cflags";
+ 
+ # Use the value of the envvar SOURCE_DATE_EPOCH, even if it's
+--- a/debian/rules
++++ b/debian/rules
+@@ -53,6 +53,8 @@
+ %:
+ 	dh $@ --without autoreconf
+ 
++export OPENSSL_CLEAR_DIRINFO=1
++
+ override_dh_auto_configure:
+ 	tar xf debian/binary.tar
+ 	test -z "$(OPTS)" || for opt in $(OPTS); \
