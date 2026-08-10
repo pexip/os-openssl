@@ -2,8 +2,9 @@ Description: Allow clearing OPENSSLDIR/ENGINESDIR/MODULESDIR from final binary
  When building with OPENSSL_CLEAR_DIRINFO=1, the directory path defines
  (OPENSSLDIR, ENGINESDIR, MODULESDIR) are set to empty strings, preventing
  build-time path information from being embedded in the final binary.
- Additionally, -I include paths are stripped from the recorded compiler flags
- in buildinf.h.
+ Additionally, -I include paths and non-deterministic compiler flags
+ (-ffile-prefix-map, -fdebug-prefix-map, -fmacro-prefix-map) are stripped
+ from the recorded compiler flags in buildinf.h.
 Author: Pexip AS <packaging@pexip.com>
 Forwarded: not-needed
 Last-Update: 2026-08-06
@@ -31,13 +32,14 @@ Last-Update: 2026-08-06
                          $target{shared_cflag} || (),
 --- a/util/mkbuildinf.pl
 +++ b/util/mkbuildinf.pl
-@@ -13,6 +13,10 @@
+@@ -13,6 +13,11 @@
  my $platform = pop @ARGV;
  my $cflags = join(' ', @ARGV);
  $cflags =~ s(\\)(\\\\)g;
 +
-+# Strip include paths that may contain build-tree paths
++# Strip include paths and non-deterministic prefix-map flags
 +$cflags =~ s/\s*-I\S+//g;
++$cflags =~ s/\s*-f(?:file|debug|macro)-prefix-map=\S+//g;
 +
  $cflags = "compiler: $cflags";
  
