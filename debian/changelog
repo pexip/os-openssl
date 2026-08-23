@@ -1,3 +1,62 @@
+openssl (3.5.7-1~deb13u2) trixie-security; urgency=medium
+
+  * CVE-2026-18798 ("QUIC Server May Trigger Double Free When Processing
+    INITIAL Packet")
+  * CVE-2026-63072 ("Heap Buffer Overflow in CMS Key Unwrapping")
+  * CVE-2026-63076 ("Invalid Pointer Dereference in CMP Server via Crafted
+    protectionAlg")
+  * CVE-2026-14457 ("RPK Server Signature Algorithm Selection Can Dereference
+    a Missing Certificate")
+  * CVE-2026-54874 ("Excessive Memory Use Buffering DTLS Records for a Future
+    Epoch")
+  * CVE-2026-63073 ("Untrusted Sender DN Used as Format String in CMP Response
+    Validation")
+  * CVE-2026-63074 ("CMP Indefinite Cache Growth of ExtraCerts")
+  * CVE-2026-63075 ("QUIC ACK-only Packet Retention Can Cause Memory
+    Exhaustion")
+  * CVE-2026-75803 ("AEAD Forgeries with Empty Ciphertext When Using
+    EVP_Cipher()") (Closes: #1145172)
+  * CVE-2026-14456 ("Unbounded Memory Growth in QUIC Server Incoming Channel
+    Queue") (Closes: #1144615)
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 23 Aug 2026 17:26:22 +0200
+
+openssl (3.5.7-1~deb13u1) trixie; urgency=medium
+
+  * Import 3.5.7
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 18 Jul 2026 22:55:34 +0200
+
+openssl (3.5.6-1~deb13u2) trixie-security; urgency=medium
+
+  * CVE-2026-7383 ("Possible Heap Buffer Overflow in ASN.1 Multibyte String
+    Conversion")
+  * CVE-2026-9076 ("Out-of-Bounds Read in CMS Password-Based Decryption")
+  * CVE-2026-34180 ("Heap Buffer Over-read in ASN.1 Content Parsing")
+  * CVE-2026-34181 ("PKCS#12 Files with PBMAC1 Are Accepted with Short HMAC
+    Keys")
+  * CVE-2026-34182 ("CMS AuthEnvelopedData Processing May Accept Forged
+    Messages")
+  * CVE-2026-34183 ("Unbounded Memory Growth in the QUIC PATH_CHALLENGE
+    Handler")
+  * CVE-2026-42764 ("NULL pointer dereference in QUIC server initial packet
+    handling")
+  * CVE-2026-42766 ("Possible NULL Dereference in Password-Based CMS
+    Decryption")
+  * CVE-2026-42767 ("NULL Pointer Dereference in CRMF EncryptedValue
+    Decryption")
+  * CVE-2026-42768 ("Multi-RecipientInfo Bleichenbacher Oracle in
+    CMS_decrypt() and PKCS7_decrypt()")
+  * CVE-2026-42769 ("Trust-Anchor Substitution via cert/issuer Typo in CMP
+    rootCaKeyUpdate")
+  * CVE-2026-42770 ("FFC-DH Peer Validation Uses Attacker-Supplied q")
+  * CVE-2026-45445 ("AES-OCB IV Ignored on EVP_Cipher() Path")
+  * CVE-2026-45446 ("Incorrect Tag Processing for Empty Messages in
+    AES-GCM-SIV and AES-SIV modes")
+  * CVE-2026-45447 ("Heap Use-After-Free in OpenSSL PKCS7_verify()")
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 06 Jun 2026 21:55:35 +0200
+
 openssl (3.5.6-1~deb13u1) trixie; urgency=medium
 
   * Import 3.5.6
