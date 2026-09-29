@@ -26,6 +26,23 @@ openssl (3.5.9-0+pexip25u1) pexip-trixie; urgency=medium
     Causes DoS")
   * CVE-2026-77696 ("Timing Side-Channel in SM2 Signature Generation")
   * CVE-2026-84784 ("QUIC: Unbounded RETIRE_CONNECTION_ID Backlog")
+  * Remove patches merged upstream:
+    + Avoid-double-free-of-qrx-in-port_default_packet_handler.patch
+    + Add-test-for-CVE-2026-63072.patch
+    + Fix-heap-buffer-overflow-8-byte-OOB-write-in-AES-WRAP-PAD.patch
+    + Add-test-for-CVE-2026-63076.patch
+    + Fix-Remote-NULL-deref-in-ossl_cmp_calc_protection-via-cra.patch
+    + Handle-signature_algorithms_cert-extension-in-key-only-co.patch
+    + Avoid-full-read-buffer-allocation-when-buffering-DTLS-nex.patch
+    + ssl-record-methods-dtls_meth.c-lower-the-unprocessed_rcds.patch
+    + ssl-record-remove-dead-DTLS-processed_rcds-record-queue.patch
+    + CMP-unexpected-sender-DN-used-as-format-string-in-ERR_rai.patch
+    + Add-test-for-CVE-2026-63073.patch
+    + Add-a-test-for-restricting-growth-in-cmp-cert-cache.patch
+    + Fix-unbounded-cert-cache-growth-in-cmp.patch
+    + Don-t-store-ACK-only-frames-in-TX-history-for-QUIC.patch
+    + Check-the-tag-on-EVP_Cipher-finalize-Poly1305-and-OCB-AEA.patch
+    + QUIC-server-limit-number-of-pending-QUIC-channels-connect.patch
 
  -- Mark Hymers <mark.hymers@pexip.com>  Tue, 29 Sep 2026 17:29:42 +0100
 
