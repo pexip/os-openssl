@@ -1,3 +1,34 @@
+openssl (3.5.9-0+pexip25u1) pexip-trixie; urgency=medium
+
+  * New upstream release
+  * CVE-2026-84782 ("DTLS Retransmits Handshake Messages From a Stale Buffer
+    Offset")
+  * CVE-2026-84783 ("Use-After-Free in X.509 Extension Cache Under Concurrent
+    Use")
+  * CVE-2026-35189 ("Excessive Memory Allocation in Relative CRLDP
+    Processing")
+  * CVE-2026-35191 ("QUIC Unvalidated Amplification Credit may be Over
+    Accounted")
+  * CVE-2026-42772 ("Potential CPU DoS via O(n^2) Fragment Reassembly in
+    QUIC")
+  * CVE-2026-54872 ("Timing Side-Channel in Scalar Multiplication for Non-NIST
+    EC Curves")
+  * CVE-2026-54873 ("QUIC STREAM Fragment Metadata DoS")
+  * CVE-2026-54875 ("Non-Constant-Time SM2 Scalar Multiplication on ARM64 and
+    RISC-V")
+  * CVE-2026-72897 ("Out-of-Bounds Access After SSL_set_SSL_CTX() During a
+    Handshake")
+  * CVE-2026-75804 ("QUIC Connection-Level Flow Control is Not Enforced for
+    Streams")
+  * CVE-2026-75805 ("NULL Pointer Dereference in CMP Client Revocation
+    Response Handling")
+  * CVE-2026-75806 ("Unauthenticated and Undersized DTLS 1.2 AEAD Record
+    Causes DoS")
+  * CVE-2026-77696 ("Timing Side-Channel in SM2 Signature Generation")
+  * CVE-2026-84784 ("QUIC: Unbounded RETIRE_CONNECTION_ID Backlog")
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 29 Sep 2026 17:29:42 +0100
+
 openssl (3.5.7-1~deb13u2+pexip25u1) pexip-trixie; urgency=medium
 
   * New upstream release
