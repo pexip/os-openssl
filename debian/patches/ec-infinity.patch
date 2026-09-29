@@ -1,10 +1,8 @@
 Fix loading of EC keys at infinity
 
-Index: openssl/crypto/ec/ec_key.c
-===================================================================
---- openssl.orig/crypto/ec/ec_key.c
-+++ openssl/crypto/ec/ec_key.c
-@@ -982,7 +982,8 @@ int EC_KEY_oct2key(EC_KEY *key, const un
+--- a/crypto/ec/ec_key.c
++++ b/crypto/ec/ec_key.c
+@@ -930,7 +930,8 @@
       * EC_POINT_oct2point() has already performed sanity checking of
       * the buffer so we know it is valid.
       */
@@ -14,11 +12,9 @@ Index: openssl/crypto/ec/ec_key.c
          key->conv_form = (point_conversion_form_t)(buf[0] & ~0x01);
      return 1;
  }
-Index: openssl/test/evp_extra_test.c
-===================================================================
---- openssl.orig/test/evp_extra_test.c
-+++ openssl/test/evp_extra_test.c
-@@ -2474,6 +2474,40 @@ done:
+--- a/test/evp_extra_test.c
++++ b/test/evp_extra_test.c
+@@ -2717,6 +2717,40 @@
      EVP_PKEY_CTX_free(pctx);
      return ret;
  }
@@ -59,7 +55,7 @@ Index: openssl/test/evp_extra_test.c
  #endif
  
  #if !defined(OPENSSL_NO_SM2)
-@@ -6763,6 +6797,7 @@ int setup_tests(void)
+@@ -8433,6 +8467,7 @@
  #endif
  #ifndef OPENSSL_NO_EC
      ADD_ALL_TESTS(test_EC_keygen_with_enc, OSSL_NELEM(ec_encodings));

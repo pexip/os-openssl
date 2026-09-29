@@ -8,9 +8,9 @@ Date:   Thu Dec 14 14:30:59 2023 +0100
     Co-Authored-By: John-Mark Bell <jmb@pexip.com>
     Co-Authored-By: Knut Saastad <knut.saastad@pexip.com>
 
---- openssl.orig/crypto/x509/by_dir.c
-+++ openssl/crypto/x509/by_dir.c
-@@ -235,6 +235,10 @@ static int get_cert_by_subject_ex(X509_L
+--- a/crypto/x509/by_dir.c
++++ b/crypto/x509/by_dir.c
+@@ -235,6 +235,10 @@
      X509_OBJECT stmp, *tmp;
      const char *postfix = "";
  
@@ -21,7 +21,7 @@ Date:   Thu Dec 14 14:30:59 2023 +0100
      if (name == NULL)
          return 0;
  
-@@ -257,10 +261,17 @@ static int get_cert_by_subject_ex(X509_L
+@@ -257,10 +261,17 @@
      }
  
      ctx = (BY_DIR *)xl->method_data;
@@ -42,7 +42,7 @@ Date:   Thu Dec 14 14:30:59 2023 +0100
          BY_DIR_ENTRY *ent;
          int idx;
          BY_DIR_HASH htmp, *hent;
-@@ -418,6 +429,7 @@ static int get_cert_by_subject_ex(X509_L
+@@ -428,6 +439,7 @@
              goto finish;
          }
      }

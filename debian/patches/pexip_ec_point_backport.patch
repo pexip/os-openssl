@@ -17,11 +17,9 @@ Date:   Thu Mar 6 14:33:17 2025 +0100
     Reviewed-by: Matt Caswell <matt@openssl.org>
     (Merged from https://github.com/openssl/openssl/pull/26990)
 
-Index: openssl/CHANGES.md
-===================================================================
---- openssl.orig/CHANGES.md
-+++ openssl/CHANGES.md
-@@ -25,6 +25,12 @@ OpenSSL Releases
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -25,6 +25,12 @@
   - [OpenSSL 1.0.0](#openssl-100)
   - [OpenSSL 0.9.x](#openssl-09x)
  
@@ -34,11 +32,9 @@ Index: openssl/CHANGES.md
  OpenSSL 3.5
  -----------
  
-Index: openssl/doc/man3/SSL_CTX_set_options.pod
-===================================================================
---- openssl.orig/doc/man3/SSL_CTX_set_options.pod
-+++ openssl/doc/man3/SSL_CTX_set_options.pod
-@@ -228,6 +228,12 @@ For more information on shutting down a
+--- a/doc/man3/SSL_CTX_set_options.pod
++++ b/doc/man3/SSL_CTX_set_options.pod
+@@ -228,6 +228,12 @@
  Allow legacy insecure renegotiation between OpenSSL and unpatched servers
  B<only>. See the B<SECURE RENEGOTIATION> section for more details.
  
@@ -51,11 +47,9 @@ Index: openssl/doc/man3/SSL_CTX_set_options.pod
  =item SSL_OP_NO_ANTI_REPLAY
  
  By default, when a server is configured for early data (i.e., max_early_data > 0),
-Index: openssl/include/openssl/ssl.h.in
-===================================================================
---- openssl.orig/include/openssl/ssl.h.in
-+++ openssl/include/openssl/ssl.h.in
-@@ -427,6 +427,7 @@ typedef int (*SSL_async_callback_fn)(SSL
+--- a/include/openssl/ssl.h.in
++++ b/include/openssl/ssl.h.in
+@@ -427,6 +427,7 @@
  #define SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE SSL_OP_BIT(34)
  
  #define SSL_OP_PREFER_NO_DHE_KEX SSL_OP_BIT(35)
@@ -63,11 +57,9 @@ Index: openssl/include/openssl/ssl.h.in
  
  /*
   * Option "collections."
-Index: openssl/ssl/ssl_conf.c
-===================================================================
---- openssl.orig/ssl/ssl_conf.c
-+++ openssl/ssl/ssl_conf.c
-@@ -406,6 +406,7 @@ static int cmd_Options(SSL_CONF_CTX *cct
+--- a/ssl/ssl_conf.c
++++ b/ssl/ssl_conf.c
+@@ -406,6 +406,7 @@
          SSL_FLAG_TBL_INV("RxCertificateCompression", SSL_OP_NO_RX_CERTIFICATE_COMPRESSION),
          SSL_FLAG_TBL("KTLSTxZerocopySendfile", SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE),
          SSL_FLAG_TBL("IgnoreUnexpectedEOF", SSL_OP_IGNORE_UNEXPECTED_EOF),
@@ -75,7 +67,7 @@ Index: openssl/ssl/ssl_conf.c
      };
      if (value == NULL)
          return -3;
-@@ -785,6 +786,7 @@ static const ssl_conf_cmd_tbl ssl_conf_c
+@@ -785,6 +786,7 @@
      SSL_CONF_CMD_SWITCH("no_anti_replay", SSL_CONF_FLAG_SERVER),
      SSL_CONF_CMD_SWITCH("no_etm", 0),
      SSL_CONF_CMD_SWITCH("no_ems", 0),
@@ -83,7 +75,7 @@ Index: openssl/ssl/ssl_conf.c
      SSL_CONF_CMD_STRING(SignatureAlgorithms, "sigalgs", 0),
      SSL_CONF_CMD_STRING(ClientSignatureAlgorithms, "client_sigalgs", 0),
      SSL_CONF_CMD_STRING(Curves, "curves", 0),
-@@ -884,6 +886,8 @@ static const ssl_switch_tbl ssl_cmd_swit
+@@ -884,6 +886,8 @@
      { SSL_OP_NO_ENCRYPT_THEN_MAC, 0 },
      /* no Extended master secret */
      { SSL_OP_NO_EXTENDED_MASTER_SECRET, 0 },
@@ -92,11 +84,9 @@ Index: openssl/ssl/ssl_conf.c
  };
  
  static int ssl_conf_cmd_skip_prefix(SSL_CONF_CTX *cctx, const char **pcmd)
-Index: openssl/ssl/t1_lib.c
-===================================================================
---- openssl.orig/ssl/t1_lib.c
-+++ openssl/ssl/t1_lib.c
-@@ -194,6 +194,10 @@ static const struct {
+--- a/ssl/t1_lib.c
++++ b/ssl/t1_lib.c
+@@ -194,6 +194,10 @@
  };
  
  static const unsigned char ecformats_default[] = {
@@ -107,7 +97,7 @@ Index: openssl/ssl/t1_lib.c
      TLSEXT_ECPOINTFORMAT_uncompressed,
      TLSEXT_ECPOINTFORMAT_ansiX962_compressed_prime,
      TLSEXT_ECPOINTFORMAT_ansiX962_compressed_char2
-@@ -1768,13 +1772,16 @@ void tls1_get_formatlist(SSL_CONNECTION
+@@ -1807,13 +1811,16 @@
      if (s->ext.ecpointformats) {
          *pformats = s->ext.ecpointformats;
          *num_formats = s->ext.ecpointformats_len;
@@ -128,11 +118,9 @@ Index: openssl/ssl/t1_lib.c
      }
  }
  
-Index: openssl/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
-===================================================================
---- openssl.orig/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
-+++ openssl/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
-@@ -19,10 +19,8 @@ Header:
+--- a/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
++++ b/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
+@@ -19,10 +19,8 @@
            000f - 01 02 04 04 80 0c 00 00-05 04 80 08 00 00 06   ...............
            001e - 04 80 08 00 00 07 04 80-08 00 00 08 02 40 64   .............@d
            002d - 09 02 40 64                                    ..@d
@@ -144,11 +132,9 @@ Index: openssl/test/recipes/75-test_quicapi_data/ssltraceref-zlib.txt
          extension_type=supported_groups(10), length=18
            X25519MLKEM768 (4588)
            ecdh_x25519 (29)
-Index: openssl/test/recipes/75-test_quicapi_data/ssltraceref.txt
-===================================================================
---- openssl.orig/test/recipes/75-test_quicapi_data/ssltraceref.txt
-+++ openssl/test/recipes/75-test_quicapi_data/ssltraceref.txt
-@@ -19,10 +19,8 @@ Header:
+--- a/test/recipes/75-test_quicapi_data/ssltraceref.txt
++++ b/test/recipes/75-test_quicapi_data/ssltraceref.txt
+@@ -19,10 +19,8 @@
            000f - 01 02 04 04 80 0c 00 00-05 04 80 08 00 00 06   ...............
            001e - 04 80 08 00 00 07 04 80-08 00 00 08 02 40 64   .............@d
            002d - 09 02 40 64                                    ..@d
@@ -160,11 +146,9 @@ Index: openssl/test/recipes/75-test_quicapi_data/ssltraceref.txt
          extension_type=supported_groups(10), length=18
            X25519MLKEM768 (4588)
            ecdh_x25519 (29)
-Index: openssl/test/ssl-tests/20-cert-select.cnf
-===================================================================
---- openssl.orig/test/ssl-tests/20-cert-select.cnf
-+++ openssl/test/ssl-tests/20-cert-select.cnf
-@@ -334,10 +334,12 @@ CipherString = DEFAULT
+--- a/test/ssl-tests/20-cert-select.cnf
++++ b/test/ssl-tests/20-cert-select.cnf
+@@ -334,10 +334,12 @@
  ECDSA.Certificate = ${ENV::TEST_CERTS_DIR}/server-cecdsa-cert.pem
  ECDSA.PrivateKey = ${ENV::TEST_CERTS_DIR}/server-cecdsa-key.pem
  MaxProtocol = TLSv1.2
@@ -177,11 +161,9 @@ Index: openssl/test/ssl-tests/20-cert-select.cnf
  SignatureAlgorithms = EcDsA+SHA256
  VerifyCAFile = ${ENV::TEST_CERTS_DIR}/rootcert.pem
  VerifyMode = Peer
-Index: openssl/test/ssl-tests/20-cert-select.cnf.in
-===================================================================
---- openssl.orig/test/ssl-tests/20-cert-select.cnf.in
-+++ openssl/test/ssl-tests/20-cert-select.cnf.in
-@@ -207,10 +207,12 @@ our @tests = (
+--- a/test/ssl-tests/20-cert-select.cnf.in
++++ b/test/ssl-tests/20-cert-select.cnf.in
+@@ -207,10 +207,12 @@
          server => {
              "ECDSA.Certificate" => test_pem("server-cecdsa-cert.pem"),
              "ECDSA.PrivateKey" => test_pem("server-cecdsa-key.pem"),
@@ -195,11 +177,9 @@ Index: openssl/test/ssl-tests/20-cert-select.cnf.in
          },
          test   => {
              "ExpectedServerCertType" => "P-256",
-Index: openssl/test/sslapitest.c
-===================================================================
---- openssl.orig/test/sslapitest.c
-+++ openssl/test/sslapitest.c
-@@ -11144,6 +11144,55 @@ end:
+--- a/test/sslapitest.c
++++ b/test/sslapitest.c
+@@ -11992,6 +11992,55 @@
      return testresult;
  }
  
@@ -255,7 +235,7 @@ Index: openssl/test/sslapitest.c
  /*
   * Test SSL_CTX_set1_verify/chain_cert_store and SSL_CTX_get_verify/chain_cert_store.
   */
-@@ -13803,6 +13852,9 @@ int setup_tests(void)
+@@ -14887,6 +14936,9 @@
  #endif
      ADD_TEST(test_inherit_verify_param);
      ADD_TEST(test_set_alpn);

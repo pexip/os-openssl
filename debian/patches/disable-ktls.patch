@@ -6,11 +6,9 @@ cryptography occurs outwith the FIPS module boundary.
 
 Therefore, if FIPS is wanted, it's safer to disable this at build
 time so that there's no opportunity for accidents later.
-Index: openssl/Configurations/10-main.conf
-===================================================================
---- openssl.orig/Configurations/10-main.conf
-+++ openssl/Configurations/10-main.conf
-@@ -693,7 +693,7 @@ my %targets = (
+--- a/Configurations/10-main.conf
++++ b/Configurations/10-main.conf
+@@ -694,7 +694,7 @@
          shared_target    => "linux-shared",
          shared_cflag     => "-fPIC",
          shared_ldflag    => sub { $disabled{pinshared} ? () : "-Wl,-znodelete" },
