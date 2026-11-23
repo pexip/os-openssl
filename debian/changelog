@@ -1,4 +1,4 @@
-openssl (3.5.9-1~deb13u1+pexip25u1) trixie; urgency=medium
+openssl (3.5.9-1~deb13u1+pexip25u1) pexip-trixie; urgency=medium
 
   * Merge back to Debian's packages again
 
